@@ -1,0 +1,12 @@
+{
+  "name": "pi",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "task": "node ./tasksfile.js"
+  },
+  "dependencies": {
+    "tasksfile": "^5.1.1"
+  }
+}
