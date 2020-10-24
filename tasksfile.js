@@ -1,7 +1,7 @@
-const { sh, cli, rawArgs } = require('tasksfile')
+const { sh, cli } = require('tasksfile')
 
-const kubectl = (options, name = 'Mysterious') => {
-    sh(`sops exec-file kubeconfig.yml 'KUBECONFIG={} kubectl ${rawArgs().join(' ').replace(/'/, '\\\'')}'`, { nopipe: true });
+const deploy = () => {
+    sh('pipenv run ansible-playbook playbook.yml', { nopipe: true });
 }
 
-cli({ kubectl });
+cli({ deploy });

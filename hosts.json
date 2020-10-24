@@ -1,0 +1,36 @@
+{
+	"_meta": {
+		"hostvars": {}
+	},
+	"all": {
+		"children": [
+			"ENC[AES256_GCM,data:QLY=,iv:EiWVq+PeVXP94+XmooA0Rkv0Q1KKK79s7KarPfxpUVw=,tag:yXx2AiDYYNLlGZv3baNveg==,type:str]"
+		]
+	},
+	"pi": {
+		"hosts": [
+			"ENC[AES256_GCM,data:LmDkte4PAcctIvxqpLFcei/5b/tTc8xbpA==,iv:+B1oFoF4Cljwa++W+qBTWSm0E5C0OCXFJiFMkxJ3SMk=,tag:vqSauPVtqULERs//8aSNRA==,type:str]"
+		],
+		"vars": {
+			"ansible_user": "ENC[AES256_GCM,data:cgs=,iv:3vv0anz618GelETnVQgALbfOjOTgUSMqZ1E4oY2PFco=,tag:Q6d8zATqnF32ksUPedH8qw==,type:str]",
+			"ansible_become": "ENC[AES256_GCM,data:piLk,iv:8Cm3Ro1HmoYILvJbK+Fc/s61eajMTauHvjxnmHQmdyc=,tag:rchgiI4cxQOQGVk7HXo05Q==,type:str]"
+		}
+	},
+	"sops": {
+		"kms": null,
+		"gcp_kms": null,
+		"azure_kv": null,
+		"hc_vault": null,
+		"lastmodified": "2020-10-23T21:21:02Z",
+		"mac": "ENC[AES256_GCM,data:JXAGyZBpF/FHht9IqUi+W8+bIX9VFmCokqPOiWt/VYT9CPKI+CnI9PDlTlmNSLJi04RVo0FXo5JkPlmFQp777AFPWLmAEoCcOpusmLN9JgCl1oStjmCIQvton5k3BFelxIAqoUBHTa+2oZU+xaXMSIN2WhgGf9XHBnR8lgZdUcg=,iv:X84tqrAezlw7xOv/2cL0d7KGPYbhYJ9E+AK1gBVgYko=,tag:/fHwJFGB9RYtpvR5pGc2VQ==,type:str]",
+		"pgp": [
+			{
+				"created_at": "2020-10-23T21:16:31Z",
+				"enc": "-----BEGIN PGP MESSAGE-----\n\nhQGMA/4sc6bB32aWAQv/TGoAZxpTCZJbV2a0cDgWY9FpnCvL+gtH3kAsQ9LwsTe7\n8Xnng4w6k2pl4KFdDVy+4xLQWK0bP6TA84RVw2pbnnpVhJT8uEmRcnmHC2RoSuUy\nWfcSdxW6cRLLo5HJ7kUWzolUh7Qsiz/cr2VkP2MoaLc5zfkzFp+0wLMW6WtGXLFE\ni9nASxTPKavRTTYZV+oXUDy2cS9wEplC5Nw/v5uFfqmyZp4+qTZNxpQeBaVG3hPe\ncmEALUK7xqSIy8Gu24f7NlCfamlgVQivX5kyjg8MbIfbGDX0IkoJYXM9FWBSkBoF\nmHOI/wZkjw8nWYlhTiSvJio/0kqb+Q4C7HlXcknHaV9NdJF9dyMaPVEgqQEGJ+sf\nmSEVBejy8zK0I1ojCKNjajACsBVN830FclulVKzClvr2LWuN3I5IcX9ce+vIS0yL\n/nLBnfkJr8zPxslRGwshVsHjwQ4d0bIOafuvK6dHDve5Bi4XXB2gsMiLcdRtXhck\nquK4sZOB4cZZDZThVsU10l4B4SZGst9bUOveNLDCEWQdin2vIadB9xuvsYEoSxqA\noqEMdB5X5EPB/6AQ0W/MIFPdbhrfG8l0z6jkEo/RZTa6sGc9zAlwPqkSqt2tAfMB\nx49iBgJO4L3npn6vggV8\n=Jq4+\n-----END PGP MESSAGE-----\n",
+				"fp": "42FC69294509367FA7A75C746C5CC1225E6B48CF"
+			}
+		],
+		"unencrypted_suffix": "_unencrypted",
+		"version": "3.6.1"
+	}
+}

@@ -1,0 +1,170 @@
+---
+
+- name: install dependencies
+  gather_facts: false
+  hosts: pi
+  tasks:
+    - name: install docker sdk
+      pip:
+        name:
+          - docker
+          - jsondiff
+          - pyyaml
+
+- name: deploy portainer
+  gather_facts: false
+  hosts: pi
+  tasks:
+    - name: deploy stack
+      community.general.docker_stack:
+        name: portainer
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.2'
+            services:
+              agent:
+                image: portainer/agent
+                volumes:
+                  - /var/run/docker.sock:/var/run/docker.sock
+                  - /mnt/external/docker/volumes:/var/lib/docker/volumes
+                networks:
+                  - agent_network
+                deploy:
+                  mode: global
+                  placement:
+                    constraints: [node.platform.os == linux]
+              portainer:
+                image: portainer/portainer-ce
+                command: -H tcp://tasks.agent:9001 --tlsskipverify
+                ports:
+                  - "9000:9000"
+                  - "8000:8000"
+                volumes:
+                  - portainer_data:/data
+                networks:
+                  - agent_network
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  placement:
+                    constraints: [node.role == manager]
+            networks:
+              agent_network:
+                driver: overlay
+                attachable: true
+            volumes:
+              portainer_data:
+
+- name: deploy registry
+  gather_facts: false
+  hosts: pi
+  tasks:
+    - name: create directory
+      file:
+        path: /mnt/external/registry
+        owner: root
+        group: root
+        state: directory
+
+    - name: deploy task
+      community.general.docker_stack:
+        name: registry
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              registry:
+                image: registry:2
+                ports:
+                  - "5000:5000"
+                volumes:
+                  - /mnt/external/registry:/var/lib/registry
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  restart_policy:
+                    condition: any
+                  update_config:
+                    order: stop-first
+
+- name: deploy homepage
+  gather_facts: false
+  hosts: pi
+  tasks:
+    - name: build
+      community.general.docker_image:
+        name: "{{ inventory_hostname }}:5000/homepage"
+        source: build
+        force_source: true
+        push: true
+        build:
+          pull: false
+          path: homepage
+      delegate_to: localhost
+
+    - name: deploy stack
+      community.general.docker_stack:
+        name: homepage
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              homepage:
+                image: localhost:5000/homepage:latest
+                ports:
+                  - 80:80
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  restart_policy:
+                    condition: any
+                  update_config:
+                    order: stop-first
+
+- name: deploy resilio sync
+  gather_facts: false
+  hosts: pi
+  tasks:
+    - name: create directories
+      file:
+        path: "{{ item }}"
+        owner: pi
+        group: pi
+        state: directory
+      loop:
+        - /mnt/external/resilio-sync/config
+        - /mnt/external/resilio-sync/downloads
+        - /mnt/external/resilio-sync/sync
+
+    - name: deploy stack
+      community.general.docker_stack:
+        name: resilio-sync
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              resilio-sync:
+                image: linuxserver/resilio-sync:latest
+                environment:
+                  PUID: "1000"
+                  PGID: "1000"
+                  TZ: America/Los_Angeles
+                  UMASK_SET: "022"
+                volumes:
+                  - /mnt/external/resilio-sync/config:/config
+                  - /mnt/external/resilio-sync/downloads:/downloads
+                  - /mnt/external/resilio-sync/sync:/sync
+                ports:
+                  - 8888:8888
+                  - 55555:55555
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  restart_policy:
+                    condition: any
+                  update_config:
+                    order: stop-first
