@@ -9,7 +9,7 @@
 	},
 	"pi": {
 		"hosts": [
-			"ENC[AES256_GCM,data:LmDkte4PAcctIvxqpLFcei/5b/tTc8xbpA==,iv:+B1oFoF4Cljwa++W+qBTWSm0E5C0OCXFJiFMkxJ3SMk=,tag:vqSauPVtqULERs//8aSNRA==,type:str]"
+			"ENC[AES256_GCM,data:re1oxmXn6APAYn/bWw1msJh0/uA=,iv:jqu5WrZVZYsN2X0zpmtQLlAKQ+s5NYph8FOUQ/Ce5tY=,tag:lK38bvKsOPP/DJryYwwIOQ==,type:str]"
 		],
 		"vars": {
 			"ansible_user": "ENC[AES256_GCM,data:cgs=,iv:3vv0anz618GelETnVQgALbfOjOTgUSMqZ1E4oY2PFco=,tag:Q6d8zATqnF32ksUPedH8qw==,type:str]",
@@ -21,8 +21,8 @@
 		"gcp_kms": null,
 		"azure_kv": null,
 		"hc_vault": null,
-		"lastmodified": "2020-10-23T21:21:02Z",
-		"mac": "ENC[AES256_GCM,data:JXAGyZBpF/FHht9IqUi+W8+bIX9VFmCokqPOiWt/VYT9CPKI+CnI9PDlTlmNSLJi04RVo0FXo5JkPlmFQp777AFPWLmAEoCcOpusmLN9JgCl1oStjmCIQvton5k3BFelxIAqoUBHTa+2oZU+xaXMSIN2WhgGf9XHBnR8lgZdUcg=,iv:X84tqrAezlw7xOv/2cL0d7KGPYbhYJ9E+AK1gBVgYko=,tag:/fHwJFGB9RYtpvR5pGc2VQ==,type:str]",
+		"lastmodified": "2021-12-12T10:57:08Z",
+		"mac": "ENC[AES256_GCM,data:+1okGQY36L90bRIL3Nk5FLixSDjD7acEIMe8TKb1BKJCc9SOcn11IF1kag8EHc83NZSaxuk08FgJMBFyQCNbbAHXrVIDWpyWZS1tp0r/c+JLC+TUgv9PcUkfncfIcmXf37IIC+fCvMHT/8CFAuASeHLaqoI6BHnvF6RZdKAhPgw=,iv:lOv76B5cLcgqlh88smgsBOiXY1dy7IA0taFVxAC1TtM=,tag:V44UMGOz4EgKjv2/lvuf8A==,type:str]",
 		"pgp": [
 			{
 				"created_at": "2020-10-23T21:16:31Z",
