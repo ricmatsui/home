@@ -129,7 +129,7 @@
   hosts: pi
   tasks:
     - name: build
-      community.general.docker_image:
+      community.docker.docker_image:
         name: "{{ inventory_hostname }}:5000/homepage"
         source: build
         force_source: true
@@ -137,6 +137,7 @@
         build:
           pull: false
           path: homepage
+          platform: linux/arm64/v8
       delegate_to: localhost
 
     - name: deploy stack
@@ -222,7 +223,7 @@
           - version: '3.8'
             services:
               cloudflare-ddns:
-                image: oznu/cloudflare-ddns:armhf
+                image: oznu/cloudflare-ddns:arm64v8
                 environment:
                   ZONE: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).zone }}"
                   SUBDOMAIN: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).subdomain }}"
@@ -240,4 +241,51 @@
               cloudflare_api_key_secret:
                 external: true
                 name: cloudflare_api_key_secret
+
+- name: deploy temporalite
+  gather_facts: false
+  hosts: pi
+  tags:
+    - temporalite
+  tasks:
+    - name: build
+      community.docker.docker_image:
+        name: "{{ inventory_hostname }}:5000/temporalite"
+        source: build
+        force_source: true
+        push: true
+        build:
+          pull: false
+          path: temporalite
+          platform: linux/arm64/v8
+      delegate_to: localhost
+
+    - name: create directories
+      file:
+        path: /mnt/external/temporalite
+        owner: pi
+        group: pi
+        state: directory
+
+    - name: deploy stack
+      community.general.docker_stack:
+        name: temporalite
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              temporalite:
+                image: localhost:5000/temporalite:latest
+                volumes:
+                  - /mnt/external/temporalite:/work
+                ports:
+                  - 7233:7233
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  restart_policy:
+                    condition: any
+                  update_config:
+                    order: stop-first
 
