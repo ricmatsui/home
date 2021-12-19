@@ -1,4 +1,4 @@
-FROM --platform=linux/arm64/v8 golang:1.17.5-bullseye AS builder
+FROM golang:1.17.5-bullseye AS builder
 
 RUN go install github.com/DataDog/temporalite/cmd/temporalite@latest
 

@@ -127,6 +127,8 @@
 - name: deploy homepage
   gather_facts: false
   hosts: pi
+  tags:
+    - homepage
   tasks:
     - name: build
       community.docker.docker_image:
