@@ -46,9 +46,97 @@
           - jsondiff
           - pyyaml
 
+- name: deploy secrets
+  gather_facts: false
+  hosts: pi
+  tags:
+    - traefik
+  tasks:
+    - name: traefik users
+      community.general.docker_secret:
+        name: traefik_users_secret
+        data: "{{ lookup('community.sops.sops', 'traefik/users') }}"
+
+    - name: cloudflare api key
+      community.general.docker_secret:
+        name: cloudflare_api_key_secret
+        data: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).api_key }}"
+
+- name: deploy traefik
+  gather_facts: false
+  hosts: pi
+  tags:
+    - traefik
+  tasks:
+    - name: create directories
+      file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        state: directory
+      loop:
+        - /mnt/external/traefik/acme
+
+    - name: deploy stack
+      community.general.docker_stack:
+        name: traefik
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              traefik:
+                image: traefik:v2.5
+                command: >
+                  --api.dashboard=true
+                  --providers.docker
+                  --providers.docker.exposedbydefault=false
+                  --providers.docker.network=traefik_traefik
+                  --entrypoints.web.address=:80
+                  --entrypoints.web.http.redirections.entrypoint.permanent=false
+                  --entrypoints.web.http.redirections.entrypoint.scheme=https
+                  --entrypoints.web.http.redirections.entrypoint.to=websecure
+                  --entrypoints.websecure.address=:443
+                  --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+                  --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+                  --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+                  --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
+                  - "traefik.http.routers.traefik.rule=Host(`traefik.{{ domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+                  - "traefik.http.routers.traefik.entrypoints=websecure"
+                  - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+                  - "traefik.http.routers.traefik.service=api@internal"
+                  - "traefik.http.routers.traefik.middlewares=traefik-auth"
+                secrets:
+                  - traefik_users_secret
+                  - cloudflare_api_key_secret
+                environment:
+                  CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_key_secret
+                ports:
+                  - '80:80'
+                  - '443:443'
+                volumes:
+                  - /var/run/docker.sock:/var/run/docker.sock
+                  - /mnt/external/traefik/acme:/etc/traefik/acme
+                networks:
+                  - traefik
+            secrets:
+              traefik_users_secret:
+                external: true
+                name: traefik_users_secret
+              cloudflare_api_key_secret:
+                external: true
+                name: cloudflare_api_key_secret
+            networks:
+              traefik: {}
+
 - name: deploy portainer
   gather_facts: false
   hosts: pi
+  tags:
+    - portainer
   tasks:
     - name: deploy stack
       community.general.docker_stack:
@@ -71,14 +159,20 @@
                     constraints: [node.platform.os == linux]
               portainer:
                 image: portainer/portainer-ce
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.routers.portainer.rule=Host(`portainer.{{ domain }}`)"
+                  - "traefik.http.routers.portainer.entrypoints=websecure"
+                  - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
+                  - "traefik.http.services.portainer.loadbalancer.server.port=9000"
                 command: -H tcp://tasks.agent:9001 --tlsskipverify
                 ports:
-                  - "9000:9000"
                   - "8000:8000"
                 volumes:
                   - portainer_data:/data
                 networks:
                   - agent_network
+                  - traefik_traefik
                 deploy:
                   mode: replicated
                   replicas: 1
@@ -88,12 +182,16 @@
               agent_network:
                 driver: overlay
                 attachable: true
+              traefik_traefik:
+                external: true
             volumes:
               portainer_data:
 
 - name: deploy registry
   gather_facts: false
   hosts: pi
+  tags:
+    - registry
   tasks:
     - name: create directory
       file:
@@ -112,10 +210,16 @@
             services:
               registry:
                 image: registry:2
-                ports:
-                  - "5000:5000"
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.routers.registry.rule=Host(`registry.{{ domain }}`)"
+                  - "traefik.http.routers.registry.entrypoints=websecure"
+                  - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
+                  - "traefik.http.services.registry.loadbalancer.server.port=5000"
                 volumes:
                   - /mnt/external/registry:/var/lib/registry
+                networks:
+                  - traefik_traefik
                 deploy:
                   mode: replicated
                   replicas: 1
@@ -123,6 +227,9 @@
                     condition: any
                   update_config:
                     order: stop-first
+            networks:
+              traefik_traefik:
+                external: true
 
 - name: deploy homepage
   gather_facts: false
@@ -132,7 +239,7 @@
   tasks:
     - name: build
       community.docker.docker_image:
-        name: "{{ inventory_hostname }}:5000/homepage"
+        name: "registry.{{ domain }}/homepage"
         source: build
         force_source: true
         push: true
@@ -151,9 +258,17 @@
           - version: '3.8'
             services:
               homepage:
-                image: localhost:5000/homepage:latest
-                ports:
-                  - 80:80
+                image: registry.{{ domain }}/homepage:latest
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.routers.homepage.rule=Host(`pi.{{ domain }}`)"
+                  - "traefik.http.routers.homepage.entrypoints=websecure"
+                  - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
+                  - "traefik.http.services.homepage.loadbalancer.server.port=80"
+                environment:
+                  DOMAIN: "{{ domain }}"
+                networks:
+                  - traefik_traefik
                 deploy:
                   mode: replicated
                   replicas: 1
@@ -161,10 +276,15 @@
                     condition: any
                   update_config:
                     order: stop-first
+            networks:
+              traefik_traefik:
+                external: true
 
 - name: deploy resilio sync
   gather_facts: false
   hosts: pi
+  tags:
+    - sync
   tasks:
     - name: create directories
       file:
@@ -187,6 +307,14 @@
             services:
               resilio-sync:
                 image: linuxserver/resilio-sync:latest
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.routers.sync.rule=Host(`sync.{{ domain }}`)"
+                  - "traefik.http.routers.sync.entrypoints=websecure"
+                  - "traefik.http.routers.sync.tls.certresolver=letsencrypt"
+                  - "traefik.http.services.sync.loadbalancer.server.port=8888"
+                networks:
+                  - traefik_traefik
                 environment:
                   PUID: "1000"
                   PGID: "1000"
@@ -197,7 +325,6 @@
                   - /mnt/external/resilio-sync/downloads:/downloads
                   - /mnt/external/resilio-sync/sync:/sync
                 ports:
-                  - 8888:8888
                   - 55555:55555
                 deploy:
                   mode: replicated
@@ -206,16 +333,14 @@
                     condition: any
                   update_config:
                     order: stop-first
+            networks:
+              traefik_traefik:
+                external: true
 
 - name: deploy cloudflare ddns
   gather_facts: false
   hosts: pi
   tasks:
-    - name: configure
-      community.general.docker_secret:
-        name: cloudflare_api_key_secret
-        data: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).api_key }}"
-
     - name: deploy stack
       community.general.docker_stack:
         name: cloudflare-ddns
@@ -252,7 +377,7 @@
   tasks:
     - name: build
       community.docker.docker_image:
-        name: "{{ inventory_hostname }}:5000/temporalite"
+        name: "registry.{{ domain }}/temporalite"
         source: build
         force_source: true
         push: true
@@ -278,7 +403,7 @@
           - version: '3.8'
             services:
               temporalite:
-                image: localhost:5000/temporalite:latest
+                image: registry.{{ domain }}/temporalite:latest
                 volumes:
                   - /mnt/external/temporalite:/work
                 ports:
