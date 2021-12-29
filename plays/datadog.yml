@@ -1,0 +1,30 @@
+---
+
+- name: datadog
+  gather_facts: false
+  hosts: pi
+  tags:
+    - datadog
+  tasks:
+    - name: install agent
+      ansible.builtin.shell:
+        cmd: >
+          DD_AGENT_MAJOR_VERSION=7
+          DD_API_KEY={{ config.datadog.api_key }}
+          DD_SITE=datadoghq.com
+          bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+        creates: /etc/datadog-agent/datadog.yaml
+
+    - name: configure
+      ansible.builtin.lineinfile:
+        path: /etc/datadog-agent/datadog.yaml
+        line: "dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock"
+      notify: restart
+
+  handlers:
+    - name: restart datadog
+      ansible.builtin.systemd:
+        daemon_reload: true
+        name: datadog-agent
+        state: restarted
+      listen: restart

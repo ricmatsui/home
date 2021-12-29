@@ -12,13 +12,17 @@ config:
         puck_mac_addresses:
         - ENC[AES256_GCM,data:Y3c+p906iKjOoOToZgbUV3Q=,iv:ZC7YATm22mQPfO0W9e1yqEXiVV8vLjsti0TcU+3lcD0=,tag:Qu4QpqCSCeKBYpqPGaPNmA==,type:str]
         - ENC[AES256_GCM,data:17ES7RBxalG+Wj85k2FxX1U=,iv:SrOJzLhBCvtSNI/rldVt8HDsupG9r5DUFsFpEvzJ3Os=,tag:YES9B2ijkF3oCE29o8OaNw==,type:str]
+    external:
+        vendor_id: ENC[AES256_GCM,data:bLoU7Q==,iv:OJGuDPKsNggMMJFXOdvkrmoxE894isHvxvYxb3VLpA8=,tag:PSt/XX438D1XaLq/eAg8Yw==,type:str]
+        product_id: ENC[AES256_GCM,data:mTTolw==,iv:RwKy1zNa1pOiqtcHet1ul/aW1EvcjQXFhgR/A/VgKmA=,tag:XJ3tGUJDA5K3x86AG/TAfA==,type:str]
+        uuid: ENC[AES256_GCM,data:aHNOqi7tiDvvikrUuRm2CqILQsrY03DybcLgtH/lPhSxfBtY,iv:xAx3WxOwUNf9LkNp5SnFa9J4dTpRDU84Qk3zSQ3ldHk=,tag:XOzQWe38HC1W5qtxe3Zipw==,type:str]
 sops:
     kms: []
     gcp_kms: []
     azure_kv: []
     hc_vault: []
-    lastmodified: '2021-12-27T10:32:08Z'
-    mac: ENC[AES256_GCM,data:KQdYpi4zVkIFWdexAGs0gcgi0DmcRgr0VDZaVnLP/66sAHXDOeWkcChTH90si95atCvtWaZJZ6+sUr8NXRrLdKULG7hhyrxdtiYwkNWoHVRY71Sfmd51Ogni7wjCy9WfPX0DeDnuEH0wrU+fexbT32v3xH2X/QT3tafDeUipmjY=,iv:ATdzKakr7G1Bjh0ageFWShIkMq/3xcLUWV0h+i7CCgI=,tag:ER9DtQiukJqhdxa4JmtWOA==,type:str]
+    lastmodified: '2021-12-29T21:09:56Z'
+    mac: ENC[AES256_GCM,data:25tDB8ZuVp3PN2g+ej11dPaWasqfQXlTTmT88ZfWxgs/901ecQUXjxUoKyBwBLof10z7/JIp5nbaGEEr9JuuzNPUo9gd9dC9Xfz0t6DsGjirtiRZK6QDW+zEk2jbixUrG7YmsPhYUPkl5LXsLHz1HK7/dp80EGfDJ4Zqd38KYCY=,iv:3KBmO47FJ1VSFtPZefSkGRDXDbET80TUHh3XAkQjhXc=,tag:naRs1zn26Ua5gzrqrzzQyA==,type:str]
     pgp:
     -   created_at: '2021-12-27T08:11:41Z'
         enc: |

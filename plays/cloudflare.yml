@@ -1,0 +1,41 @@
+---
+
+- name: deploy cloudflare ddns
+  gather_facts: false
+  hosts: pi
+  tags:
+    - cloudflare
+  tasks:
+    - name: deploy stack
+      community.general.docker_stack:
+        name: cloudflare-ddns
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              cloudflare-ddns:
+                image: oznu/cloudflare-ddns:arm64v8
+                environment:
+                  ZONE: "{{ config.cloudflare.zone }}"
+                  SUBDOMAIN: "{{ config.cloudflare.subdomain }}"
+                  API_KEY_FILE: /run/secrets/cloudflare_api_key_secret
+                secrets:
+                  - cloudflare_api_key_secret
+                logging:
+                  driver: none
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  resources:
+                    limits:
+                      cpus: '0.15'
+                      memory: 10M
+                  restart_policy:
+                    delay: 5m
+                  update_config:
+                    order: stop-first
+            secrets:
+              cloudflare_api_key_secret:
+                external: true
+                name: cloudflare_api_key_secret

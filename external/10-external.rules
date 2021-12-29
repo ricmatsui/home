@@ -1,0 +1,1 @@
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="{{ config.external.vendor_id }}", ATTRS{idProduct}=="{{ config.external.product_id }}", PROGRAM="/bin/sh -c 'echo temporary write through > /sys/devices/platform/soc/3f980000.usb/usb1/1-1/1-1.4/1-1.4:1.0/host0/target0:0:0/0:0:0:0/scsi_disk/0:0:0:0/cache_type'"

@@ -1,0 +1,49 @@
+---
+
+- name: external drive
+  gather_facts: false
+  hosts: pi
+  tags:
+    - external
+  tasks:
+    - name: configure udev rule
+      ansible.builtin.template:
+        src: ../external/10-external.rules
+        dest: /etc/udev/rules.d
+        owner: root
+        group: root
+      notify: reboot
+
+    - name: list block devices
+      ansible.builtin.shell:
+        cmd: lsblk -f
+      changed_when: false
+      register:
+        block_result
+
+    - name: print block devices
+      ansible.builtin.debug:
+        var: block_result.stdout
+
+    - name: create mount point
+      ansible.builtin.file:
+        path: /mnt/external
+        owner: root
+        group: root
+        state: directory
+      notify: reboot
+
+    - name: configure fstab
+      ansible.posix.mount:
+        path: /mnt/external
+        src: "UUID={{ config.external.uuid }}"
+        fstype: ext4
+        opts: defaults
+        passno: 1
+        state: present
+      notify: reboot
+
+  handlers:
+    - name: reboot
+      ansible.builtin.reboot:
+      listen: reboot

@@ -1,0 +1,84 @@
+---
+
+- name: deploy traefik
+  gather_facts: false
+  hosts: pi
+  tags:
+    - traefik
+  tasks:
+    - name: create directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        owner: root
+        group: root
+        state: directory
+      loop:
+        - /mnt/external/traefik/acme
+
+    - name: deploy stack
+      community.general.docker_stack:
+        name: traefik
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              traefik:
+                image: traefik:v2.5
+                command: >
+                  --api.dashboard=true
+                  --providers.docker
+                  --providers.docker.exposedbydefault=false
+                  --providers.docker.network=traefik_traefik
+                  --entrypoints.web.address=:80
+                  --entrypoints.web.http.redirections.entrypoint.permanent=false
+                  --entrypoints.web.http.redirections.entrypoint.scheme=https
+                  --entrypoints.web.http.redirections.entrypoint.to=websecure
+                  --entrypoints.websecure.address=:443
+                  --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+                  --certificatesresolvers.letsencrypt.acme.dnschallenge=true
+                  --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
+                  --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
+                  - "traefik.http.routers.traefik.rule=Host(`traefik.{{ config.domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+                  - "traefik.http.routers.traefik.entrypoints=websecure"
+                  - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+                  - "traefik.http.routers.traefik.service=api@internal"
+                  - "traefik.http.routers.traefik.middlewares=traefik-auth"
+                  - "traefik.http.services.traefik.loadbalancer.server.port=80"
+                secrets:
+                  - traefik_users_secret
+                  - cloudflare_api_key_secret
+                environment:
+                  CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_key_secret
+                ports:
+                  - '80:80'
+                  - '443:443'
+                volumes:
+                  - /var/run/docker.sock:/var/run/docker.sock
+                  - /mnt/external/traefik/acme:/etc/traefik/acme
+                networks:
+                  - traefik
+                logging:
+                  driver: none
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  resources:
+                    limits:
+                      cpus: '1.00'
+                      memory: 75M
+                  restart_policy:
+                    delay: 5s
+            secrets:
+              traefik_users_secret:
+                external: true
+                name: traefik_users_secret
+              cloudflare_api_key_secret:
+                external: true
+                name: cloudflare_api_key_secret
+            networks:
+              traefik: {}
+
