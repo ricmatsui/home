@@ -1,17 +1,167 @@
 ---
 
+- name: config
+  gather_facts: false
+  hosts:
+    - pi
+    - localhost
+  tags:
+    - always
+  tasks:
+    - name: load config
+      community.sops.load_vars:
+        file: config.yml
+
+- name: setup
+  gather_facts: false
+  hosts: pi
+  tags:
+    - setup
+  tasks:
+    - name: update cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: install
+      ansible.builtin.apt:
+        name:
+          - vim
+          - python3-venv
+
+    - name: install docker sdk
+      ansible.builtin.pip:
+        name:
+          - docker
+          - jsondiff
+          - pyyaml
+
+    - name: install pipx
+      ansible.builtin.pip:
+        executable: pip3
+        name: pipx
+        extra_args: --user
+      become_user: pi
+
+    - name: install poetry
+      community.general.pipx:
+        name: poetry
+      become_user: pi
+
+- name: datadog
+  gather_facts: false
+  hosts: pi
+  tags:
+    - datadog
+  tasks:
+    - name: install agent
+      ansible.builtin.shell:
+        cmd: >
+          DD_AGENT_MAJOR_VERSION=7
+          DD_API_KEY={{ config.datadog.api_key }}
+          DD_SITE=datadoghq.com
+          bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+        creates: /etc/datadog-agent/datadog.yaml
+
+    - name: configure
+      ansible.builtin.lineinfile:
+        path: /etc/datadog-agent/datadog.yaml
+        line: "dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock"
+      notify: restart
+
+  handlers:
+    - name: restart datadog
+      ansible.builtin.systemd:
+        daemon_reload: true
+        name: datadog-agent
+        state: restarted
+      listen: restart
+
+- name: deploy light
+  gather_facts: false
+  hosts: pi
+  tags:
+    - light
+  tasks:
+    - name: install
+      ansible.builtin.apt:
+        name:
+          - libglib2.0-dev
+
+    - name: create directory
+      ansible.builtin.file:
+        path: /home/pi/light-puck
+        owner: pi
+        group: pi
+        state: directory
+
+    - name: copy files
+      ansible.builtin.copy:
+        src: "light-puck/{{ item }}"
+        dest: "/home/pi/light-puck/{{ item }}"
+      loop:
+        - pyproject.toml
+        - poetry.toml
+        - poetry.lock
+      become_user: pi
+      notify: restart
+
+    - name: install dependencies
+      ansible.builtin.shell:
+        cmd: /home/pi/.local/bin/poetry install
+        chdir: /home/pi/light-puck
+      become_user: pi
+
+    - name: copy script
+      ansible.builtin.copy:
+        src: "light-puck/{{ item }}"
+        dest: "/home/pi/light-puck/{{ item }}"
+      loop:
+        - light.py
+      become_user: pi
+      tags:
+        - light-script
+      notify: restart
+
+    - name: install service
+      ansible.builtin.template:
+        src: light-puck/light-puck.service
+        dest: /etc/systemd/system
+        owner: root
+        group: root
+      notify: restart
+
+    - name: enable service
+      ansible.builtin.systemd:
+        name: light-puck
+        enabled: true
+
+  handlers:
+    - name: restart service
+      ansible.builtin.systemd:
+        daemon_reload: true
+        name: light-puck
+        state: restarted
+      listen: restart
+
 - name: deploy vpn
   gather_facts: false
   hosts: pi
   tags:
     - vpn
   tasks:
+    - name: install
+      ansible.builtin.apt:
+        name:
+          - wireguard
+
     - name: ipv4 forward
       ansible.posix.sysctl:
         name: net.ipv4.ip_forward
         value: '1'
         state: present
         reload: yes
+      notify: restart
 
     - name: ipv6 forward
       ansible.posix.sysctl:
@@ -19,32 +169,29 @@
         value: '1'
         state: present
         reload: yes
+      notify: restart
 
     - name: configure
-      copy:
-        content: "{{ lookup('community.sops.sops', 'vpn/pi-wg1.conf') }} "
+      ansible.builtin.copy:
+        content: "{{ lookup('community.sops.sops', 'vpn/pi-wg1.conf') }}"
         dest: /etc/wireguard/wg1.conf
         owner: root
         group: root
         mode: u=rw,g=,o=
+      notify: restart
 
-    - name: enable
-      systemd:
-        state: restarted
-        enabled: yes
+    - name: enable service
+      ansible.builtin.systemd:
         name: wg-quick@wg1.service
+        enabled: true
 
-
-- name: install dependencies
-  gather_facts: false
-  hosts: pi
-  tasks:
-    - name: install docker sdk
-      pip:
-        name:
-          - docker
-          - jsondiff
-          - pyyaml
+  handlers:
+    - name: restart service
+      ansible.builtin.systemd:
+        daemon_reload: true
+        name: wg-quick@wg1.service
+        state: restarted
+      listen: restart
 
 - name: deploy secrets
   gather_facts: false
@@ -60,7 +207,7 @@
     - name: cloudflare api key
       community.general.docker_secret:
         name: cloudflare_api_key_secret
-        data: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).api_key }}"
+        data: "{{ config.cloudflare.api_key }}"
 
 - name: deploy traefik
   gather_facts: false
@@ -69,7 +216,7 @@
     - traefik
   tasks:
     - name: create directories
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         owner: root
         group: root
@@ -104,7 +251,7 @@
                 labels:
                   - "traefik.enable=true"
                   - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
-                  - "traefik.http.routers.traefik.rule=Host(`traefik.{{ domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+                  - "traefik.http.routers.traefik.rule=Host(`traefik.{{ config.domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
                   - "traefik.http.routers.traefik.entrypoints=websecure"
                   - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
                   - "traefik.http.routers.traefik.service=api@internal"
@@ -161,7 +308,7 @@
                 image: portainer/portainer-ce
                 labels:
                   - "traefik.enable=true"
-                  - "traefik.http.routers.portainer.rule=Host(`portainer.{{ domain }}`)"
+                  - "traefik.http.routers.portainer.rule=Host(`portainer.{{ config.domain }}`)"
                   - "traefik.http.routers.portainer.entrypoints=websecure"
                   - "traefik.http.routers.portainer.tls.certresolver=letsencrypt"
                   - "traefik.http.services.portainer.loadbalancer.server.port=9000"
@@ -194,7 +341,7 @@
     - registry
   tasks:
     - name: create directory
-      file:
+      ansible.builtin.file:
         path: /mnt/external/registry
         owner: root
         group: root
@@ -212,7 +359,7 @@
                 image: registry:2
                 labels:
                   - "traefik.enable=true"
-                  - "traefik.http.routers.registry.rule=Host(`registry.{{ domain }}`)"
+                  - "traefik.http.routers.registry.rule=Host(`registry.{{ config.domain }}`)"
                   - "traefik.http.routers.registry.entrypoints=websecure"
                   - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
                   - "traefik.http.services.registry.loadbalancer.server.port=5000"
@@ -231,6 +378,15 @@
               traefik_traefik:
                 external: true
 
+    - name: wait for registry
+      ansible.builtin.uri:
+        method: GET
+        url: "https://registry.{{ config.domain }}"
+      register: result
+      until: result is succeeded
+      retries: 60
+      delay: 5
+
 - name: deploy homepage
   gather_facts: false
   hosts: pi
@@ -239,7 +395,7 @@
   tasks:
     - name: build
       community.docker.docker_image:
-        name: "registry.{{ domain }}/homepage"
+        name: "registry.{{ config.domain }}/homepage"
         source: build
         force_source: true
         push: true
@@ -248,6 +404,7 @@
           path: homepage
           platform: linux/arm64/v8
       delegate_to: localhost
+      register: build_result
 
     - name: deploy stack
       community.general.docker_stack:
@@ -258,15 +415,15 @@
           - version: '3.8'
             services:
               homepage:
-                image: registry.{{ domain }}/homepage:latest
+                image: "{{ build_result.image.RepoDigests[0] }}"
                 labels:
                   - "traefik.enable=true"
-                  - "traefik.http.routers.homepage.rule=Host(`pi.{{ domain }}`)"
+                  - "traefik.http.routers.homepage.rule=Host(`pi.{{ config.domain }}`)"
                   - "traefik.http.routers.homepage.entrypoints=websecure"
                   - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
                   - "traefik.http.services.homepage.loadbalancer.server.port=80"
                 environment:
-                  DOMAIN: "{{ domain }}"
+                  DOMAIN: "{{ config.domain }}"
                 networks:
                   - traefik_traefik
                 deploy:
@@ -287,7 +444,7 @@
     - sync
   tasks:
     - name: create directories
-      file:
+      ansible.builtin.file:
         path: "{{ item }}"
         owner: pi
         group: pi
@@ -309,7 +466,7 @@
                 image: linuxserver/resilio-sync:latest
                 labels:
                   - "traefik.enable=true"
-                  - "traefik.http.routers.sync.rule=Host(`sync.{{ domain }}`)"
+                  - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
                   - "traefik.http.routers.sync.entrypoints=websecure"
                   - "traefik.http.routers.sync.tls.certresolver=letsencrypt"
                   - "traefik.http.services.sync.loadbalancer.server.port=8888"
@@ -352,8 +509,8 @@
               cloudflare-ddns:
                 image: oznu/cloudflare-ddns:arm64v8
                 environment:
-                  ZONE: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).zone }}"
-                  SUBDOMAIN: "{{ (lookup('community.sops.sops', 'cloudflare_config.yml') | from_yaml).subdomain }}"
+                  ZONE: "{{ config.cloudflare.zone }}"
+                  SUBDOMAIN: "{{ config.cloudflare.subdomain }}"
                   API_KEY_FILE: /run/secrets/cloudflare_api_key_secret
                 secrets:
                   - cloudflare_api_key_secret
@@ -377,7 +534,7 @@
   tasks:
     - name: build
       community.docker.docker_image:
-        name: "registry.{{ domain }}/temporalite"
+        name: "registry.{{ config.domain }}/temporalite"
         source: build
         force_source: true
         push: true
@@ -386,9 +543,10 @@
           path: temporalite
           platform: linux/arm64/v8
       delegate_to: localhost
+      register: build_result
 
     - name: create directories
-      file:
+      ansible.builtin.file:
         path: /mnt/external/temporalite
         owner: pi
         group: pi
@@ -403,7 +561,7 @@
           - version: '3.8'
             services:
               temporalite:
-                image: registry.{{ domain }}/temporalite:latest
+                image: "{{ build_result.image.RepoDigests[0] }}"
                 volumes:
                   - /mnt/external/temporalite:/work
                 ports:
@@ -416,3 +574,75 @@
                   update_config:
                     order: stop-first
 
+- name: deploy temporal web
+  gather_facts: false
+  hosts: pi
+  tags:
+    - temporal-web
+  tasks:
+    - name: clone
+      ansible.builtin.git:
+        repo: https://github.com/temporalio/web.git
+        dest: "{{ playbook_dir}}/build/temporal-web"
+        version: v1.12.0
+        depth: 1
+        force: true
+      delegate_to: localhost
+
+    - name: patch dockerignore
+      ansible.builtin.lineinfile:
+        path: "{{ playbook_dir }}/build/temporal-web/.dockerignore"
+        line: ".git"
+      delegate_to: localhost
+
+    - name: patch dockerfile
+      ansible.builtin.lineinfile:
+        path: "{{ playbook_dir }}/build/temporal-web/Dockerfile"
+        insertbefore: "# Install app dependencies"
+        line: RUN apk add --no-cache python3 build-base
+      delegate_to: localhost
+
+    - name: build
+      community.docker.docker_image:
+        name: "registry.{{ config.domain }}/temporal-web"
+        source: build
+        force_source: true
+        push: true
+        build:
+          pull: false
+          path: build/temporal-web
+          platform: linux/arm64/v8
+      delegate_to: localhost
+      register: build_result
+
+    - name: deploy stack
+      community.general.docker_stack:
+        name: temporal-web
+        prune: yes
+        resolve_image: always
+        compose:
+          - version: '3.8'
+            services:
+              homepage:
+                image: "{{ build_result.image.RepoDigests[0] }}"
+                labels:
+                  - "traefik.enable=true"
+                  - "traefik.http.routers.temporal.rule=Host(`temporal.{{ config.domain }}`)"
+                  - "traefik.http.routers.temporal.entrypoints=websecure"
+                  - "traefik.http.routers.temporal.tls.certresolver=letsencrypt"
+                  - "traefik.http.services.temporal.loadbalancer.server.port=8088"
+                environment:
+                  TEMPORAL_GRPC_ENDPOINT: "pi.{{ config.domain }}:7233"
+                  TEMPORAL_PERMIT_WRITE_API: 'true'
+                networks:
+                  - traefik_traefik
+                deploy:
+                  mode: replicated
+                  replicas: 1
+                  restart_policy:
+                    condition: any
+                  update_config:
+                    order: stop-first
+            networks:
+              traefik_traefik:
+                external: true
