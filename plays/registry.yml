@@ -6,6 +6,15 @@
   tags:
     - registry
   tasks:
+    - name: set dns record
+      community.general.cloudflare_dns:
+        zone: "{{ config.cloudflare.zone }}"
+        record: "registry.{{ config.domain }}"
+        type: A
+        value: "{{ config.ip }}"
+        api_token: "{{ config.cloudflare.api_key }}"
+      delegate_to: localhost
+
     - name: create directory
       ansible.builtin.file:
         path: /mnt/external/registry

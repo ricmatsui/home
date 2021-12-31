@@ -21,6 +21,14 @@
         line: "dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock"
       notify: restart
 
+    - name: configure disk
+      ansible.builtin.template:
+        src: ../datadog/disk.yaml
+        dest: /etc/datadog-agent/conf.d/disk.d
+        owner: root
+        group: root
+      notify: restart
+
   handlers:
     - name: restart datadog
       ansible.builtin.systemd:

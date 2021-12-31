@@ -1,5 +1,6 @@
 config:
     domain: ENC[AES256_GCM,data:s73ijnUwoS+NfdjZOeVk39w=,iv:xQhxuYcGgww6NKL8ZAJ86OnDF0I+c76boJduycQwCmk=,tag:M7pbNLc0Z11pPHDRFzOfMw==,type:str]
+    ip: ENC[AES256_GCM,data:R79WcMdETdc=,iv:FJzq2wyTkuQlC6tP1GP+3AmbA4/AFrcEq8/K4pNVlbs=,tag:ngD+8wkaZejeoA0QDhWELQ==,type:str]
     datadog:
         api_key: ENC[AES256_GCM,data:lQFjQ5kZTui1fuXj3GQRTqklJchsvpBCj0ABbA0V/Gk=,iv:eh7LjAuzGjoa2CyXMFQnfK71GPv4yfjHit9hDejc0ow=,tag:k+AYoLFCk+SgmZMrUfx6Vw==,type:str]
     cloudflare:
@@ -21,8 +22,8 @@ sops:
     gcp_kms: []
     azure_kv: []
     hc_vault: []
-    lastmodified: '2021-12-29T21:09:56Z'
-    mac: ENC[AES256_GCM,data:25tDB8ZuVp3PN2g+ej11dPaWasqfQXlTTmT88ZfWxgs/901ecQUXjxUoKyBwBLof10z7/JIp5nbaGEEr9JuuzNPUo9gd9dC9Xfz0t6DsGjirtiRZK6QDW+zEk2jbixUrG7YmsPhYUPkl5LXsLHz1HK7/dp80EGfDJ4Zqd38KYCY=,iv:3KBmO47FJ1VSFtPZefSkGRDXDbET80TUHh3XAkQjhXc=,tag:naRs1zn26Ua5gzrqrzzQyA==,type:str]
+    lastmodified: '2021-12-31T05:02:30Z'
+    mac: ENC[AES256_GCM,data:qXvDxP2YYHMAKVIoV4D2pJjG6ydsNk7UKP5xeaNv8MqNPv1UKNZbsu8qqAzWOWyKldpdBySwkNBf37Ng5X1t1QVZzkb1GQp2y4ORJnfTUPfq7Kq/wKsby87XdVJcYo5fSEWTMqn8ZPDpiy1IJ9uRkhiI5xWC3fgDP3ZrsXJvr50=,iv:tbqJIat18WvtZeCIi9cc+8IZRZfA+Ix3Qc1gTiw7pqM=,tag:3k6mgRXS7RUA5N9FQyw0jA==,type:str]
     pgp:
     -   created_at: '2021-12-27T08:11:41Z'
         enc: |

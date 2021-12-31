@@ -6,6 +6,15 @@
   tags:
     - sync
   tasks:
+    - name: set dns record
+      community.general.cloudflare_dns:
+        zone: "{{ config.cloudflare.zone }}"
+        record: "sync.{{ config.domain }}"
+        type: A
+        value: "{{ config.ip }}"
+        api_token: "{{ config.cloudflare.api_key }}"
+      delegate_to: localhost
+
     - name: create directories
       ansible.builtin.file:
         path: "{{ item }}"

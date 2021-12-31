@@ -6,6 +6,15 @@
   tags:
     - homepage
   tasks:
+    - name: set dns record
+      community.general.cloudflare_dns:
+        zone: "{{ config.cloudflare.zone }}"
+        record: "pi.{{ config.domain }}"
+        type: A
+        value: "{{ config.ip }}"
+        api_token: "{{ config.cloudflare.api_key }}"
+      delegate_to: localhost
+
     - name: build
       community.docker.docker_image:
         name: "registry.{{ config.domain }}/homepage"

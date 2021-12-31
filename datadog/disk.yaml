@@ -1,0 +1,6 @@
+init_config:
+  mount_point_global_exclude:
+    - ^/run/docker/
+    - ^/mnt/external/docker
+instances:
+  - use_mount: false
