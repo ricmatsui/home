@@ -38,7 +38,7 @@
         path: /mnt/external
         src: "UUID={{ config.external.uuid }}"
         fstype: ext4
-        opts: defaults
+        opts: defaults,noatime
         passno: 1
         state: present
       notify: reboot

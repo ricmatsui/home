@@ -33,9 +33,6 @@
 - name: traefik
   import_playbook: plays/traefik.yml
 
-- name: glances
-  import_playbook: plays/glances.yml
-
 - name: registry
   import_playbook: plays/registry.yml
 

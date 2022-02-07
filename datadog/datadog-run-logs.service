@@ -1,0 +1,10 @@
+[Unit]
+Description=Datadog Run Logs
+Before=datadog-agent.service
+
+[Install]
+WantedBy=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=bash -c "mkdir -p /run/log/datadog && chown dd-agent:dd-agent /run/log/datadog"

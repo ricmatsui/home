@@ -15,21 +15,67 @@
           bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
         creates: /etc/datadog-agent/datadog.yaml
 
-    - name: configure
-      ansible.builtin.lineinfile:
-        path: /etc/datadog-agent/datadog.yaml
-        line: "dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock"
-      notify: restart
-
-    - name: configure disk
+    - name: install service
       ansible.builtin.template:
-        src: ../datadog/disk.yaml
-        dest: /etc/datadog-agent/conf.d/disk.d
+        src: ../datadog/datadog-run-logs.service
+        dest: /etc/systemd/system
         owner: root
         group: root
       notify: restart
 
+    - name: enable service
+      ansible.builtin.systemd:
+        name: datadog-run-logs
+        enabled: true
+
+    - name: add datadog to groups
+      ansible.builtin.user:
+        name: dd-agent
+        append: true
+        groups:
+          - docker
+          - systemd-journal
+      notify: restart
+
+    - name: configure
+      ansible.builtin.blockinfile:
+        path: /etc/datadog-agent/datadog.yaml
+        block: |
+          dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock
+          log_file: /run/log/datadog/agent.log
+          logs_enabled: true
+          apm_config: 
+            log_file: /run/log/datadog/trace-agent.log
+          process_config:
+            enabled: true
+            log_file: /run/log/datadog/process-agent.log
+      notify: restart
+
+    - name: configure checks
+      ansible.builtin.template:
+        src: "../datadog/{{ item.src }}"
+        dest: "/etc/datadog-agent/conf.d/{{ item.dest }}"
+        owner: root
+        group: root
+      loop:
+        - src: disk.yaml
+          dest: disk.d
+        - src: system_swap.yaml
+          dest: system_swap.d
+        - src: systemd.yaml
+          dest: systemd.d
+        - src: journald.yaml
+          dest: journald.d
+      notify: restart
+
   handlers:
+    - name: restart datadog run logs
+      ansible.builtin.systemd:
+        daemon_reload: true
+        name: datadog-run-logs
+        state: restarted
+      listen: restart
+
     - name: restart datadog
       ansible.builtin.systemd:
         daemon_reload: true
