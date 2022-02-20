@@ -102,6 +102,16 @@ async def blast_command(command, count):
         logger.debug('Blast transports closed')
 
 
+async def toggle_light_with_retry():
+    try:
+        await toggle_light()
+    except:
+        try:
+            await toggle_light()
+        except:
+            statsd.increment('lightpuck.toggle_retry_error')
+            logger.error('Toggle retry error')
+
 async def toggle_light():
     info_command = {
         'system': { 'get_sysinfo': {} }
@@ -152,6 +162,7 @@ async def toggle_light():
     except:
         statsd.increment('lightpuck.toggle_error')
         logger.error('Toggle error')
+        raise
 
 
 
@@ -199,7 +210,7 @@ class ScanDelegate(DefaultDelegate):
                         diff_press_count += 256
 
                     statsd.increment('lightpuck.button_pressed', value=diff_press_count-last_button_press, tags=tags)
-                    asyncio.run(toggle_light())
+                    asyncio.run(toggle_light_with_retry())
 
             self.last_button_press_by_addr[dev.addr] = button_press_count
 

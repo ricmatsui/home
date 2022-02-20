@@ -53,6 +53,8 @@
       loop:
         - dphys-swapfile
         - rsyslog
+        - apt-daily.timer
+        - apt-daily-upgrade.timer
       notify: reboot
       tags:
         - swap
