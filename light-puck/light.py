@@ -224,18 +224,21 @@ async def monitor():
 
     while True:
         try:
-            _, on_complete = await send_command({
+            transport, on_complete = await send_command({
                 'system': { 'get_sysinfo': {} }
                 })
 
-            await asyncio.wait_for(on_complete, timeout=5)
+            try:
+                await asyncio.wait_for(on_complete, timeout=5)
 
-            if on_complete.result()['system']['get_sysinfo']['sw_ver']:
-                logger.info('Monitor passed')
-                statsd.increment('lightpuck.monitor.passed')
-            else:
-                logger.warning('Monitor failed')
-                statsd.increment('lightpuck.monitor.failed')
+                if on_complete.result()['system']['get_sysinfo']['sw_ver']:
+                    logger.info('Monitor passed')
+                    statsd.increment('lightpuck.monitor.passed')
+                else:
+                    logger.warning('Monitor failed')
+                    statsd.increment('lightpuck.monitor.failed')
+            finally:
+                transport.close()
         except:
             logger.error('Monitor error')
             statsd.increment('lightpuck.monitor.error')
