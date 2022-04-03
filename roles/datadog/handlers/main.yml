@@ -1,0 +1,15 @@
+---
+
+- name: restart datadog run logs
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: datadog-run-logs
+    state: restarted
+  listen: datadog_restart
+
+- name: restart datadog
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: datadog-agent
+    state: restarted
+  listen: datadog_restart

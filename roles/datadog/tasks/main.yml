@@ -1,0 +1,64 @@
+---
+
+- name: install agent
+  ansible.builtin.shell:
+    cmd: >
+      DD_AGENT_MAJOR_VERSION=7
+      DD_API_KEY={{ config.datadog.api_key }}
+      DD_SITE=datadoghq.com
+      bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
+    creates: /etc/datadog-agent/datadog.yaml
+
+- name: install service
+  ansible.builtin.template:
+    src: datadog-run-logs.service
+    dest: /etc/systemd/system
+    owner: root
+    group: root
+  notify: datadog_restart
+
+- name: enable service
+  ansible.builtin.systemd:
+    name: datadog-run-logs
+    enabled: true
+
+- name: add datadog to groups
+  ansible.builtin.user:
+    name: dd-agent
+    append: true
+    groups:
+      - docker
+      - systemd-journal
+  notify: datadog_restart
+
+- name: configure
+  ansible.builtin.blockinfile:
+    path: /etc/datadog-agent/datadog.yaml
+    block: |
+      dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock
+      log_file: /run/log/datadog/agent.log
+      logs_enabled: true
+      apm_config:
+        log_file: /run/log/datadog/trace-agent.log
+      process_config:
+        enabled: true
+        log_file: /run/log/datadog/process-agent.log
+  notify: datadog_restart
+
+- name: configure checks
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "/etc/datadog-agent/conf.d/{{ item.dest }}"
+    owner: root
+    group: root
+  loop:
+    - src: disk.yaml
+      dest: disk.d
+    - src: system_swap.yaml
+      dest: system_swap.d
+    - src: systemd.yaml
+      dest: systemd.d
+    - src: journald.yaml
+      dest: journald.d
+  notify: datadog_restart
+

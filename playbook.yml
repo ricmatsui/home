@@ -13,40 +13,54 @@
         file: config.yml
 
 - name: external
-  import_playbook: plays/external.yml
+  gather_facts: false
+  hosts: pi
+  roles:
+    - role: external
+      tags: external
 
 - name: setup
-  import_playbook: plays/setup.yml
+  gather_facts: false
+  hosts: pi
+  roles:
+    - role: setup
+      tags: setup
 
-- name: datadog
-  import_playbook: plays/datadog.yml
+- name: deploy
+  gather_facts: false
+  hosts: pi
+  roles:
+    - role: datadog
+      tags: datadog
 
-- name: light
-  import_playbook: plays/light.yml
+    - role: light
+      tags: light
 
-- name: vpn
-  import_playbook: plays/vpn.yml
+    - role: vpn
+      tags: vpn
 
-- name: docker secrets
-  import_playbook: plays/docker_secrets.yml
+    - role: docker_secrets
+      tags:
+        - docker_secrets
+        - traefik
 
-- name: traefik
-  import_playbook: plays/traefik.yml
+    - role: traefik
+      tags: traefik
 
-- name: registry
-  import_playbook: plays/registry.yml
+    - role: registry
+      tags: registry
 
-- name: homepage
-  import_playbook: plays/homepage.yml
+    - role: homepage
+      tags: homepage
 
-- name: sync
-  import_playbook: plays/sync.yml
+    - role: sync
+      tags: sync
 
-- name: cloudflare
-  import_playbook: plays/cloudflare.yml
+    - role: cloudflare
+      tags: cloudflare
 
-- name: temporalite
-  import_playbook: plays/temporalite.yml
+    - role: temporalite
+      tags: temporalite
 
-- name: temporal web
-  import_playbook: plays/temporal_web.yml
+    - role: temporal_web
+      tags: temporal_web

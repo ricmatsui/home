@@ -1,0 +1,51 @@
+---
+
+- name: build
+  community.docker.docker_image:
+    name: "registry.{{ config.domain }}/temporalite"
+    source: build
+    force_source: true
+    push: true
+    build:
+      pull: false
+      path: "{{ role_path }}/files"
+      platform: linux/arm64/v8
+  delegate_to: localhost
+  register: build_result
+
+- name: create directories
+  ansible.builtin.file:
+    path: /mnt/external/temporalite
+    owner: pi
+    group: pi
+    state: directory
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: temporalite
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          temporalite:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            environment:
+              GOMAXPROCS: '1'
+            volumes:
+              - /mnt/external/temporalite:/work
+            ports:
+              - 7233:7233
+            logging:
+              driver: none
+            deploy:
+              mode: replicated
+              replicas: 1
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 125M
+              restart_policy:
+                delay: 30s
+              update_config:
+                order: stop-first

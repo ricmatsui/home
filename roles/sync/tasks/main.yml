@@ -1,0 +1,67 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "sync.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/external/resilio-sync/config
+    - /mnt/external/resilio-sync/downloads
+    - /mnt/external/resilio-sync/sync
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: resilio-sync
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          resilio-sync:
+            image: linuxserver/resilio-sync:latest
+            labels:
+              - "traefik.enable=true"
+              - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
+              - "traefik.http.routers.sync.entrypoints=websecure"
+              - "traefik.http.routers.sync.tls.certresolver=letsencrypt"
+              - "traefik.http.services.sync.loadbalancer.server.port=8888"
+            networks:
+              - traefik_traefik
+            environment:
+              PUID: "1000"
+              PGID: "1000"
+              TZ: America/Los_Angeles
+              UMASK_SET: "022"
+            volumes:
+              - /mnt/external/resilio-sync/config:/config
+              - /mnt/external/resilio-sync/downloads:/downloads
+              - /mnt/external/resilio-sync/sync:/sync
+            ports:
+              - 55555:55555
+            logging:
+              driver: none
+            deploy:
+              mode: replicated
+              replicas: 1
+              resources:
+                limits:
+                  cpus: '0.50'
+                  memory: 150M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

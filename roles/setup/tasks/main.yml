@@ -1,0 +1,100 @@
+---
+
+- name: update cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: check swap
+  ansible.builtin.stat:
+    path: /var/swap
+  changed_when: false
+  register: swap_result
+  tags:
+    - swap
+
+- name: disable swap
+  ansible.builtin.shell:
+    cmd: "{{ item }}"
+  loop:
+    - dphys-swapfile swapoff
+    - dphys-swapfile uninstall
+  when: swap_result.stat.exists
+  notify: setup_reboot
+  tags:
+    - swap
+
+- name: configure journal
+  community.general.ini_file:
+    path: /etc/systemd/journald.conf
+    section: Journal
+    option: "{{ item.option }}"
+    value: "{{ item.value }}"
+  loop:
+    - option: Storage
+      value: volatile
+    - option: RuntimeMaxUse
+      value: 15M
+  notify: setup_reboot
+  tags:
+    - journal
+
+- name: disable services
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - dphys-swapfile
+    - rsyslog
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+  notify: setup_reboot
+  tags:
+    - swap
+
+- name: enable cgroups features
+  ansible.builtin.lineinfile:
+    path: /boot/cmdline.txt
+    backrefs: True
+    regexp: '(^.+rootwait)$'
+    line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+  notify: setup_reboot
+  tags:
+    - cgroups
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - vim
+      - lsof
+      - git
+      - sysstat
+      - python3-venv
+      - zram-tools
+  notify: setup_reboot
+
+- name: configure zram
+  ansible.builtin.lineinfile:
+    path: /etc/default/zramswap
+    line: SIZE=1024
+  notify: setup_reboot
+
+- name: install docker sdk
+  ansible.builtin.pip:
+    name:
+      - docker
+      - jsondiff
+      - pyyaml
+
+- name: install pipx
+  ansible.builtin.pip:
+    executable: pip3
+    name: pipx
+    extra_args: --user
+  become_user: pi
+
+- name: install poetry
+  community.general.pipx:
+    name: poetry
+  become_user: pi

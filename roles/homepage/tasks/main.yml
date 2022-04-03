@@ -1,0 +1,60 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "pi.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: build
+  community.docker.docker_image:
+    name: "registry.{{ config.domain }}/homepage"
+    source: build
+    force_source: true
+    push: true
+    build:
+      pull: false
+      path: "{{ role_path }}/files"
+      platform: linux/arm64/v8
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: homepage
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          homepage:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            labels:
+              - "traefik.enable=true"
+              - "traefik.http.routers.homepage.rule=Host(`pi.{{ config.domain }}`)"
+              - "traefik.http.routers.homepage.entrypoints=websecure"
+              - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
+              - "traefik.http.services.homepage.loadbalancer.server.port=80"
+            environment:
+              DOMAIN: "{{ config.domain }}"
+            networks:
+              - traefik_traefik
+            logging:
+              driver: none
+            deploy:
+              mode: replicated
+              replicas: 1
+              resources:
+                limits:
+                  cpus: '0.15'
+                  memory: 10M
+              restart_policy:
+                delay: 30s
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

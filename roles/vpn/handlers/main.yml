@@ -1,0 +1,8 @@
+---
+
+- name: restart service
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: wg-quick@wg1.service
+    state: restarted
+  listen: vpn_restart

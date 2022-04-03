@@ -1,0 +1,38 @@
+---
+
+- name: configure udev rule
+  ansible.builtin.template:
+    src: 10-external.rules
+    dest: /etc/udev/rules.d
+    owner: root
+    group: root
+  notify: external_reboot
+
+- name: list block devices
+  ansible.builtin.shell:
+    cmd: lsblk -f
+  changed_when: false
+  register:
+    block_result
+
+- name: print block devices
+  ansible.builtin.debug:
+    var: block_result.stdout
+
+- name: create mount point
+  ansible.builtin.file:
+    path: /mnt/external
+    owner: root
+    group: root
+    state: directory
+  notify: external_reboot
+
+- name: configure fstab
+  ansible.posix.mount:
+    path: /mnt/external
+    src: "UUID={{ config.external.uuid }}"
+    fstype: ext4
+    opts: defaults,noatime
+    passno: 1
+    state: present
+  notify: external_reboot
