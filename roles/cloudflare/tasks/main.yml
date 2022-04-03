@@ -9,7 +9,7 @@
       - version: '3.8'
         services:
           cloudflare-ddns:
-            image: oznu/cloudflare-ddns:arm64v8
+            image: oznu/cloudflare-ddns@sha256:957a3442e4415cc247376e695e58743448c5eb7d8ffd8c606054b5c7f84c31db
             environment:
               ZONE: "{{ config.cloudflare.zone }}"
               SUBDOMAIN: "{{ config.cloudflare.subdomain }}"

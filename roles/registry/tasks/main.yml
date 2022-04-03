@@ -25,7 +25,7 @@
       - version: '3.8'
         services:
           registry:
-            image: registry:2
+            image: registry@sha256:169211e20e2f2d5d115674681eb79d21a217b296b43374b8e39f97fcf866b375
             labels:
               - "traefik.enable=true"
               - "traefik.http.routers.registry.rule=Host(`registry.{{ config.domain }}`)"

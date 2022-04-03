@@ -13,8 +13,7 @@
   ansible.builtin.git:
     repo: https://github.com/temporalio/web.git
     dest: "{{ role_path }}/files/build/temporal-web"
-    version: v1.12.0
-    depth: 1
+    version: decc2d77e8b8d570293eb303c1c6665e7ff62501
     force: true
   delegate_to: localhost
 
