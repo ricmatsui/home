@@ -12,8 +12,8 @@
         cache_valid_time: 3600
 
     - name: check swap
-      ansible.builtin.shell:
-        cmd: cat /proc/swaps | tail -n +2
+      ansible.builtin.stat:
+        path: /var/swap
       changed_when: false
       register: swap_result
       tags:
@@ -25,7 +25,7 @@
       loop:
         - dphys-swapfile swapoff
         - dphys-swapfile uninstall
-      when: swap_result.stdout_lines|length > 0
+      when: swap_result.stat.exists
       notify: reboot
       tags:
         - swap
@@ -77,6 +77,14 @@
           - git
           - sysstat
           - python3-venv
+          - zram-tools
+      notify: reboot
+
+    - name: configure zram
+      ansible.builtin.lineinfile:
+        path: /etc/default/zramswap
+        line: SIZE=1024
+      notify: reboot
 
     - name: install docker sdk
       ansible.builtin.pip:
