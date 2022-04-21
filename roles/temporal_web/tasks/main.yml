@@ -54,12 +54,6 @@
         services:
           temporal-web:
             image: "{{ build_result.image.RepoDigests[0] }}"
-            labels:
-              - "traefik.enable=true"
-              - "traefik.http.routers.temporal.rule=Host(`temporal.{{ config.domain }}`)"
-              - "traefik.http.routers.temporal.entrypoints=websecure"
-              - "traefik.http.routers.temporal.tls.certresolver=letsencrypt"
-              - "traefik.http.services.temporal.loadbalancer.server.port=8088"
             environment:
               TEMPORAL_GRPC_ENDPOINT: "pi.{{ config.domain }}:7233"
               TEMPORAL_PERMIT_WRITE_API: 'true'
@@ -70,6 +64,15 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.temporal.rule=Host(`temporal.{{ config.domain }}`)"
+                - "traefik.http.routers.temporal.entrypoints=websecure"
+                - "traefik.http.routers.temporal.tls.certresolver=letsencrypt"
+                - "traefik.http.services.temporal.loadbalancer.server.port=8088"
+              placement:
+                constraints:
+                  - 'node.role == worker'
               resources:
                 limits:
                   cpus: '1.00'

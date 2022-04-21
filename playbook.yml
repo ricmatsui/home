@@ -4,6 +4,7 @@
   gather_facts: false
   hosts:
     - pi
+    - tart
     - localhost
   tags:
     - always
@@ -21,23 +22,67 @@
 
 - name: setup
   gather_facts: false
-  hosts: pi
+  hosts:
+    - pi
+    - tart
   roles:
     - role: setup
       tags: setup
+
+- name: vpn
+  gather_facts: false
+  hosts:
+    - pi
+    - tart
+  roles:
+    - role: vpn
+      tags: vpn
+
+- name: datadog
+  gather_facts: false
+  hosts:
+    - pi
+    - tart
+  roles:
+    - role: datadog
+      tags: datadog
+
+- name: external_docker
+  gather_facts: false
+  hosts: pi
+  roles:
+    - role: external_docker
+      tags: external_docker
+
+- name: docker
+  gather_facts: false
+  hosts:
+    - docker_managers
+    - docker_workers
+  roles:
+    - role: docker
+      tags: docker
+
+- name: docker_manager
+  gather_facts: false
+  hosts: docker_managers
+  roles:
+    - role: docker_manager
+      tags: docker_manager
+
+- name: docker_worker
+  gather_facts: false
+  hosts: docker_workers
+  roles:
+    - role: docker_worker
+      tags: docker_worker
 
 - name: deploy
   gather_facts: false
   hosts: pi
   roles:
-    - role: datadog
-      tags: datadog
-
     - role: light
       tags: light
-
-    - role: vpn
-      tags: vpn
 
     - role: docker_secrets
       tags:

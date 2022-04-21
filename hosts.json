@@ -4,7 +4,18 @@
 	},
 	"all": {
 		"children": [
-			"ENC[AES256_GCM,data:QLY=,iv:EiWVq+PeVXP94+XmooA0Rkv0Q1KKK79s7KarPfxpUVw=,tag:yXx2AiDYYNLlGZv3baNveg==,type:str]"
+			"ENC[AES256_GCM,data:QLY=,iv:EiWVq+PeVXP94+XmooA0Rkv0Q1KKK79s7KarPfxpUVw=,tag:yXx2AiDYYNLlGZv3baNveg==,type:str]",
+			"ENC[AES256_GCM,data:XlDCPQ==,iv:PzBShH8A+W7thNVhMGG/TBAqCITNqtTSPhlMUQ8cePE=,tag:2nSDhbJfCUywNl0U7QgA5w==,type:str]"
+		]
+	},
+	"docker_managers": {
+		"children": [
+			"ENC[AES256_GCM,data:SuM=,iv:upt7r82YokHElqV7cw3vO0gABz2WGkw9Y0lDD6EL1yk=,tag:4EFZWS+C+lpS+cnVKuD86w==,type:str]"
+		]
+	},
+	"docker_workers": {
+		"children": [
+			"ENC[AES256_GCM,data:kLaFgQ==,iv:eISUvU8X/zEUdBrQXGyxsw299BdFJP1av4ve8+pBavc=,tag:Gj7rIOuH2xlGcIEDWLfHGw==,type:str]"
 		]
 	},
 	"pi": {
@@ -13,7 +24,46 @@
 		],
 		"vars": {
 			"ansible_user": "ENC[AES256_GCM,data:cgs=,iv:3vv0anz618GelETnVQgALbfOjOTgUSMqZ1E4oY2PFco=,tag:Q6d8zATqnF32ksUPedH8qw==,type:str]",
-			"ansible_become": "ENC[AES256_GCM,data:piLk,iv:8Cm3Ro1HmoYILvJbK+Fc/s61eajMTauHvjxnmHQmdyc=,tag:rchgiI4cxQOQGVk7HXo05Q==,type:str]"
+			"ansible_become": "ENC[AES256_GCM,data:piLk,iv:8Cm3Ro1HmoYILvJbK+Fc/s61eajMTauHvjxnmHQmdyc=,tag:rchgiI4cxQOQGVk7HXo05Q==,type:str]",
+			"setup_zram_size": "ENC[AES256_GCM,data:Ge8oyQ==,iv:DP8yQQNQM8UPk5ahBgnjkBcT6Kg+gbIOxd/yBiLaUG0=,tag:QKDhcFrrG0VkAUuE4k6kkw==,type:float]",
+			"vpn_ip_forward": "ENC[AES256_GCM,data:PoEaAQ==,iv:tPNA4UtxraJkVwPjeWF8ChYmjGfyr/m6cPq9WORaqJ8=,tag:nVuKBS1GSGp403gsja/hzg==,type:bool]",
+			"vpn_config": "ENC[AES256_GCM,data:zfzFMNz+OgjM1ss=,iv:OlSFshZME201+nx1qOdGwqHsllrQ3rHtLtY1kRAw1Cs=,tag:B9LKxBcMQVuQuIw346Hqkw==,type:str]",
+			"vpn_dns_name": "ENC[AES256_GCM,data:joZj8xWf1OGM4zxyNV8Ak5+w3SY=,iv:6vGVUV/X+pbbFHLm5Qu0ujwEy43ObaiJiiN1RsxajSo=,tag:k7cmOL/PcVG8uBJREYyMbw==,type:str]",
+			"vpn_ip": "ENC[AES256_GCM,data:0aAQLWg5sUo=,iv:qZiP0Aj684P46mGf8A0i7fEp2DNsSm4eKRYSRTAb/NM=,tag:ita5wlsvVi8mtPsQGZlIBQ==,type:str]",
+			"docker_advertise_addr": "ENC[AES256_GCM,data:L5CrFk96fs3CrSZR,iv:7dfaqHT3Vd3woiai7NIyYYZbKHQqEa8p7aAbP/xRno8=,tag:pb7PCrgISTrDtSHJA6at2g==,type:str]",
+			"docker_default_address_pool": "ENC[AES256_GCM,data:eU1+qXwl82rVI7Nk,iv:siXJq5sfKEyvisaYZKknZK4/GzU+pEEIThb96xl0o4k=,tag:cIVD4kLwP5VnyJqIUIuRJg==,type:str]",
+			"docker_hostname": "ENC[AES256_GCM,data:Bx8/3Dn+ZVqUo+YK,iv:nS7emN7EmqvFO/4ZnNWKs1MTfhHASPWZqi41nL8YWr4=,tag:AC1UaxW4q4dEEfsTDEOGzw==,type:str]",
+			"docker_labels": {
+				"pi.model": "ENC[AES256_GCM,data:Du0r,iv:VBT46OZ3b4wEjbMbuNhRacSniyIlqxH3UN7sG7KqP/s=,tag:5oWUQYx3rJMsovBWV41h4w==,type:str]",
+				"pi.storage": "ENC[AES256_GCM,data:kD1foFwQ3s8=,iv:W+w2LY/dmswhUR9fkpMBSD+g6Yi38KzorDWTAt5AHv0=,tag:9SiB8gYXGJiOBHmNhhOLVA==,type:str]"
+			},
+			"datadog_systemd_unit_names": [
+				"ENC[AES256_GCM,data:BlNgUz8zhzW4JsE/O40=,iv:ilu/imdhHrvGEqpab/t+w4yOokSkGghW897kT+6uKEg=,tag:gZRTy9Kc0gWs+GED659i/w==,type:str]",
+				"ENC[AES256_GCM,data:p6BBTPIrY8k5ejFolvItZo1Q,iv:RVDIuUGxopia3sfPUpiKMYKe3e8kD8E8I1EHlu+XVBM=,tag:jdj1MxkuWNmHLaKxeJbbkA==,type:str]"
+			]
+		}
+	},
+	"tart": {
+		"hosts": [
+			"ENC[AES256_GCM,data:e8rJUHOM9dgeXkPk44U4pUEpKvtc+g==,iv:/Dli+TfBKcAtHfALkg7ES0JB1oNTpbzdyI2AY/MCrt8=,tag:VSHUKtNwPcltOLiOXxFR6g==,type:str]"
+		],
+		"vars": {
+			"ansible_user": "ENC[AES256_GCM,data:tT8=,iv:8ngmpL18DMBFbBzhp+qay7GuCdhEplrbEfPWsqT7gvM=,tag:1IxgoX/qofE9ojEX+sceaA==,type:str]",
+			"ansible_become": "ENC[AES256_GCM,data:fmDF,iv:7RKFVeqG1tJrEvQHFD846/RHY6iW8qdBQseH2Dw51f8=,tag:kXIJxFgXDrY2ualeyViC4Q==,type:str]",
+			"setup_zram_size": "ENC[AES256_GCM,data:u5Toww==,iv:E3aZNJk8fP4rwrPvRsknkYaYyjjzUtcHFPYaI1DwnO4=,tag:MvwpbgR5iuRmzVXnhdm4uQ==,type:float]",
+			"vpn_ip_forward": "ENC[AES256_GCM,data:NFfcuJw=,iv:KeUhuRxMRtqGD2QSPOZdc4rHxAJPcHVOzEoZuPUAoiA=,tag:MCpbrJAcFdpz4X8y8CHViw==,type:bool]",
+			"vpn_config": "ENC[AES256_GCM,data:Y+PITPichawviy7YbA==,iv:vGFHMEq1n5NQMKmZst2iYkEBF+qsmZgXded/GTrE+yQ=,tag:euvnGkEeWuy+ETkvCb9TTQ==,type:str]",
+			"vpn_dns_name": "ENC[AES256_GCM,data:HRp5g/rQsT2vQdLZ2PvPH/CL2Hjajg==,iv:l+wKjIFQVyX/tEDPLEdOVgzfellk9/j0iMXjoteWcQE=,tag:eR5ejBx5Fh7dlNZ4xIaCMg==,type:str]",
+			"vpn_ip": "ENC[AES256_GCM,data:xWFvg8Ehgtk=,iv:hsGhAPFdKHtwQsbURtUplvTJ0lRNoo315jg4wryxajQ=,tag:EzWaM6TB9Eg7/bAPuLrQuw==,type:str]",
+			"docker_advertise_addr": "ENC[AES256_GCM,data:ieOvNAVnUb6nm9ql,iv:fMiQ5tkzmEBlxoIb5IKAQCSUuGknlIFCFLeJmLMPehY=,tag:k3ZNqQijYnGLQIWxG63U2g==,type:str]",
+			"docker_hostname": "ENC[AES256_GCM,data:u8uyfWkW8hyaRjRH,iv:kCouzRkx2ZDhCXG+iLSYPI8NdofDS36VpDIZnLP0ANI=,tag:7E2uQizqvlAWM4FbIOKXOg==,type:str]",
+			"docker_labels": {
+				"pi.model": "ENC[AES256_GCM,data:/xoM,iv:T8rSFMLirqmoYrnp4tST1sKhkFIQGTOXCZPhnvj7qSE=,tag:b/9WKFwpCyneSz3aLCR6zQ==,type:str]"
+			},
+			"datadog_systemd_unit_names": [
+				"ENC[AES256_GCM,data:q0H8gHFx+KmqH/meOwc=,iv:Hzm8L88Vji5+RrW9q4WJukWibzz01SZRv/8sW8atWyc=,tag:LV0UtOI6VGEhRMhAjx919Q==,type:str]",
+				"ENC[AES256_GCM,data:MOhoRuiZFXSjFHXQjbmT0Mpz,iv:OvumrB7XYAzPu9/ai9V85awM6eAfcZv0AwR5nXFYjJ8=,tag:lDgnXibIqcLDR4Dbq5+yNg==,type:str]"
+			]
 		}
 	},
 	"sops": {
@@ -21,8 +71,8 @@
 		"gcp_kms": null,
 		"azure_kv": null,
 		"hc_vault": null,
-		"lastmodified": "2021-12-27T09:44:46Z",
-		"mac": "ENC[AES256_GCM,data:H/4p4MqfVtx9gx7tZ8NVhgbIMJzdf1e04rURigLgEt+wYNdKPsczx1EVqaTi1P09isZkvMLR3HDzlmaiUZFt/ZSiEVr8uZt/CQxLhYGt6N4TEkDxKF8FSaPVb6bKHenmTNFWlss/n9iT6LZMaXSUSP3zAAGg1WBwB9D6Z93NjXk=,iv:spu5yefpDD8aEnKzmI/3r/jDwJmrJvaMURY34IcM/DY=,tag:eEAVV5m2d1ptOutJNbgS9Q==,type:str]",
+		"lastmodified": "2022-04-21T04:39:06Z",
+		"mac": "ENC[AES256_GCM,data:FrRAMUnErDzTvlJUsXvRbiO6we7AU1V8gj5LFFhetIsnWceJpYTuAvXjJC38CTo7kv7CqSii077xBrFuSl7v+wUmnRb5GKV/CPnj3hMB2Wfo15zra8lgwcnkUWee1qCJR/dUYn4KXDBh/xNMdR5f9HzCXamF/JwfBgOS4d+43s8=,iv:V0Dm/vr8yAsAO+SjhPCkqn3fJ1TumtXOtk7Ec41IHgQ=,tag:giMARNBAF/9LVQDrLlbGrg==,type:str]",
 		"pgp": [
 			{
 				"created_at": "2020-10-23T21:16:31Z",

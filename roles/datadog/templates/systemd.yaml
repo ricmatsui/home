@@ -1,3 +1,5 @@
 instances:
   - unit_names:
-      - light-puck.service
+      {% for unit_name in datadog_systemd_unit_names %}
+      - {{ unit_name }}
+      {% endfor %}

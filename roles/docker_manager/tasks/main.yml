@@ -1,0 +1,12 @@
+---
+
+- name: init swarm
+  community.docker.docker_swarm:
+    advertise_addr: "{{ docker_advertise_addr }}"
+    default_addr_pool: "{{ docker_default_address_pool }}"
+
+- name: update node
+  community.docker.docker_node:
+    hostname: "{{ docker_hostname }}"
+    labels: "{{ docker_labels }}"
+    labels_state: replace

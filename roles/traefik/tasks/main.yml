@@ -31,6 +31,7 @@
             command: >
               --api.dashboard=true
               --providers.docker
+              --providers.docker.swarmMode=true
               --providers.docker.exposedbydefault=false
               --providers.docker.network=traefik_traefik
               --entrypoints.web.address=:80
@@ -42,15 +43,6 @@
               --certificatesresolvers.letsencrypt.acme.dnschallenge=true
               --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
               --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
-            labels:
-              - "traefik.enable=true"
-              - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
-              - "traefik.http.routers.traefik.rule=Host(`traefik.{{ config.domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
-              - "traefik.http.routers.traefik.entrypoints=websecure"
-              - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
-              - "traefik.http.routers.traefik.service=api@internal"
-              - "traefik.http.routers.traefik.middlewares=traefik-auth"
-              - "traefik.http.services.traefik.loadbalancer.server.port=80"
             secrets:
               - traefik_users_secret
               - cloudflare_api_key_secret
@@ -69,6 +61,19 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
+                - "traefik.http.routers.traefik.rule=Host(`traefik.{{ config.domain }}`) && (PathPrefix(`/api`) || PathPrefix(`/dashboard`))"
+                - "traefik.http.routers.traefik.entrypoints=websecure"
+                - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+                - "traefik.http.routers.traefik.service=api@internal"
+                - "traefik.http.routers.traefik.middlewares=traefik-auth"
+                - "traefik.http.services.traefik.loadbalancer.server.port=80"
+              placement:
+                constraints:
+                  - 'node.role == manager'
+                  - 'node.labels.pi.storage == external'
               resources:
                 limits:
                   cpus: '1.00'

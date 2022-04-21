@@ -4,6 +4,7 @@
   ansible.builtin.apt:
     name:
       - wireguard
+  notify: vpn_restart
 
 - name: ipv4 forward
   ansible.posix.sysctl:
@@ -12,6 +13,7 @@
     state: present
     reload: yes
   notify: vpn_restart
+  when: vpn_ip_forward
 
 - name: ipv6 forward
   ansible.posix.sysctl:
@@ -20,18 +22,51 @@
     state: present
     reload: yes
   notify: vpn_restart
+  when: vpn_ip_forward
 
 - name: configure
   ansible.builtin.copy:
-    content: "{{ lookup('community.sops.sops', 'pi-wg1.conf') }}"
+    content: "{{ lookup('community.sops.sops', vpn_config) }}"
     dest: /etc/wireguard/wg1.conf
     owner: root
     group: root
     mode: u=rw,g=,o=
   notify: vpn_restart
 
-- name: enable service
+- ansible.builtin.blockinfile:
+    path: /etc/nftables.conf
+    block: |
+      add table wireguard-nat
+
+      table ip wireguard-nat {
+        chain prerouting {
+          type nat hook prerouting priority -100; policy accept;
+        }
+
+        chain postrouting {
+          type nat hook postrouting priority 100; policy accept;
+          oifname "eth0" masquerade
+        }
+      }
+  notify: vpn_restart
+  when: vpn_ip_forward
+
+- name: enable nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+  when: vpn_ip_forward
+
+- name: enable wireguard
   ansible.builtin.systemd:
     name: wg-quick@wg1.service
     enabled: true
 
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "{{ vpn_dns_name }}"
+    type: A
+    value: "{{ vpn_ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost

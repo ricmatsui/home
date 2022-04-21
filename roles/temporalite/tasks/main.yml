@@ -41,6 +41,9 @@
             deploy:
               mode: replicated
               replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.pi.storage == external'
               resources:
                 limits:
                   cpus: '1.00'

@@ -1,6 +1,14 @@
 ---
 
-- name: restart service
+- name: restart nftables
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: nftables.service
+    state: restarted
+  listen: vpn_restart
+  when: vpn_ip_forward
+
+- name: restart wireguard
   ansible.builtin.systemd:
     daemon_reload: true
     name: wg-quick@wg1.service

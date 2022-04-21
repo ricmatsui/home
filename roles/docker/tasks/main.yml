@@ -1,0 +1,7 @@
+---
+
+- name: install docker
+  ansible.builtin.shell:
+    cmd: >
+      bash -c "$(curl -fsSL https://get.docker.com)"
+    creates: /usr/bin/docker

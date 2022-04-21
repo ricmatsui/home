@@ -30,12 +30,6 @@
         services:
           resilio-sync:
             image: linuxserver/resilio-sync@sha256:b597ca68fe271adf473f7d0c8a4cd28a919c9eb31a9d6687edfc119e40ff7fbe
-            labels:
-              - "traefik.enable=true"
-              - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
-              - "traefik.http.routers.sync.entrypoints=websecure"
-              - "traefik.http.routers.sync.tls.certresolver=letsencrypt"
-              - "traefik.http.services.sync.loadbalancer.server.port=8888"
             networks:
               - traefik_traefik
             environment:
@@ -54,6 +48,15 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
+                - "traefik.http.routers.sync.entrypoints=websecure"
+                - "traefik.http.routers.sync.tls.certresolver=letsencrypt"
+                - "traefik.http.services.sync.loadbalancer.server.port=8888"
+              placement:
+                constraints:
+                  - 'node.labels.pi.storage == external'
               resources:
                 limits:
                   cpus: '0.50'

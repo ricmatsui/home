@@ -1,0 +1,5 @@
+---
+
+- name: reboot
+  ansible.builtin.reboot:
+  listen: external_docker_reboot

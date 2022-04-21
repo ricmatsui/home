@@ -1,0 +1,21 @@
+---
+
+- name: get swarm info
+  community.docker.docker_swarm_info:
+  register: swarm_info
+  delegate_to: "{{ groups['docker_managers']|first }}"
+
+- name: join swarm
+  community.docker.docker_swarm:
+    state: join
+    join_token: "{{ swarm_info['swarm_facts']['JoinTokens']['Worker'] }}"
+    remote_addrs:
+      - "{{ hostvars[groups['docker_managers']|first]['docker_advertise_addr'] }}"
+    advertise_addr: "{{ docker_advertise_addr }}"
+
+- name: update node
+  community.docker.docker_node:
+    hostname: "{{ docker_hostname }}"
+    labels: "{{ docker_labels }}"
+    labels_state: replace
+  delegate_to: "{{ groups['docker_managers']|first }}"

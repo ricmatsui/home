@@ -26,12 +26,6 @@
         services:
           registry:
             image: registry@sha256:169211e20e2f2d5d115674681eb79d21a217b296b43374b8e39f97fcf866b375
-            labels:
-              - "traefik.enable=true"
-              - "traefik.http.routers.registry.rule=Host(`registry.{{ config.domain }}`)"
-              - "traefik.http.routers.registry.entrypoints=websecure"
-              - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
-              - "traefik.http.services.registry.loadbalancer.server.port=5000"
             volumes:
               - /mnt/external/registry:/var/lib/registry
             networks:
@@ -41,6 +35,15 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.registry.rule=Host(`registry.{{ config.domain }}`)"
+                - "traefik.http.routers.registry.entrypoints=websecure"
+                - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
+                - "traefik.http.services.registry.loadbalancer.server.port=5000"
+              placement:
+                constraints:
+                  - 'node.labels.pi.storage == external'
               resources:
                 limits:
                   cpus: '0.25'

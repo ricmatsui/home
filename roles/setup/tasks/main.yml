@@ -70,6 +70,7 @@
       - lsof
       - git
       - sysstat
+      - python3-pip
       - python3-venv
       - zram-tools
   notify: setup_reboot
@@ -77,7 +78,7 @@
 - name: configure zram
   ansible.builtin.lineinfile:
     path: /etc/default/zramswap
-    line: SIZE=1024
+    line: "SIZE={{ setup_zram_size }}"
   notify: setup_reboot
 
 - name: install docker sdk
@@ -87,14 +88,10 @@
       - jsondiff
       - pyyaml
 
-- name: install pipx
-  ansible.builtin.pip:
-    executable: pip3
-    name: pipx
-    extra_args: --user
-  become_user: pi
-
 - name: install poetry
-  community.general.pipx:
-    name: poetry
+  ansible.builtin.shell:
+    cmd: >
+      curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py
+      | python -
+    creates: /home/pi/.poetry/bin/poetry
   become_user: pi
