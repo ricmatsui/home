@@ -1,0 +1,74 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "pi-hole.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: configure
+  ansible.builtin.template:
+    src: adlists.list
+    dest: "{{ role_path }}/files/build/adlists.list"
+  delegate_to: localhost
+
+- name: build
+  community.docker.docker_image:
+    name: "registry.{{ config.domain }}/pi-hole"
+    source: build
+    force_source: true
+    push: true
+    build:
+      pull: false
+      path: "{{ role_path }}/files"
+      platform: linux/arm64/v8
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: pi-hole
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          pi-hole:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            ports:
+              - '53:53/tcp'
+              - '53:53/udp'
+            environment:
+              WEBPASSWORD: ''
+            networks:
+              - traefik_traefik
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.middlewares.pi-hole-redirect.redirectregex.regex=^https://([^/]+)/$$"
+                - "traefik.http.middlewares.pi-hole-redirect.redirectregex.replacement=https://$${1}/admin/"
+                - "traefik.http.middlewares.pi-hole-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
+                - "traefik.http.routers.pi-hole.rule=Host(`pi-hole.{{ config.domain }}`)"
+                - "traefik.http.routers.pi-hole.entrypoints=websecure"
+                - "traefik.http.routers.pi-hole.tls.certresolver=letsencrypt"
+                - "traefik.http.routers.pi-hole.middlewares=pi-hole-redirect,pi-hole-auth"
+                - "traefik.http.services.pi-hole.loadbalancer.server.port=80"
+              placement:
+                constraints:
+                  - 'node.labels.pi.network == ingress'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 100M
+              restart_policy:
+                delay: 20s
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

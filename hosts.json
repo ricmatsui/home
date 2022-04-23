@@ -35,7 +35,8 @@
 			"docker_hostname": "ENC[AES256_GCM,data:Bx8/3Dn+ZVqUo+YK,iv:nS7emN7EmqvFO/4ZnNWKs1MTfhHASPWZqi41nL8YWr4=,tag:AC1UaxW4q4dEEfsTDEOGzw==,type:str]",
 			"docker_labels": {
 				"pi.model": "ENC[AES256_GCM,data:Du0r,iv:VBT46OZ3b4wEjbMbuNhRacSniyIlqxH3UN7sG7KqP/s=,tag:5oWUQYx3rJMsovBWV41h4w==,type:str]",
-				"pi.storage": "ENC[AES256_GCM,data:kD1foFwQ3s8=,iv:W+w2LY/dmswhUR9fkpMBSD+g6Yi38KzorDWTAt5AHv0=,tag:9SiB8gYXGJiOBHmNhhOLVA==,type:str]"
+				"pi.storage": "ENC[AES256_GCM,data:kD1foFwQ3s8=,iv:W+w2LY/dmswhUR9fkpMBSD+g6Yi38KzorDWTAt5AHv0=,tag:9SiB8gYXGJiOBHmNhhOLVA==,type:str]",
+				"pi.network": "ENC[AES256_GCM,data:irOKN4cMZw==,iv:m5RDJUHBt8lxnkfJ5Oqw9iiMnDc7JTzuS6mo/0eC/Dc=,tag:avxvU2FW0cHK3zMkk9PcLA==,type:str]"
 			},
 			"datadog_systemd_unit_names": [
 				"ENC[AES256_GCM,data:BlNgUz8zhzW4JsE/O40=,iv:ilu/imdhHrvGEqpab/t+w4yOokSkGghW897kT+6uKEg=,tag:gZRTy9Kc0gWs+GED659i/w==,type:str]",
@@ -71,8 +72,8 @@
 		"gcp_kms": null,
 		"azure_kv": null,
 		"hc_vault": null,
-		"lastmodified": "2022-04-21T04:39:06Z",
-		"mac": "ENC[AES256_GCM,data:FrRAMUnErDzTvlJUsXvRbiO6we7AU1V8gj5LFFhetIsnWceJpYTuAvXjJC38CTo7kv7CqSii077xBrFuSl7v+wUmnRb5GKV/CPnj3hMB2Wfo15zra8lgwcnkUWee1qCJR/dUYn4KXDBh/xNMdR5f9HzCXamF/JwfBgOS4d+43s8=,iv:V0Dm/vr8yAsAO+SjhPCkqn3fJ1TumtXOtk7Ec41IHgQ=,tag:giMARNBAF/9LVQDrLlbGrg==,type:str]",
+		"lastmodified": "2022-04-23T09:01:21Z",
+		"mac": "ENC[AES256_GCM,data:9pa6Hms5et/KS1IRRD12iIM8wRj4r9neCE/AERfJlmwzWlj9xw1RqaBqVoMBnd61G/N66L/Ei9NS09530+2q/ynTQgzHrnViRczFLe8vzcOAOsITmynAhRCqU9kBxU7AONJhA/No/V7ODAjSv4RSeIO4IR5jHJsrb0ljNrPo+ng=,iv:nbbO22HWFigKniICX3zV3fdOUElw7/m/KND8g5wopN8=,tag:E0bG22bD/DKZyJb7t6ILGA==,type:str]",
 		"pgp": [
 			{
 				"created_at": "2020-10-23T21:16:31Z",

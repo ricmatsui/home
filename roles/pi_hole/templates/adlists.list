@@ -1,0 +1,3 @@
+{% for list in config.pi_hole.adlists %}
+{{ list }}
+{% endfor %}

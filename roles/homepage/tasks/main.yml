@@ -33,6 +33,7 @@
           homepage:
             image: "{{ build_result.image.RepoDigests[0] }}"
             environment:
+              DATADOG_DASHBOARD_URL: "{{ config.datadog.dashboard_url }}"
               DOMAIN: "{{ config.domain }}"
             networks:
               - traefik_traefik

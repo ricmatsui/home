@@ -14,8 +14,18 @@
     <body>
         <h1><img alt='Raspberry Pi' style='width: 50px' src='favicon.svg'></h1>
         <h2>
-            <a rel='noopener' href='https://traefik.<!--#echo var="domain"-->/dashboard/'>
+            <a rel='noopener' href='<!--#echo var="datadog_dashboard_url"-->'>
+                Datadog Dashboard
+            </a>
+        </h2>
+        <h2>
+            <a rel='noopener' href='https://traefik.<!--#echo var="domain"-->'>
                 Traefik Dashboard
+            </a>
+        </h2>
+        <h2>
+            <a rel='noopener' href='https://pi-hole.<!--#echo var="domain"-->'>
+                Pi-hole
             </a>
         </h2>
         <h2>

@@ -5,6 +5,7 @@ server {
     location / {
         ssi on;
 
+        set $datadog_dashboard_url "${DATADOG_DASHBOARD_URL}";
         set $domain "${DOMAIN}";
 
         root   /usr/share/nginx/html;

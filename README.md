@@ -1,6 +1,6 @@
 # Pi Home Lab
 
-Automation for Raspberry Pi server
+Automation for Raspberry Pi servers
 
 ## Services
 
@@ -8,6 +8,7 @@ Automation for Raspberry Pi server
 - Docker Registry
 - Wireguard
 - Cloudflare DDNS
+- Pi-hole
 - Traefik
 - Temporalite
 - Temporal Web

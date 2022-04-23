@@ -98,6 +98,9 @@
     - role: homepage
       tags: homepage
 
+    - role: pi_hole
+      tags: pi_hole
+
     - role: sync
       tags: sync
 
