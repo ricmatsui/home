@@ -18,3 +18,4 @@ Automation for Raspberry Pi servers
 - External USB Drive
 - Homepage
 - Light Control
+- Wireless AP

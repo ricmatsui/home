@@ -77,13 +77,24 @@
     - role: docker_worker
       tags: docker_worker
 
-- name: deploy
+- name: wireless_ap
   gather_facts: false
-  hosts: pi
+  hosts: tart
+  roles:
+    - role: wireless_ap
+      tags: wireless_ap
+
+- name: light
+  gather_facts: false
+  hosts: tart
   roles:
     - role: light
       tags: light
 
+- name: deploy
+  gather_facts: false
+  hosts: pi
+  roles:
     - role: docker_secrets
       tags:
         - docker_secrets

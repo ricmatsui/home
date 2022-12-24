@@ -13,7 +13,7 @@ config:
         - ENC[AES256_GCM,data:GJ8L58TUY0bCbTOHVuPQtJGIAbgdFwDV39gUOi28yZBXJqEGmLKtyaT5q9TScsCFuM7aS1TGoSPyfD407VTjE5XOyOntO1rfr3XgIxxOuCYXsO6+V7t7ehsLN9Td4dEX3Ts=,iv:mHoHQqQ31BOSJFPrX8DXUWCKwtJukov9MWeSVs4fr6Y=,tag:LRRKWIjn2ljt64JMen52tg==,type:str]
         - ENC[AES256_GCM,data:r4xtI3HNoi2d5vBSBWIiWZ+bskDMdtQBKhmnyclC3O/NZFwJHGx6U6EkqNY+v47RSRUJxn81jVBkErLjbd+dvv9uJeOasShrokEFgkMpJSLxMcyLUjhD1XTHTv8vlwlobnzt13HAcALpi1KNIS8=,iv:iIcg0+QpYwhI+yGYCFcxRiuFjeB2Q+ebwxtc4IVfHyM=,tag:qwrJCh3JCK9yPSzE5ingmA==,type:str]
     light:
-        ip_address: ENC[AES256_GCM,data:CQ+qTqQUSoBZrPXR4Q==,iv:Zi1dBR50XcIzX6LGbEjsQDbyH50+H60c2++7/dtW8tI=,tag:r1/H8pFMX89L+GVs65YrTg==,type:str]
+        ip_address: ENC[AES256_GCM,data:zG3CRXZ2ku2eiE0j,iv:5HFseY8QUUAc95OYfii04CyfmEyCSk24lSuHZzRQh24=,tag:kzlkKTm5wzNmXiYsETIYmQ==,type:str]
         child_id: ENC[AES256_GCM,data:s1cTKZaOWapsngq3An9fvmUnV+LaC7HBcdS/MOdHCzjBNIRXki61/w==,iv:jZwhPgRl8sSniYVDF/pOnzhvs3H7agFOmO3VbqWNXpY=,tag:AXaxBunIGAGQ43svG2pAjw==,type:str]
         puck_mac_addresses:
         - ENC[AES256_GCM,data:Y3c+p906iKjOoOToZgbUV3Q=,iv:ZC7YATm22mQPfO0W9e1yqEXiVV8vLjsti0TcU+3lcD0=,tag:Qu4QpqCSCeKBYpqPGaPNmA==,type:str]
@@ -22,13 +22,28 @@ config:
         vendor_id: ENC[AES256_GCM,data:bLoU7Q==,iv:OJGuDPKsNggMMJFXOdvkrmoxE894isHvxvYxb3VLpA8=,tag:PSt/XX438D1XaLq/eAg8Yw==,type:str]
         product_id: ENC[AES256_GCM,data:mTTolw==,iv:RwKy1zNa1pOiqtcHet1ul/aW1EvcjQXFhgR/A/VgKmA=,tag:XJ3tGUJDA5K3x86AG/TAfA==,type:str]
         uuid: ENC[AES256_GCM,data:aHNOqi7tiDvvikrUuRm2CqILQsrY03DybcLgtH/lPhSxfBtY,iv:xAx3WxOwUNf9LkNp5SnFa9J4dTpRDU84Qk3zSQ3ldHk=,tag:XOzQWe38HC1W5qtxe3Zipw==,type:str]
+    wireless_ap:
+        address: ENC[AES256_GCM,data:tYyAbbr0kUrSVjG61i0=,iv:5mdVj+nIAD+VkEthPOUrwmdJbJjsjKACzv5PB5xisbs=,tag:6gngiXelV5CTFaMJm1LfZw==,type:str]
+        network: ENC[AES256_GCM,data:trypH/9++5z8KChJHIA=,iv:nWoZIrGcedVaHerTm5DO4MnUj+gSunL3ZIvaX4NENs4=,tag:DIT2loZiWUKBtQRA8jD00w==,type:str]
+        dns: ENC[AES256_GCM,data:L5rL7psfHg==,iv:tYxWNNzj0pQuSF+XZIQOnzgsuvu4pA2BL5prpj9mGRc=,tag:PaqUI4kEBfOjbbk9SKm9MA==,type:str]
+        static_leases:
+        -   mac_address: ENC[AES256_GCM,data:Y/oYTFPSPZFvlSy0dRzJt98=,iv:KLmLtxcRkKSAB/eLHsw+/xhvzwBCDlP5c+qscii4Smk=,tag:GHwX09+YXjWcaN/7IwDIKg==,type:str]
+            address: ENC[AES256_GCM,data:S01kKbEBFAzysp1JIA==,iv:1Npb4Uy3RqV9OQhTZ1YRfMbzIqlfivAI2wIobx2yUjM=,tag:nNNIZ6vdurRuaf3eilrSRQ==,type:str]
+        -   mac_address: ENC[AES256_GCM,data:+cKJZMP9kqoS2KehND1ycm4=,iv:b7QMm7vAETWPMwqZ1SEbqpCylGsaXeT9fAd68RbFF4s=,tag:RXQxGkxkA0D56rn55pHpQg==,type:str]
+            address: ENC[AES256_GCM,data:eAClqjsd0/EsyoV0,iv:wWp9QziygtXXD+JV/SmBWZmQNd5ogKBNA6skWPk4znI=,tag:JFqk35NGsl3G4bn1AXORFQ==,type:str]
+        gateway_ssid: ENC[AES256_GCM,data:+Vb468f3QA==,iv:d3TiKFLCQ7P+nLsKdc02dNCTHnWruozUFX8s0NSqqJg=,tag:8FVWfmQVp86587lOpwfEPA==,type:str]
+        country_code: ENC[AES256_GCM,data:r0w=,iv:H+XY1ubL4xGxXou1eUH/bSJEsoEtOiLUe5G3CT2Io4E=,tag:gnx57g3+eQybq1EuGbErlA==,type:str]
+        ssid: ENC[AES256_GCM,data:wkllCvdFbqEH,iv:+Fo5Tub7uB+4ziCZWrfgsLrw+d0BxLu1glj6Tcz3s4M=,tag:bvl+ry89wy0eymvn7ZO6jg==,type:str]
+        hw_mode: ENC[AES256_GCM,data:xg==,iv:ecf35xfHjprN4cZWG/Ze+PJcgBwzmHJLQoQ6urQS0E0=,tag:XqwsTWtqdpKkfr+NqagI2g==,type:str]
+        channel: ENC[AES256_GCM,data:bg==,iv:CKcuOnLp/tToVHXeASpAYvRNx9XOcFBV5VjKkBsB9yY=,tag:XihpA6Li5ErsH8GaaPOjlQ==,type:int]
+        wpa_passphrase: ENC[AES256_GCM,data:74ItH6ebgCZ0,iv:jW2G1UatoAbeDzgx9ANPHiTviJG5TvR+sTqX85ShrNc=,tag:vov69AY4jTJw9DfGcTVp2Q==,type:str]
 sops:
     kms: []
     gcp_kms: []
     azure_kv: []
     hc_vault: []
-    lastmodified: '2022-04-23T08:19:30Z'
-    mac: ENC[AES256_GCM,data:ugrgIs3ruwGHozWNG7a3rwghkL2VSSou1dAJnB6wiewe9VQTX6iI8c1wH20hy+ldOnKl28dxDZZFwVl6y//IOHXbHm0us6hpKgCPXn6M0M7cI+p3NDl+Df7Z6kk7V3P9X/ahhQEFJfaadPijZapUc4lVADuWni3ZaHl0mEqZ/e0=,iv:HzP3z0IE99S4aZtXQs4M/RBYmAmy7W0LlwW2YPRuH/U=,tag:D5rP/inNOWPm31KobuYT+w==,type:str]
+    lastmodified: '2022-04-30T20:22:10Z'
+    mac: ENC[AES256_GCM,data:knunMtzVq2xCp9m9QkYeB9VBL+d1nQwb7bnIhfJOtR12AOoCqVoSDDNL//p4V1Ri68PvQ2yfMAiynvv+nPjumRS0pbM1cG7Fe+5s0GehQ5bRq5kMAKLzFkrGABmWgLQl7h5BLZwpwkNHu4JxPdQzC+GOcYfpD/FC0QjTqH7h1lE=,iv:xx7p5xQ4SUzTgkXgO7W8slQ0Kow6vMsg3ojyaHMVGBk=,tag:au1CPPvijmCSwtwHkoctfA==,type:str]
     pgp:
     -   created_at: '2021-12-27T08:11:41Z'
         enc: |

@@ -1,0 +1,9 @@
+[Match]
+Name=wlan0
+
+[Network]
+DHCP=ipv4
+
+[Route]
+Table=ap
+Gateway=_dhcp4

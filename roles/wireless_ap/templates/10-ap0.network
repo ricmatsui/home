@@ -1,0 +1,25 @@
+[Match]
+Name=ap0
+
+[Network]
+DHCPServer=yes
+MulticastDNS=yes
+IPMasquerade=both
+Address={{ config.wireless_ap.address }}
+
+[DHCPServer]
+DNS={{ config.wireless_ap.dns }}
+
+{% for static_lease in config.wireless_ap.static_leases %}
+[DHCPServerStaticLease]
+MACAddress={{ static_lease.mac_address }}
+Address={{ static_lease.address }}
+{% endfor %}
+
+[RoutingPolicyRule]
+From={{ config.wireless_ap.network }}
+Table=ap
+
+[Route]
+Table=ap
+Destination={{ config.wireless_ap.network }}

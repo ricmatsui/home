@@ -1,0 +1,5 @@
+---
+
+- name: reboot
+  ansible.builtin.reboot:
+  listen: wireless_ap_reboot

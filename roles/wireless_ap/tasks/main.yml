@@ -1,0 +1,138 @@
+---
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - hostapd
+  notify: wireless_ap_reboot
+
+- name: add backports
+  ansible.builtin.apt_repository:
+    repo: deb http://deb.debian.org/debian bullseye-backports main
+    state: present
+  register: backports_result
+
+- name: update cache
+  ansible.builtin.apt:
+    update_cache: true
+  when: backports_result is changed
+
+- name: install backports
+  ansible.builtin.apt:
+    name:
+      - systemd
+      - systemd-timesyncd
+      - libpam-systemd
+    default_release: bullseye-backports
+  notify: wireless_ap_reboot
+
+- name: configure ap interface service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ap-interface.service
+    content: |
+      [Unit]
+      Description=Add AP interface
+      Before=hostapd.service
+
+      [Install]
+      WantedBy=multi-user.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/sbin/iw phy0 interface add ap0 type __ap
+  notify: wireless_ap_reboot
+
+- name: enable ap interface
+  ansible.builtin.systemd:
+    name: ap-interface
+    enabled: true
+  notify: wireless_ap_reboot
+
+- name: configure hostapd
+  ansible.builtin.template:
+    src: hostapd.conf
+    dest: /etc/hostapd/hostapd.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+  notify: wireless_ap_reboot
+
+- name: enable hostapd
+  ansible.builtin.systemd:
+    name: hostapd
+    enabled: true
+    masked: false
+  notify: wireless_ap_reboot
+
+- name: configure wpa supplicant
+  ansible.builtin.template:
+    src: wpa_supplicant-wlan0.conf
+    dest: /etc/wpa_supplicant/wpa_supplicant-wlan0.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+  notify: wireless_ap_reboot
+
+- name: enable wpa supplicant
+  ansible.builtin.systemd:
+    name: wpa_supplicant@wlan0
+    enabled: true
+  notify: wireless_ap_reboot
+
+- name: create networkd directories
+  ansible.builtin.file:
+    path: /etc/systemd/networkd.conf.d
+    owner: root
+    group: root
+    state: directory
+
+- name: configure networkd
+  ansible.builtin.copy:
+    dest: /etc/systemd/networkd.conf.d/ap.conf
+    content: |
+      [Network]
+      RouteTable=ap:100
+  notify: wireless_ap_reboot
+
+- name: configure networks
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/network/{{ item }}"
+  loop:
+    - 10-ap0.network
+    - 11-wlan0.network
+  notify: wireless_ap_reboot
+
+- name: enable networkd
+  ansible.builtin.systemd:
+    name: systemd-networkd
+    enabled: true
+  notify: wireless_ap_reboot
+
+- name: configure dhcpcd
+  ansible.builtin.blockinfile:
+    path: /etc/dhcpcd.conf
+    block: |
+      denyinterfaces wlan0 ap0
+  notify: wireless_ap_reboot
+
+- name: configure nftables
+  ansible.builtin.blockinfile:
+    path: /etc/nftables.conf
+    block: |
+      add table wireless-ap-forward
+
+      table inet wireless-ap-forward {
+        chain forward {
+          type filter hook forward priority 0; policy accept;
+
+          iifname { "wlan0", "ap0" } oifname != { "wlan0", "ap0" } drop;
+        }
+      }
+  notify: wireless_ap_reboot
+
+- name: enable nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+  notify: wireless_ap_reboot
