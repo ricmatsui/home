@@ -1,0 +1,55 @@
+---
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    state: directory
+  loop:
+    - /mnt/external/selenium
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 1200
+    group: 1200
+    state: directory
+  loop:
+    - /mnt/external/selenium/profiles
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: selenium
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          selenium:
+            image: seleniarm/standalone-chromium@sha256:ea7c849ec54f6a9da06634ec2392af3195a24a646b71841bfa986d34462a98b8
+            environment:
+              SCREEN_WIDTH: '1024'
+              SCREEN_HEIGHT: '768'
+              SCREEN_DEPTH: '24'
+              SCREEN_DPI: '74'
+              SE_NODE_SESSION_TIMEOUT: '30'
+            shm_size: 1g
+            ports:
+              - '4444:4444'
+              - '5900:5900'
+            volumes:
+              - /mnt/external/selenium:/selenium
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.pi.storage == external'
+              resources:
+                limits:
+                  cpus: '2.00'
+                  memory: 1024M
+              restart_policy:
+                delay: 5m
+

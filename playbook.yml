@@ -118,6 +118,9 @@
     - role: cloudflare
       tags: cloudflare
 
+    - role: selenium
+      tags: selenium
+
     - role: temporalite
       tags: temporalite
 

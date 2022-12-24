@@ -13,6 +13,7 @@ Automation for Raspberry Pi servers
 - Temporalite
 - Temporal Web
 - Resilio Sync
+- Selenium
 - Let's Encrypt
 - Datadog
 - External USB Drive
