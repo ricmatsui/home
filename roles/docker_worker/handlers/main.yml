@@ -1,0 +1,5 @@
+---
+
+- name: reboot
+  ansible.builtin.reboot:
+  listen: docker_worker_reboot
