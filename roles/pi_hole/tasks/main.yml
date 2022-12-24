@@ -43,6 +43,7 @@
               - '53:53/udp'
             environment:
               WEBPASSWORD: ''
+              FTLCONF_RATE_LIMIT: '0/0'
             networks:
               - traefik_traefik
             deploy:

@@ -1,7 +1,9 @@
 from bluepy.btle import Scanner, DefaultDelegate
 from datadog import initialize, statsd
 
+import datetime
 import socket
+import struct
 import json
 import asyncio
 import os
@@ -164,12 +166,26 @@ async def toggle_light():
         logger.error('Toggle error')
         raise
 
+SERVICE_16_BIT_DATA_TYPE = 0x16
 
+def parse_service_data(raw_data):
+    service_data = {}
 
-def get_service_value(raw_data, uuid, length):
-    index = raw_data.index(bytes(reversed(uuid))) + len(uuid)
-    return bytes(raw_data[index:index+length])
+    while len(raw_data) >= 2:
+        data_length, data_type = struct.unpack_from('<BB', raw_data)
+        element_length = data_length + 1
 
+        if data_type == SERVICE_16_BIT_DATA_TYPE:
+            data_value = raw_data[2:element_length]
+
+            service_value_length = len(data_value) - 2
+            service_id, service_value = struct.unpack_from(f'<H{service_value_length}s', data_value)
+
+            service_data[service_id] = service_value
+
+        raw_data = raw_data[element_length:]
+
+    return service_data
 
 class ScanDelegate(DefaultDelegate):
     def __init__(self):
@@ -185,9 +201,11 @@ class ScanDelegate(DefaultDelegate):
         logger.debug('Light puck discovery')
 
         try:
-            battery = get_service_value(dev.rawData, bytes.fromhex('180f'), 1)[0]
-            temperature_whole, temperature_decimal = get_service_value(dev.rawData, bytes.fromhex('1809'), 2)
-            button_pressed, button_press_count = get_service_value(dev.rawData, bytes.fromhex('1815'), 2)
+            service_data = parse_service_data(dev.rawData)
+
+            battery = service_data[0x180f][0]
+            temperature_whole, temperature_decimal = service_data[0x1809]
+            button_pressed, button_press_count, button_checksum = service_data[0x1815]
 
             temperature = (temperature_whole + temperature_decimal/10.0)*1.8+32
 
@@ -196,10 +214,22 @@ class ScanDelegate(DefaultDelegate):
                 battery=battery,
                 temperature=temperature,
                 button_pressed=button_pressed,
-                button_press_count=button_press_count
+                button_press_count=button_press_count,
+                raw_data_hex=dev.rawData.hex(),
+                service_data=str(service_data)
                 )))
             statsd.gauge('lightpuck.battery', battery, tags=tags)
             statsd.gauge('lightpuck.temperature', temperature, tags=tags)
+
+            if button_pressed not in [0, 1]:
+                statsd.increment('lightpuck.invalid_button_pressed', tags=tags)
+                logger.warning('Invalid button pressed value')
+                return
+
+            if button_checksum != ((button_pressed + button_press_count + 0x18 + 0x15) % 256):
+                statsd.increment('lightpuck.invalid_button_checksum', tags=tags)
+                logger.warning('Invalid button checksum value')
+                return
 
             if dev.addr in self.last_button_press_by_addr:
                 last_button_press = self.last_button_press_by_addr[dev.addr]
@@ -216,33 +246,45 @@ class ScanDelegate(DefaultDelegate):
 
 
         except:
-            logger.warning('Light puck failed to parse data: %s', json.dumps(dict(address=dev.addr)))
+            statsd.increment('lightpuck.parse_data_failed', tags=tags)
+            logger.warning('Light puck failed to parse data: %s', json.dumps(dict(
+                address=dev.addr,
+                raw_data_hex=dev.rawData.hex(),
+            )))
 
 
 async def monitor():
     logger.info('Monitor started')
 
     while True:
-        try:
-            transport, on_complete = await send_command({
-                'system': { 'get_sysinfo': {} }
-                })
+        successful = False
+        attempts = 0
 
+        while not successful:
             try:
-                await asyncio.wait_for(on_complete, timeout=5)
+                attempts += 1
+                transport, on_complete = await send_command({
+                    'system': { 'get_sysinfo': {} }
+                    })
 
-                if on_complete.result()['system']['get_sysinfo']['sw_ver']:
-                    logger.info('Monitor passed')
-                    statsd.increment('lightpuck.monitor.passed')
-                else:
-                    logger.warning('Monitor failed')
-                    statsd.increment('lightpuck.monitor.failed')
-            finally:
-                transport.close()
-        except:
-            logger.error('Monitor error')
-            statsd.increment('lightpuck.monitor.error')
+                try:
+                    await asyncio.wait_for(on_complete, timeout=10)
 
+                    if on_complete.result()['system']['get_sysinfo']['sw_ver']:
+                        logger.info('Monitor passed')
+                        statsd.increment('lightpuck.monitor.passed')
+                        successful = True
+                    else:
+                        raise RuntimeError('Incomplete result')
+                finally:
+                    transport.close()
+            except:
+                logger.error('Monitor error')
+                statsd.increment('lightpuck.monitor.error')
+                await asyncio.sleep(1)
+
+        logger.info('Monitor attempts needed: %d', attempts)
+        statsd.gauge('lightpuck.monitor.attempts_needed', attempts)
         await asyncio.sleep(300)
 
     logger.error('Monitor ended')
@@ -252,11 +294,25 @@ monitor_thread.daemon = True
 monitor_thread.start()
 
 
+scanner = Scanner().withDelegate(ScanDelegate())
+
 try:
-    scanner = Scanner().withDelegate(ScanDelegate())
+    statsd.increment('lightpuck.scan_start')
     scanner.start(passive=True)
+    processed_without_devices_count = 0
+
     while True:
         statsd.increment('lightpuck.scan')
+        scanner.clear()
         scanner.process(10)
+
+        if len(scanner.getDevices()) > 0:
+            processed_without_devices_count = 0
+        else:
+            processed_without_devices_count += 1
+
+        if processed_without_devices_count > 2:
+            statsd.increment('lightpuck.scan_not_finding_devices')
+            raise RuntimeError('Scanner not finding devices')
 finally:
     scanner.stop()
