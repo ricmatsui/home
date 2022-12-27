@@ -62,6 +62,41 @@
     name: wg-quick@wg1.service
     enabled: true
 
+- name: configure restart service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg1-restart.service
+    content: |
+      [Unit]
+      Description=Restart wg1 service
+      After=wg-quick@wg1.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/systemctl restart wg-quick@wg1.service
+  notify: wg1_timer_restart
+
+- name: configure restart timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg1-restart.timer
+    content: |
+      [Unit]
+      Description=Daily wg1 restart
+
+      [Timer]
+      OnCalendar=*-*-* 6,18:00
+      RandomizedDelaySec=12h
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: wg1_timer_restart
+
+- name: enable restart timer
+  ansible.builtin.systemd:
+    name: wg1-restart.timer
+    enabled: true
+  notify: wg1_timer_restart
+
 - name: set dns record
   community.general.cloudflare_dns:
     zone: "{{ config.cloudflare.zone }}"

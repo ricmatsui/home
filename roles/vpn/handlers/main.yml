@@ -14,3 +14,10 @@
     name: wg-quick@wg1.service
     state: restarted
   listen: vpn_restart
+
+- name: restart wg1 timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: wg1-restart.timer
+    state: restarted
+  listen: wg1_timer_restart
