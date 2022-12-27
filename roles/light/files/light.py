@@ -87,7 +87,7 @@ async def blast_command(command, count):
     try:
         done, pending = await asyncio.wait(
                 [on_complete for _, on_complete in commands],
-                timeout=5,
+                timeout=2,
                 return_when=asyncio.FIRST_COMPLETED
                 )
 
@@ -105,14 +105,20 @@ async def blast_command(command, count):
 
 
 async def toggle_light_with_retry():
-    try:
-        await toggle_light()
-    except:
+    start = datetime.datetime.now()
+    attempts = 0
+
+    while datetime.datetime.now() < start + datetime.timedelta(minutes=1):
         try:
+            attempts += 1
             await toggle_light()
+            statsd.gauge('lightpuck.toggle_attempts_needed', attempts)
+            return
         except:
-            statsd.increment('lightpuck.toggle_retry_error')
-            logger.error('Toggle retry error')
+            logger.debug('Failed to toggle', exc_info=True)
+
+    statsd.increment('lightpuck.toggle_retry_error')
+    logger.error('Toggle retry error')
 
 async def toggle_light():
     info_command = {
@@ -145,7 +151,7 @@ async def toggle_light():
 
     try:
         logger.info('Toggle start')
-        info = await blast_command(info_command, 30)
+        info = await blast_command(info_command, 20)
         statsd.increment('lightpuck.toggle_info')
         light = next(light for light in info['system']['get_sysinfo']['children'] if light['id'] == '00')
         logger.debug('Light status: %s', json.dumps(light))
@@ -155,11 +161,11 @@ async def toggle_light():
 
         if light_on:
             logger.info('Toggle off')
-            await blast_command(off_command, 30)
+            await blast_command(off_command, 20)
             statsd.increment('lightpuck.toggle_off')
         else:
             logger.info('Toggle on')
-            await blast_command(on_command, 30)
+            await blast_command(on_command, 20)
             statsd.increment('lightpuck.toggle_on')
     except:
         statsd.increment('lightpuck.toggle_error')
@@ -312,6 +318,9 @@ try:
             processed_without_devices_count += 1
 
         if processed_without_devices_count > 2:
+            statsd.increment('lightpuck.reset_hci')
+            os.system('hciconfig hci0 reset')
+
             statsd.increment('lightpuck.scan_not_finding_devices')
             raise RuntimeError('Scanner not finding devices')
 finally:
