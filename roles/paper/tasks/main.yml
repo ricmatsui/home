@@ -1,0 +1,46 @@
+---
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: paper
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          paper:
+            image: openjdk:23-jdk-bullseye@sha256:ca0b23280f47f3da09b1491d501a16d86883cb533ce5606112128addb5a08d0c
+            command: java -Xms4G -Xmx4G -jar paper.jar --nogui
+            user: '1000:1000'
+            working_dir: /data
+            ports:
+              - target: 25565
+                published: 25565
+                protocol: tcp
+                mode: host
+              - target: 25565
+                published: 25565
+                protocol: udp
+                mode: host
+              - target: 19132
+                published: 19132
+                protocol: tcp
+                mode: host
+              - target: 19132
+                published: 19132
+                protocol: udp
+                mode: host
+            volumes:
+              - /mnt/gluster/resilio-sync/sync/Paper:/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.pi.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '4.00'
+                  memory: 4096M
+              restart_policy:
+                delay: 10m

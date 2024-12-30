@@ -24,6 +24,14 @@
   notify: vpn_restart
   when: vpn_ip_forward
 
+- name: create configuration directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/wg-quick@.service.d
+    owner: root
+    group: root
+    state: directory
+  notify: vpn_restart
+
 - name: configure
   ansible.builtin.copy:
     content: "{{ lookup('community.sops.sops', vpn_config) }}"
@@ -31,6 +39,14 @@
     owner: root
     group: root
     mode: u=rw,g=,o=
+  notify: vpn_restart
+
+- name: configure service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg-quick@.service.d/override.conf
+    content: |
+      [Service]
+      Restart=on-failure
   notify: vpn_restart
 
 - ansible.builtin.blockinfile:
@@ -61,6 +77,42 @@
   ansible.builtin.systemd:
     name: wg-quick@wg1.service
     enabled: true
+    daemon_reload: true
+
+- name: configure reresolve dns service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg1-reresolve-dns.service
+    content: |
+      [Unit]
+      Description=Reresolve DNS wg1 service
+      After=wg-quick@wg1.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/share/doc/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh wg1
+  notify: wg1_reresolve_dns_timer_restart
+
+- name: configure reresolve dns timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg1-reresolve-dns.timer
+    content: |
+      [Unit]
+      Description=Reresolve DNS wg1
+
+      [Timer]
+      OnCalendar=*-*-* *:*:00
+      RandomizedDelaySec=30s
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: wg1_reresolve_dns_timer_restart
+
+- name: enable reresolve dns timer
+  ansible.builtin.systemd:
+    name: wg1-reresolve-dns.timer
+    enabled: true
+  notify: wg1_reresolve_dns_timer_restart
 
 - name: configure restart service
   ansible.builtin.copy:

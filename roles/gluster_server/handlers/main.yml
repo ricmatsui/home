@@ -1,0 +1,8 @@
+---
+
+- name: restart gluster server
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: glusterd.service
+    state: restarted
+  listen: gluster_server_restart

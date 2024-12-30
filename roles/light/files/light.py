@@ -9,6 +9,7 @@ import asyncio
 import os
 from threading import Thread
 import logging
+import queue
 
 initialize()
 
@@ -28,7 +29,6 @@ def _encrypt_command(string):
     return result
 
 def _decrypt_command(string):
-
     key = 171
     result = b''
     for i in bytes(string):
@@ -87,7 +87,7 @@ async def blast_command(command, count):
     try:
         done, pending = await asyncio.wait(
                 [on_complete for _, on_complete in commands],
-                timeout=2,
+                timeout=1,
                 return_when=asyncio.FIRST_COMPLETED
                 )
 
@@ -151,7 +151,7 @@ async def toggle_light():
 
     try:
         logger.info('Toggle start')
-        info = await blast_command(info_command, 20)
+        info = await blast_command(info_command, 10)
         statsd.increment('lightpuck.toggle_info')
         light = next(light for light in info['system']['get_sysinfo']['children'] if light['id'] == '00')
         logger.debug('Light status: %s', json.dumps(light))
@@ -161,11 +161,11 @@ async def toggle_light():
 
         if light_on:
             logger.info('Toggle off')
-            await blast_command(off_command, 20)
+            await blast_command(off_command, 10)
             statsd.increment('lightpuck.toggle_off')
         else:
             logger.info('Toggle on')
-            await blast_command(on_command, 20)
+            await blast_command(on_command, 10)
             statsd.increment('lightpuck.toggle_on')
     except:
         statsd.increment('lightpuck.toggle_error')
@@ -192,6 +192,30 @@ def parse_service_data(raw_data):
         raw_data = raw_data[element_length:]
 
     return service_data
+
+toggle_queue = queue.Queue()
+
+async def process_toggle_queue():
+    while True:
+        toggle_queue.get()
+
+        await toggle_light_with_retry()
+
+        last = datetime.datetime.now()
+
+        while datetime.datetime.now() < last + datetime.timedelta(seconds=2):
+            await asyncio.sleep(0.1)
+
+            while True:
+                try:
+                    toggle_queue.get(block=False)
+                    last = datetime.datetime.now()
+                except queue.Empty:
+                    break
+
+toggle_thread = Thread(target=lambda: asyncio.run(process_toggle_queue()))
+toggle_thread.daemon = True
+toggle_thread.start()
 
 class ScanDelegate(DefaultDelegate):
     def __init__(self):
@@ -246,7 +270,7 @@ class ScanDelegate(DefaultDelegate):
                         diff_press_count += 256
 
                     statsd.increment('lightpuck.button_pressed', value=diff_press_count-last_button_press, tags=tags)
-                    asyncio.run(toggle_light_with_retry())
+                    toggle_queue.put('toggle')
 
             self.last_button_press_by_addr[dev.addr] = button_press_count
 

@@ -1,20 +1,5 @@
 ---
 
-- name: create directories
-  ansible.builtin.file:
-    path: /etc/docker
-    owner: root
-    group: root
-    state: directory
-
-- name: configure
-  ansible.builtin.template:
-    src: daemon.json
-    dest: /etc/docker/daemon.json
-    owner: root
-    group: root
-  notify: docker_worker_reboot
-
 - name: get swarm info
   community.docker.docker_swarm_info:
   register: swarm_info

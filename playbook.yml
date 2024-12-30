@@ -5,6 +5,7 @@
   hosts:
     - pi
     - tart
+    - cannoli
     - localhost
   tags:
     - always
@@ -15,7 +16,9 @@
 
 - name: external
   gather_facts: false
-  hosts: pi
+  hosts:
+    - pi
+    - cannoli
   roles:
     - role: external
       tags: external
@@ -25,6 +28,7 @@
   hosts:
     - pi
     - tart
+    - cannoli
   roles:
     - role: setup
       tags: setup
@@ -34,25 +38,38 @@
   hosts:
     - pi
     - tart
+    - cannoli
   roles:
     - role: vpn
       tags: vpn
+
+- name: gluster_server
+  gather_facts: false
+  hosts:
+    - gluster_pool_servers
+  roles:
+    - role: gluster_server
+      tags: gluster_server
+
+- name: gluster_client
+  gather_facts: false
+  hosts:
+    - pi
+    - tart
+    - cannoli
+  roles:
+    - role: gluster_client
+      tags: gluster_client
 
 - name: datadog
   gather_facts: false
   hosts:
     - pi
     - tart
+    - cannoli
   roles:
     - role: datadog
       tags: datadog
-
-- name: external_docker
-  gather_facts: false
-  hosts: pi
-  roles:
-    - role: external_docker
-      tags: external_docker
 
 - name: docker
   gather_facts: false
@@ -109,17 +126,17 @@
     - role: homepage
       tags: homepage
 
-    - role: pi_hole
-      tags: pi_hole
-
     - role: sync
       tags: sync
+
+    - role: jellyfin
+      tags: jellyfin
 
     - role: cloudflare
       tags: cloudflare
 
-    - role: selenium
-      tags: selenium
+    - role: paper
+      tags: paper
 
     - role: temporalite
       tags: temporalite

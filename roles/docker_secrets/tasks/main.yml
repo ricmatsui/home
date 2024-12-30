@@ -1,10 +1,5 @@
 ---
 
-- name: traefik users
-  community.general.docker_secret:
-    name: traefik_users_secret
-    data: "{{ lookup('community.sops.sops', 'traefik_users') }}"
-
 - name: cloudflare api key
   community.general.docker_secret:
     name: cloudflare_api_key_secret

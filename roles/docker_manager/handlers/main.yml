@@ -2,4 +2,4 @@
 
 - name: reboot
   ansible.builtin.reboot:
-  listen: external_docker_reboot
+  listen: docker_manager_reboot

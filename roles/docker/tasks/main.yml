@@ -1,7 +1,56 @@
 ---
 
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    state: directory
+  loop:
+    - /etc/docker
+    - /etc/systemd/system/docker.service.d
+    - /etc/systemd/system/containerd.service.d
+  notify: docker_restart
+
+- name: configure
+  ansible.builtin.template:
+    src: daemon.json
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+  notify: docker_restart
+
+- name: configure docker slice
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker.slice
+    content: |
+      [Unit]
+      Description=Docker Slice
+      Before=slices.target
+
+      [Slice]
+      CPUAccounting=true
+      CPUWeight=idle
+      MemoryAccounting=true
+      MemoryMax={{ docker_slice_memory_max }}
+      IOAccounting=true
+      IOWeight=50
+  notify: docker_restart
+
+- name: configure services
+  ansible.builtin.copy:
+    dest: "{{ item }}/override.conf"
+    content: |
+      [Service]
+      Slice=docker.slice
+  loop:
+    - /etc/systemd/system/docker.service.d
+    - /etc/systemd/system/containerd.service.d
+  notify: docker_restart
+
 - name: install docker
   ansible.builtin.shell:
     cmd: >
       bash -c "$(curl -fsSL https://get.docker.com)"
     creates: /usr/bin/docker
+  notify: docker_restart

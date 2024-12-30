@@ -53,11 +53,10 @@
                 - "traefik.enable=true"
                 - "traefik.http.middlewares.pi-hole-redirect.redirectregex.regex=^https://([^/]+)/$$"
                 - "traefik.http.middlewares.pi-hole-redirect.redirectregex.replacement=https://$${1}/admin/"
-                - "traefik.http.middlewares.pi-hole-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
                 - "traefik.http.routers.pi-hole.rule=Host(`pi-hole.{{ config.domain }}`)"
                 - "traefik.http.routers.pi-hole.entrypoints=websecure"
                 - "traefik.http.routers.pi-hole.tls.certresolver=letsencrypt"
-                - "traefik.http.routers.pi-hole.middlewares=pi-hole-redirect,pi-hole-auth"
+                - "traefik.http.routers.pi-hole.middlewares=traefik-internal,pi-hole-redirect,traefik-forward-auth"
                 - "traefik.http.services.pi-hole.loadbalancer.server.port=80"
               placement:
                 constraints:

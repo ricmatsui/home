@@ -1,0 +1,87 @@
+---
+
+- name: create directories
+  ansible.builtin.file:
+    path: /mnt/external/gluster
+    owner: root
+    group: root
+    state: directory
+  when: inventory_hostname in groups['gluster_brick_servers']
+
+- name: create configuration directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/glusterd.service.d
+    owner: root
+    group: root
+    state: directory
+
+- name: configure
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/glusterd.service.d/override.conf
+    content: |
+      [Service]
+      ExecStartPre=/bin/sleep 30
+      #Environment="GLUSTERD_OPTIONS=--logger=syslog"
+  notify: gluster_server_restart
+
+- name: add backports
+  ansible.builtin.apt_repository:
+    repo: deb http://deb.debian.org/debian bullseye-backports main
+    state: present
+
+- name: install
+  ansible.builtin.apt:
+    name: glusterfs-server
+    default_release: bullseye-backports
+  notify: gluster_server_restart
+
+- name: install gstatus
+  ansible.builtin.shell:
+    cmd: |
+      curl -fsSL https://github.com/gluster/gstatus/releases/download/v1.0.8/gstatus -o /tmp/gstatus
+      install /tmp/gstatus /usr/bin/gstatus
+    creates: /usr/bin/gstatus
+  tags: gstatus
+
+- name: enable
+  ansible.builtin.systemd:
+    name: glusterd.service
+    enabled: true
+
+- name: set gluster peers
+  gluster.gluster.gluster_peer:
+    nodes: "{{ groups['gluster_pool_servers']|map('extract', hostvars, 'gluster_ip')|list }}"
+  when: inventory_hostname in groups['gluster_management_server']
+
+- name: create gluster volume
+  gluster.gluster.gluster_volume:
+    state: present
+    name: gv0
+    brick: /mnt/external/gluster
+    cluster: "{{ groups['gluster_brick_servers']|map('extract', hostvars, 'gluster_ip')|list }}"
+    replicas: 2
+    options:
+      cluster.server-quorum-ratio: '51'
+      cluster.server-quorum-type: server
+      cluster.quorum-type: auto
+  when: inventory_hostname in groups['gluster_management_server']
+
+- name: start gluster volume
+  gluster.gluster.gluster_volume:
+    state: started
+    name: gv0
+  when: inventory_hostname in groups['gluster_management_server']
+
+- name: get gluster volume config
+  ansible.builtin.shell:
+    cmd: gluster volume get gv0 features.bitrot
+  register: gluster_volume_config
+  changed_when: false
+  when: inventory_hostname in groups['gluster_management_server']
+
+- name: enable gluster volume bitrot
+  ansible.builtin.shell:
+    cmd: gluster volume bitrot gv0 enable
+  when: >
+    inventory_hostname in groups['gluster_management_server']
+    and gluster_volume_config.stdout is not search('features\.bitrot\s+on')

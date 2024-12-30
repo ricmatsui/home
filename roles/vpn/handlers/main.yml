@@ -15,7 +15,14 @@
     state: restarted
   listen: vpn_restart
 
-- name: restart wg1 timer
+- name: restart reresolve dns timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: wg1-reresolve-dns.timer
+    state: restarted
+  listen: wg1_reresolve_dns_timer_restart
+
+- name: restart restart timer
   ansible.builtin.systemd:
     daemon_reload: true
     name: wg1-restart.timer

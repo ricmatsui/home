@@ -1,0 +1,5 @@
+init_config:
+  gstatus_path: /usr/bin/gstatus
+  
+instances:
+  - min_collection_interval: 60

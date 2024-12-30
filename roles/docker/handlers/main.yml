@@ -1,0 +1,11 @@
+---
+
+- name: restart docker
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: "{{ item }}"
+    state: restarted
+  loop:
+    - docker.service
+    - containerd.service
+  listen: docker_restart

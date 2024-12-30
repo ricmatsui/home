@@ -7,6 +7,7 @@
     owner: root
     group: root
   notify: external_reboot
+  when: external.usb
 
 - name: list block devices
   ansible.builtin.shell:
@@ -30,7 +31,7 @@
 - name: configure fstab
   ansible.posix.mount:
     path: /mnt/external
-    src: "UUID={{ config.external.uuid }}"
+    src: "UUID={{ external.uuid }}"
     fstype: ext4
     opts: defaults,noatime
     passno: 1

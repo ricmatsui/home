@@ -1,0 +1,71 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "jellyfin.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/jellyfin/config
+    - /mnt/gluster/jellyfin/cache
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: jellyfin
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          jellyfin:
+            image: jellyfin/jellyfin:10.10.3@sha256:040461da121ebe7f5055a385d0f1fc8e8260509041ff0fbce54ec52da2b6bf60
+            networks:
+              - traefik_traefik
+            user: 1000:1000
+            environment:
+              TZ: America/Los_Angeles
+              JELLYFIN_PublishedServerUrl: "https://jellyfin.{{ config.domain }}"
+            volumes:
+              - /mnt/gluster/jellyfin/config:/config
+              - /mnt/gluster/jellyfin/cache:/cache
+              - /mnt/gluster/resilio-sync/sync/SharedVideos:/data/SharedVideos
+              - /mnt/gluster/resilio-sync/sync/Media:/data/Media
+            healthcheck:
+              start_period: 3m
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.{{ config.domain }}`)"
+                - "traefik.http.routers.jellyfin.middlewares=traefik-internal"
+                - "traefik.http.routers.jellyfin.entrypoints=websecure"
+                - "traefik.http.routers.jellyfin.tls.certresolver=letsencrypt"
+                - "traefik.http.routers.jellyfin-external.rule=Host(`jellyfin.home.ricmatsui.com`)"
+                - "traefik.http.routers.jellyfin-external.entrypoints=websecure"
+                - "traefik.http.routers.jellyfin-external.tls.certresolver=letsencrypt"
+                - "traefik.http.services.jellyfin.loadbalancer.server.port=8096"
+              placement:
+                constraints:
+                  - 'node.labels.pi.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 900M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

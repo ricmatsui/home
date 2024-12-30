@@ -1,5 +1,19 @@
 ---
 
+- name: restart apt download timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: apt-daily.timer
+    state: restarted
+  listen: setup_apt_download_restart
+
+- name: restart apt upgrade timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: apt-daily-upgrade.timer
+    state: restarted
+  listen: setup_apt_upgrade_restart
+
 - name: reboot
   ansible.builtin.reboot:
   listen: setup_reboot

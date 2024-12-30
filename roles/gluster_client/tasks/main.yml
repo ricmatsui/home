@@ -1,0 +1,27 @@
+---
+
+- name: add backports
+  ansible.builtin.apt_repository:
+    repo: deb http://deb.debian.org/debian bullseye-backports main
+    state: present
+
+- name: install
+  ansible.builtin.apt:
+    name: glusterfs-client
+    default_release: bullseye-backports
+
+- name: create mount point
+  ansible.builtin.file:
+    path: /mnt/gluster
+    owner: root
+    group: root
+    state: directory
+
+- name: configure fstab
+  ansible.posix.mount:
+    path: /mnt/gluster
+    src: "{{ hostvars[groups['gluster_management_server'][0]]['gluster_ip'] }}:/gv0"
+    fstype: glusterfs
+    opts: defaults,_netdev,noatime,x-systemd.automount
+    passno: 1
+    state: mounted

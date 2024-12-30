@@ -31,6 +31,16 @@
       - systemd-journal
   notify: datadog_restart
 
+- name: allow datadog to run gstatus
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/datadog
+    owner: root
+    group: root
+    mode: u=r,g=r,o=
+    content: |
+      dd-agent ALL=(ALL) NOPASSWD: /usr/bin/gstatus
+  notify: datadog_restart
+
 - name: configure
   ansible.builtin.blockinfile:
     path: /etc/datadog-agent/datadog.yaml
@@ -54,6 +64,8 @@
   loop:
     - src: disk.yaml
       dest: disk.d
+    - src: glusterfs.yaml
+      dest: glusterfs.d
     - src: system_swap.yaml
       dest: system_swap.d
     - src: systemd.yaml

@@ -38,6 +38,7 @@
               labels:
                 - "traefik.enable=true"
                 - "traefik.http.routers.registry.rule=Host(`registry.{{ config.domain }}`)"
+                - "traefik.http.routers.registry.middlewares=traefik-internal"
                 - "traefik.http.routers.registry.entrypoints=websecure"
                 - "traefik.http.routers.registry.tls.certresolver=letsencrypt"
                 - "traefik.http.services.registry.loadbalancer.server.port=5000"

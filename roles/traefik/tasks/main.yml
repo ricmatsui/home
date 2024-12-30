@@ -1,9 +1,18 @@
 ---
 
-- name: set dns record
+- name: set traefik dns record
   community.general.cloudflare_dns:
     zone: "{{ config.cloudflare.zone }}"
     record: "traefik.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: set auth dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "auth.{{ config.domain }}"
     type: A
     value: "{{ config.ip }}"
     api_token: "{{ config.cloudflare.api_key }}"
@@ -17,6 +26,13 @@
     state: directory
   loop:
     - /mnt/external/traefik/acme
+
+- name: traefik forward auth config
+  community.general.docker_secret:
+    name: traefik_forward_auth_config_secret
+    data: "{{ lookup('community.sops.sops', 'traefik_forward_auth.ini') }}"
+    rolling_versions: true
+  register: traefik_forward_auth_config_secret
 
 - name: deploy stack
   community.general.docker_stack:
@@ -44,13 +60,16 @@
               --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
               --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json
             secrets:
-              - traefik_users_secret
               - cloudflare_api_key_secret
             environment:
               CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_key_secret
             ports:
-              - '80:80'
-              - '443:443'
+              - target: 80
+                published: 80
+                mode: host
+              - target: 443
+                published: 443
+                mode: host
             volumes:
               - /var/run/docker.sock:/var/run/docker.sock
               - /mnt/external/traefik/acme:/etc/traefik/acme
@@ -63,12 +82,12 @@
               replicas: 1
               labels:
                 - "traefik.enable=true"
-                - "traefik.http.middlewares.traefik-auth.basicauth.usersfile=/run/secrets/traefik_users_secret"
+                - "traefik.http.middlewares.traefik-internal.ipwhitelist.sourcerange=10.3.0.0/24,172.18.0.0/16"
                 - "traefik.http.routers.traefik.rule=Host(`traefik.{{ config.domain }}`)"
                 - "traefik.http.routers.traefik.entrypoints=websecure"
                 - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
                 - "traefik.http.routers.traefik.service=api@internal"
-                - "traefik.http.routers.traefik.middlewares=traefik-auth"
+                - "traefik.http.routers.traefik.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.services.traefik.loadbalancer.server.port=80"
               placement:
                 constraints:
@@ -80,10 +99,42 @@
                   memory: 75M
               restart_policy:
                 delay: 5s
+
+          traefik-forward-auth:
+            image: npawelek/traefik-forward-auth:v2.2.0@sha256:2a2d302c12b7e3aafade14b94ed31c182125934e1b0b499d81cbebf42c174fd5
+            secrets:
+              - traefik_forward_auth_config_secret
+            environment:
+              CONFIG: /run/secrets/traefik_forward_auth_config_secret
+            networks:
+              - traefik
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.traefik-forward-auth.rule=Host(`auth.{{ config.domain }}`)"
+                - "traefik.http.routers.traefik-forward-auth.middlewares=traefik-internal,traefik-forward-auth"
+                - "traefik.http.routers.traefik-forward-auth.entrypoints=websecure"
+                - "traefik.http.routers.traefik-forward-auth.tls.certresolver=letsencrypt"
+                - "traefik.http.services.traefik-forward-auth.loadbalancer.server.port=4181"
+                - "traefik.http.middlewares.traefik-forward-auth.forwardauth.address=http://traefik-forward-auth:4181"
+                - "traefik.http.middlewares.traefik-forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
+              placement:
+                constraints:
+                  - 'node.role == manager'
+                  - 'node.labels.pi.storage == external'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 15M
+              restart_policy:
+                delay: 5s
+
         secrets:
-          traefik_users_secret:
+          traefik_forward_auth_config_secret:
             external: true
-            name: traefik_users_secret
+            name: "{{ traefik_forward_auth_config_secret.secret_name }}"
           cloudflare_api_key_secret:
             external: true
             name: cloudflare_api_key_secret

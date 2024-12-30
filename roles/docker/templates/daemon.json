@@ -1,0 +1,7 @@
+{
+  {% if docker_storage_external %}
+  "data-root": "/mnt/external/docker",
+  {% endif %}
+  "log-driver": "journald",
+  "cgroup-parent": "docker.slice"
+}

@@ -4,5 +4,3 @@ collections:
     type: git
 
   - name: community.docker
-
-  - name: community.general

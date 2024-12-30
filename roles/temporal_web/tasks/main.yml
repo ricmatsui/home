@@ -67,12 +67,14 @@
               labels:
                 - "traefik.enable=true"
                 - "traefik.http.routers.temporal.rule=Host(`temporal.{{ config.domain }}`)"
+                - "traefik.http.routers.temporal.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.routers.temporal.entrypoints=websecure"
                 - "traefik.http.routers.temporal.tls.certresolver=letsencrypt"
                 - "traefik.http.services.temporal.loadbalancer.server.port=8088"
               placement:
                 constraints:
                   - 'node.role == worker'
+                  - 'node.labels.pi.instance_type == pi'
               resources:
                 limits:
                   cpus: '1.00'

@@ -1,4 +1,0 @@
-{
-  "data-root": "/mnt/external/docker",
-  "log-driver": "journald"
-}

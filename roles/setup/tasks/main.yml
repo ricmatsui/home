@@ -5,6 +5,11 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: configure timezone
+  community.general.timezone:
+    name: Etc/UTC
+  notify: setup_reboot
+
 - name: check swap
   ansible.builtin.stat:
     path: /var/swap
@@ -39,19 +44,58 @@
   tags:
     - journal
 
-- name: disable services
+- name: disable rsyslog service
   ansible.builtin.systemd:
-    name: "{{ item }}"
+    name: rsyslog
     state: stopped
     enabled: false
-  loop:
-    - dphys-swapfile
-    - rsyslog
-    - apt-daily.timer
-    - apt-daily-upgrade.timer
+  notify: setup_reboot
+
+- name: disable swap service
+  ansible.builtin.systemd:
+    name: dphys-swapfile
+    state: stopped
+    enabled: false
+  when: swap_result.stat.exists
   notify: setup_reboot
   tags:
     - swap
+
+- name: create apt timer directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    state: directory
+  loop:
+    - /etc/systemd/system/apt-daily.timer.d
+    - /etc/systemd/system/apt-daily-upgrade.timer.d
+
+- name: configure apt download timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily.timer.d/override.conf
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ apt_download_time }}
+      RandomizedDelaySec=10m
+  notify: setup_apt_download_restart
+
+- name: configure apt upgrade timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/override.conf
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar={{ apt_upgrade_time }}
+      RandomizedDelaySec=10m
+  notify: setup_apt_upgrade_restart
+
+- name: check cmdline
+  ansible.builtin.stat:
+    path: /boot/cmdline.txt
+  changed_when: false
+  register: cmdline_result
 
 - name: enable cgroups features
   ansible.builtin.lineinfile:
@@ -59,6 +103,31 @@
     backrefs: True
     regexp: '(^.+rootwait)$'
     line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+  when: cmdline_result.stat.exists
+  notify: setup_reboot
+  tags:
+    - cgroups
+
+- name: check grub
+  ansible.builtin.stat:
+    path: /etc/default/grub
+  changed_when: false
+  register: grub_result
+
+- name: enable cgroups features
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    line: 'GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory"'
+  when: grub_result.stat.exists
+  register: enable_grub_cgroups
+  notify: setup_reboot
+  tags:
+    - cgroups
+
+- name: update grub
+  ansible.builtin.shell:
+    cmd: update-grub
+  when: enable_grub_cgroups.changed
   notify: setup_reboot
   tags:
     - cgroups
@@ -66,13 +135,16 @@
 - name: install
   ansible.builtin.apt:
     name:
+      - curl
       - vim
       - lsof
       - git
       - sysstat
+      - python-is-python3
       - python3-pip
       - python3-venv
       - zram-tools
+      - unattended-upgrades
   notify: setup_reboot
 
 - name: configure zram
@@ -80,6 +152,14 @@
     path: /etc/default/zramswap
     line: "SIZE={{ setup_zram_size }}"
   notify: setup_reboot
+
+- name: configure unattended upgrades
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/51unattended-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      Unattended-Upgrade::Automatic-Reboot "true";
 
 - name: install docker sdk
   ansible.builtin.pip:
@@ -91,7 +171,7 @@
 - name: install poetry
   ansible.builtin.shell:
     cmd: >
-      curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py
+      curl -sSL https://install.python-poetry.org
       | python -
-    creates: /home/pi/.poetry/bin/poetry
-  become_user: pi
+    creates: /home/{{ ansible_user }}/.poetry/bin/poetry
+  become_user: "{{ ansible_user }}"

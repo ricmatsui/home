@@ -16,9 +16,9 @@
     group: pi
     state: directory
   loop:
-    - /mnt/external/resilio-sync/config
-    - /mnt/external/resilio-sync/downloads
-    - /mnt/external/resilio-sync/sync
+    - /mnt/gluster/resilio-sync/config
+    - /mnt/gluster/resilio-sync/downloads
+    - /mnt/gluster/resilio-sync/sync
 
 - name: deploy stack
   community.general.docker_stack:
@@ -29,7 +29,7 @@
       - version: '3.8'
         services:
           resilio-sync:
-            image: linuxserver/resilio-sync@sha256:b597ca68fe271adf473f7d0c8a4cd28a919c9eb31a9d6687edfc119e40ff7fbe
+            image: linuxserver/resilio-sync:2.7.3.1381-1-ls171@sha256:6d21c4c24c48e4a990dcca5520b602b49f3102e44f1a6da040128dfd09af91f2
             networks:
               - traefik_traefik
             environment:
@@ -38,9 +38,9 @@
               TZ: America/Los_Angeles
               UMASK_SET: "022"
             volumes:
-              - /mnt/external/resilio-sync/config:/config
-              - /mnt/external/resilio-sync/downloads:/downloads
-              - /mnt/external/resilio-sync/sync:/sync
+              - /mnt/gluster/resilio-sync/config:/config
+              - /mnt/gluster/resilio-sync/downloads:/downloads
+              - /mnt/gluster/resilio-sync/sync:/sync
             ports:
               - 55555:55555
             logging:
@@ -51,16 +51,17 @@
               labels:
                 - "traefik.enable=true"
                 - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
+                - "traefik.http.routers.sync.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.routers.sync.entrypoints=websecure"
                 - "traefik.http.routers.sync.tls.certresolver=letsencrypt"
                 - "traefik.http.services.sync.loadbalancer.server.port=8888"
               placement:
                 constraints:
-                  - 'node.labels.pi.storage == external'
+                  - 'node.labels.pi.instance_type == mbp'
               resources:
                 limits:
                   cpus: '0.50'
-                  memory: 150M
+                  memory: 800M
               restart_policy:
                 delay: 10m
               update_config:

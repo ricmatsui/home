@@ -45,6 +45,7 @@
               labels:
                 - "traefik.enable=true"
                 - "traefik.http.routers.homepage.rule=Host(`pi.{{ config.domain }}`)"
+                - "traefik.http.routers.homepage.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.routers.homepage.entrypoints=websecure"
                 - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
                 - "traefik.http.services.homepage.loadbalancer.server.port=80"
