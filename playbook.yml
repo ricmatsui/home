@@ -143,3 +143,9 @@
 
     - role: temporal_web
       tags: temporal_web
+
+    - role: home_assistant
+      tags: home_assistant
+
+    - role: vpn_ui
+      tags: vpn_ui

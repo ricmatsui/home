@@ -28,3 +28,10 @@
     name: wg1-restart.timer
     state: restarted
   listen: wg1_timer_restart
+
+- name: restart sync path
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: wg1-sync.path
+    state: restarted
+  listen: wg1_sync_restart

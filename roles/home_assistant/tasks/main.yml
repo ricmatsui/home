@@ -1,0 +1,59 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "ha.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/home-assistant/config
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: home-assistant
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          home-assistant:
+            image: ghcr.io/home-assistant/home-assistant:2024.12.5@sha256:db0f344d5126bfedd7bf18e0bfb8249a9a5e6785e2f6cb3728edbd393fff1981
+            networks:
+              - traefik_traefik
+            user: 1000:1000
+            volumes:
+              - /mnt/gluster/home-assistant/config:/config
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.home-assistant.rule=Host(`ha.{{ config.domain }}`)"
+                - "traefik.http.routers.home-assistant.middlewares=traefik-internal"
+                - "traefik.http.routers.home-assistant.entrypoints=websecure"
+                - "traefik.http.routers.home-assistant.tls.certresolver=letsencrypt"
+                - "traefik.http.services.home-assistant.loadbalancer.server.port=8123"
+              placement:
+                constraints:
+                  - 'node.labels.pi.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 600M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

@@ -7,7 +7,11 @@ Automation for Raspberry Pi servers
 - Docker Swarm
 - Docker Registry
 - Wireguard
+- Wireguard UI
 - Cloudflare DDNS
+- Home Assistant
+- Jellyfin
+- Paper
 - Pi-hole
 - Traefik
 - Temporalite

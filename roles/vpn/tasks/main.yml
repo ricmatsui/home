@@ -32,14 +32,20 @@
     state: directory
   notify: vpn_restart
 
+- name: check configuration
+  ansible.builtin.stat:
+    path: /etc/wireguard/wg1.conf
+  register: wg1_config
+
 - name: configure
   ansible.builtin.copy:
-    content: "{{ lookup('community.sops.sops', vpn_config) }}"
+    content: "{{ lookup('community.sops.sops', inventory_hostname_short ~ '/wg1.conf') }}"
     dest: /etc/wireguard/wg1.conf
     owner: root
     group: root
     mode: u=rw,g=,o=
   notify: vpn_restart
+  when: not vpn_ui_config or not wg1_config.stat.exists
 
 - name: configure service
   ansible.builtin.copy:
@@ -148,6 +154,42 @@
     name: wg1-restart.timer
     enabled: true
   notify: wg1_timer_restart
+
+- name: configure sync service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg1-sync.service
+    content: |
+      [Unit]
+      Description=Sync wg1 config
+      After=wg-quick@wg1.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c '/usr/bin/wg syncconf wg1 <(/usr/bin/wg-quick strip wg1)'
+  notify: wg1_sync_restart
+  when: vpn_ui_config
+
+- name: configure sync path
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg1-sync.path
+    content: |
+      [Unit]
+      Description=Watch wg1 config
+
+      [Path]
+      PathModified=/etc/wireguard/wg1.conf
+
+      [Install]
+      WantedBy=multi-user.target
+  notify: wg1_sync_restart
+  when: vpn_ui_config
+
+- name: enable sync path
+  ansible.builtin.systemd:
+    name: wg1-sync.path
+    enabled: true
+  notify: wg1_sync_restart
+  when: vpn_ui_config
 
 - name: set dns record
   community.general.cloudflare_dns:

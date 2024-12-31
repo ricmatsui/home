@@ -24,6 +24,7 @@
               placement:
                 constraints:
                   - 'node.role == worker'
+                  - 'node.labels.pi.instance_type == pi'
               resources:
                 limits:
                   cpus: '0.15'

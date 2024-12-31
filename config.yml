@@ -33,14 +33,20 @@ config:
         hw_mode: ENC[AES256_GCM,data:xg==,iv:ecf35xfHjprN4cZWG/Ze+PJcgBwzmHJLQoQ6urQS0E0=,tag:XqwsTWtqdpKkfr+NqagI2g==,type:str]
         channel: ENC[AES256_GCM,data:bg==,iv:CKcuOnLp/tToVHXeASpAYvRNx9XOcFBV5VjKkBsB9yY=,tag:XihpA6Li5ErsH8GaaPOjlQ==,type:int]
         wpa_passphrase: ENC[AES256_GCM,data:74ItH6ebgCZ0,iv:jW2G1UatoAbeDzgx9ANPHiTviJG5TvR+sTqX85ShrNc=,tag:vov69AY4jTJw9DfGcTVp2Q==,type:str]
+    vpn_ui:
+        session_secret: ENC[AES256_GCM,data:vuQySGyBWOjVUxEF2Bs3ZPSyTJe4LnX1jCS/MjM0vRESYsQVJ6YX2+aB,iv:kQz/IFGivQIGTvghKATZG58HYdJa4zznqcR4LyeaHYE=,tag:4FW03zIuG2im25+YV9JXbg==,type:str]
+        subnet_ranges: ENC[AES256_GCM,data:QzRA1IR0HtyBRPAslUhX,iv:Pin9u0IUe9r4IeN8SV04QEO3pV8ApT2MY4aC2rI4DFQ=,tag:aqlNtZw3lgFO99XhQSfhUA==,type:str]
+        default_client_allowed_ips: ENC[AES256_GCM,data:/T/ws7t269y0btE=,iv:lZm+cFt1nqVvq3R0vpbab9b1BD9cghjeYu1letG/+0U=,tag:uGPgDxrOXD5PIC3BgfUIFQ==,type:str]
+        firewall_mark: ENC[AES256_GCM,data:cldx+dBP,iv:ph+xyV33KMLC9lGc8iWc+PyGm3UPyi+sB/IEiBQKLxw=,tag:nIknR48FPOh8ClvBIkQJ5A==,type:str]
+        server_listen_port: ENC[AES256_GCM,data:aBnKDnA=,iv:ZzqWIDKyx/yZq7G/GFzWqyjYU345eZ8RigG08UDKVQ4=,tag:cPGvNyEAfITX0leuoS8J4g==,type:str]
 sops:
     kms: []
     gcp_kms: []
     azure_kv: []
     hc_vault: []
     age: []
-    lastmodified: "2024-12-21T05:59:29Z"
-    mac: ENC[AES256_GCM,data:wdRm2kcoculMm+AbgQIg7B1PAueYPSj1RlWk/qR47aZ56JUsglkgy9466ODKKI60VhU4Wl7ymz5TCa/C44Hbl2qbObMIm2mFkJh9AlIhv/KGD5QIZbk5hcdKWIexRD4c10w+eupPnXnc0Pwa/pA0DiaCMiFYTGcum1DNapCxHHA=,iv:2y1sTervlKvyPQ/cGB4UJWvvgie64bMnQOdu32RYrjo=,tag:QD9kH/h+MP9PHmolmgmvsQ==,type:str]
+    lastmodified: "2024-12-31T02:19:45Z"
+    mac: ENC[AES256_GCM,data:0o7UUOZZZmZH6nnnfFt7ljqlfFP6+ca5aBJw4VU4lAKl1oVTtMzQuaEqGlTqMmOcQQ5xs9ML5FCN1f1PwmEMuDaXB1P3rw0wUwhqJ/XJMBOrGYXYRRny8rqhyFyDO6cL2k54ihABFBGWcZn+U4hNJigm9avY0JioRdOhsxnXW5M=,iv:lSCgEFFbYlY+CoOae9bdqZ9lbYQuCaICSa92mURjpZw=,tag:MpbgpD/h/RpX/OGsVNqMmQ==,type:str]
     pgp:
         - created_at: "2021-12-27T08:11:41Z"
           enc: |
