@@ -33,7 +33,7 @@
             environment:
               GOMAXPROCS: '1'
             volumes:
-              - /mnt/external/temporalite:/work
+              - /mnt/gluster/temporalite:/work
             ports:
               - 7233:7233
             logging:

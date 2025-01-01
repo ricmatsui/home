@@ -61,7 +61,7 @@
 			"docker_slice_memory_max": "ENC[AES256_GCM,data:2NZO2zo=,iv:Vtv3E5dYNKwR5+HdxQetbuZeuwtKM5SpJqKbbGIbWvs=,tag:fsy5X6xJRrjpMuSx1HmojA==,type:str]",
 			"docker_advertise_addr": "ENC[AES256_GCM,data:L5CrFk96fs3CrSZR,iv:7dfaqHT3Vd3woiai7NIyYYZbKHQqEa8p7aAbP/xRno8=,tag:pb7PCrgISTrDtSHJA6at2g==,type:str]",
 			"docker_default_address_pool": "ENC[AES256_GCM,data:eU1+qXwl82rVI7Nk,iv:siXJq5sfKEyvisaYZKknZK4/GzU+pEEIThb96xl0o4k=,tag:cIVD4kLwP5VnyJqIUIuRJg==,type:str]",
-			"docker_hostname": "ENC[AES256_GCM,data:Bx8/3Dn+ZVqUo+YK,iv:nS7emN7EmqvFO/4ZnNWKs1MTfhHASPWZqi41nL8YWr4=,tag:AC1UaxW4q4dEEfsTDEOGzw==,type:str]",
+			"docker_hostname": "ENC[AES256_GCM,data:xO4=,iv:zM2s0LA9T0wOwE3kL2oH7UouU/N46A57u+qZNEdySNk=,tag:1aUsefcdNK8SyHu3ggZS+g==,type:str]",
 			"docker_storage_external": "ENC[AES256_GCM,data:MLDaKA==,iv:ZPVcjdhKj4rR7BPRTEndMuEc3UVgUytXAwAIDBPHJc8=,tag:PJhBZwvNvJoSafzIk7qacQ==,type:bool]",
 			"docker_labels": {
 				"pi.instance_type": "ENC[AES256_GCM,data:o88=,iv:L5CNoV6+useUdkDg+MNQ/oOmyFwpZurhZAl+JYcGP/Q=,tag:7yUKsaKNIfDVq9klBYbqoA==,type:str]",
@@ -92,7 +92,7 @@
 			"vpn_ui_config": "ENC[AES256_GCM,data:vrrzocA=,iv:9L2VyBftXydX42aoSxpO3j9PP1g7/0gA+79JyykJBPE=,tag:LPE+gMa3/aK9CPuKgBovgg==,type:bool]",
 			"docker_slice_memory_max": "ENC[AES256_GCM,data:XSLNmg==,iv:opzSka4WEzInSUBtEu/x3L3K9OMnoXrz2kwQN2U2cU4=,tag:nwSHYOO78veH9HxKzpkddw==,type:str]",
 			"docker_advertise_addr": "ENC[AES256_GCM,data:ieOvNAVnUb6nm9ql,iv:fMiQ5tkzmEBlxoIb5IKAQCSUuGknlIFCFLeJmLMPehY=,tag:k3ZNqQijYnGLQIWxG63U2g==,type:str]",
-			"docker_hostname": "ENC[AES256_GCM,data:u8uyfWkW8hyaRjRH,iv:kCouzRkx2ZDhCXG+iLSYPI8NdofDS36VpDIZnLP0ANI=,tag:7E2uQizqvlAWM4FbIOKXOg==,type:str]",
+			"docker_hostname": "ENC[AES256_GCM,data:/KQZ2w==,iv:vllFR1A4wU6vRbOTvHU59NwOfeQFZouwwW57LOhnZL0=,tag:40VjZsGigJC2w8yGGwkjqQ==,type:str]",
 			"docker_storage_external": "ENC[AES256_GCM,data:92N89K8=,iv:NA89RT1UrOnHHHHQ/OowjBP5+NnKATlDKTd33lkZ0e0=,tag:R/VU1Q4r1DkdJkGxdaPLxA==,type:bool]",
 			"docker_labels": {
 				"pi.instance_type": "ENC[AES256_GCM,data:bGI=,iv:cfI74Xl/f8sEtJXbCjjpjcgT4yxhQ6kWDDl3eB/ofEw=,tag:md5lVXC7n2yXPcJE5BIKxQ==,type:str]",
@@ -144,8 +144,8 @@
 		"azure_kv": null,
 		"hc_vault": null,
 		"age": null,
-		"lastmodified": "2024-12-31T06:15:00Z",
-		"mac": "ENC[AES256_GCM,data:EdCFLh7vA9PjgyAUc6e35FUrSQ/JRDVEOF3X9ugA7QEs+z8eUEePRB9OVMKCTwOd+zfluDjDRuDs4iC1ANsU8K1hh0qIJvZp4bO37yABmWt+lH7ay+DrlPlGjLm43EWjZ0Xz3Faysp6XkzxGxe9+iiLI9xhhJQvT4QbtHzLDDoI=,iv:QfH+3EGpYjTa8X573SXvs8wJx4IVWu5SDVmjntSGdt0=,tag:WHwfzBiW6GNlTk90WRiLIg==,type:str]",
+		"lastmodified": "2025-01-01T19:23:46Z",
+		"mac": "ENC[AES256_GCM,data:0MVP5ybhJEyrI1GvUp6GxlgRS0XfmDpy+NM6Nrk2Wpjplb8oFFgLqCTPFG0FlfOmC0aBQOFv/aQt6OGiUBjQVt8gAqv+RGsuOdtv70LlMLnLGLiGaQgzH3gxwJsba996mkyQxmqGFm2wDTmYhbOgsNOLnEQJJwE/cJuLWAI1XUw=,iv:K0dptL8nYcywend26zVqDS3wI9WTW30WJNsuw5rKnqE=,tag:w92e7akYH+9flo28Aa4vdg==,type:str]",
 		"pgp": [
 			{
 				"created_at": "2020-10-23T21:16:31Z",
