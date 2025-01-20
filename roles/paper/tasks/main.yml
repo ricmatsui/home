@@ -1,5 +1,23 @@
 ---
 
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "paper.{{ config.domain }}"
+    type: A
+    value: "{{ config.paper.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: set ui dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "paper-ui.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
 - name: deploy stack
   community.general.docker_stack:
     name: paper
@@ -30,11 +48,20 @@
                 published: 19132
                 protocol: udp
                 mode: host
+            networks:
+              - traefik_traefik
             volumes:
               - /mnt/gluster/resilio-sync/sync/Paper:/data
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.paper-ui.rule=Host(`paper-ui.{{ config.domain }}`)"
+                - "traefik.http.routers.paper-ui.middlewares=traefik-internal,traefik-forward-auth"
+                - "traefik.http.routers.paper-ui.entrypoints=websecure"
+                - "traefik.http.routers.paper-ui.tls.certresolver=letsencrypt"
+                - "traefik.http.services.paper-ui.loadbalancer.server.port=7867"
               placement:
                 constraints:
                   - 'node.labels.pi.instance_type == mbp'
@@ -44,3 +71,6 @@
                   memory: 4096M
               restart_policy:
                 delay: 10m
+        networks:
+          traefik_traefik:
+            external: true
