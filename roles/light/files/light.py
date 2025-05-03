@@ -1,4 +1,4 @@
-from bluepy.btle import Scanner, DefaultDelegate
+from bluepy.btle import Scanner, DefaultDelegate, BTLEInternalError
 from datadog import initialize, statsd
 
 import datetime
@@ -334,7 +334,13 @@ try:
     while True:
         statsd.increment('lightpuck.scan')
         scanner.clear()
-        scanner.process(10)
+
+        try:
+            scanner.process(10)
+        except BTLEInternalError as error:
+            logger.debug('Scanner error: %s', error)
+            if not error.message.startswith('Address type changed during scan'):
+                raise
 
         if len(scanner.getDevices()) > 0:
             processed_without_devices_count = 0
