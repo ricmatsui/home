@@ -41,14 +41,16 @@ config:
         default_client_allowed_ips: ENC[AES256_GCM,data:/T/ws7t269y0btE=,iv:lZm+cFt1nqVvq3R0vpbab9b1BD9cghjeYu1letG/+0U=,tag:uGPgDxrOXD5PIC3BgfUIFQ==,type:str]
         firewall_mark: ENC[AES256_GCM,data:cldx+dBP,iv:ph+xyV33KMLC9lGc8iWc+PyGm3UPyi+sB/IEiBQKLxw=,tag:nIknR48FPOh8ClvBIkQJ5A==,type:str]
         server_listen_port: ENC[AES256_GCM,data:aBnKDnA=,iv:ZzqWIDKyx/yZq7G/GFzWqyjYU345eZ8RigG08UDKVQ4=,tag:cPGvNyEAfITX0leuoS8J4g==,type:str]
+    temporal:
+        postgres_password: ENC[AES256_GCM,data:UKNS+yKpY5/eopq1lc1GOMGAR8pX,iv:Hhx9Npgl+6r9MYBnSCbO7IjFHdpGt3imYN8R88C46KI=,tag:8KJQG/RoHRRmJSU8Z1E72g==,type:str]
 sops:
     kms: []
     gcp_kms: []
     azure_kv: []
     hc_vault: []
     age: []
-    lastmodified: "2025-01-11T07:12:35Z"
-    mac: ENC[AES256_GCM,data:tuvT/ALJCgYEUiS3IeG1nhCgZj+uT8p4180wZVJlPn8G5dh9L/k9QlJMyEMALG7RtULOnV+2XrsTRPQKnELeuA4Stdo0ChSSizrsPqB4PDPba4oAhYRfsasOpBtHZLf01kTkufgHdn5yNg/v0dnEIqJtmfv6F2CenIbNngdHpa0=,iv:UtpcS6TWy2E7qYw8QKTyPmjy8Qhb//3+TlzxqCBBL/M=,tag:MHH4Zpkvp22nzcjk/UEx2Q==,type:str]
+    lastmodified: "2025-05-03T22:53:43Z"
+    mac: ENC[AES256_GCM,data:PX5VGA1t31ORLlj+ZxDg8LckmXJX4GziOb+k0Y9fsK9YOyDs5JQwNgeTWInlGeiGlK+wNzVF41uQJFn50taMzlHzycT+o2gJgJ3JNxc5numNJjISP31s1VBLMUvApfZaxbm8d2bn5EB1wUiZE/+0rWkLRH42NZJik6JygEcVxUI=,iv:+ZeuDLkyorLmlWUNeMymO8FQ7Gx9SVOqC0lt+UnFV30=,tag:AGs8AAsRSAoZ01as67c79g==,type:str]
     pgp:
         - created_at: "2021-12-27T08:11:41Z"
           enc: |

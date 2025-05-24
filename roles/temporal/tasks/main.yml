@@ -1,0 +1,150 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "temporal.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: set ui dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "temporal-ui.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create config directory
+  ansible.builtin.file:
+    path: /mnt/gluster/temporal/dynamicconfig
+    owner: pi
+    group: pi
+    state: directory
+
+- name: create db directory
+  ansible.builtin.file:
+    path: /mnt/gluster/temporal/db
+    owner: 999
+    group: pi
+    state: directory
+
+- name: create dynamic config
+  ansible.builtin.copy:
+    dest: /mnt/gluster/temporal/dynamicconfig/development.yml
+    content: |
+      limit.maxIDLength:
+        - value: 255
+          constraints: {}
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: temporal
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          temporal-server:
+            image: temporalio/auto-setup:1.27.2@sha256:cea82b3ed6c5f23a104b988bec43aa19a57affc085aaf43fb1f8debfc7dd36ed
+            environment:
+              DB: postgres12
+              DB_PORT: '5432'
+              POSTGRES_USER: temporal
+              POSTGRES_PWD: "{{ config.temporal.postgres_password }}"
+              POSTGRES_SEEDS: temporal_temporal-db
+              DYNAMIC_CONFIG_FILE_PATH: config/dynamicconfig/development.yml
+              BIND_ON_IP: 0.0.0.0
+              TEMPORAL_BROADCAST_ADDRESS: 127.0.0.1
+              TEMPORAL_ADDRESS: temporal_temporal-server:7233
+              TEMPORAL_CLI_ADDRESS: temporal_temporal-server:7233
+            networks:
+              - temporal
+              - traefik_traefik
+            volumes:
+              - /mnt/gluster/temporal/dynamicconfig:/etc/temporal/config/dynamicconfig
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.tcp.routers.temporal.rule=HostSNI(`*`)"
+                - "traefik.tcp.routers.temporal.middlewares=traefik-internal-tcp"
+                - "traefik.tcp.routers.temporal.entrypoints=temporal"
+                - "traefik.tcp.services.temporal.loadbalancer.server.port=7233"
+              placement:
+                constraints:
+                  - 'node.labels.pi.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 250M
+              restart_policy:
+                delay: 30s
+              update_config:
+                order: stop-first
+
+          temporal-db:
+            image: postgres:16.8@sha256:5779f428edb411216d6960f2721974d7e71e124e3c41a3e625e47a9072949ed6
+            environment:
+              POSTGRES_USER: temporal
+              POSTGRES_PASSWORD: "{{ config.temporal.postgres_password }}"
+            networks:
+              - temporal
+            volumes:
+              - /mnt/gluster/temporal/db:/var/lib/postgresql/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.pi.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 200M
+              restart_policy:
+                delay: 20s
+              update_config:
+                order: stop-first
+
+          temporal-ui:
+            image: temporalio/ui:2.37.2@sha256:f377c1685f96bbe99103ee57b4115b0f0f6f4213fcfa6887d5e0a7d1a9bc48d1
+            environment:
+              TEMPORAL_ADDRESS: temporal_temporal-server:7233
+              TEMPORAL_CORS_ORIGINS: "https://temporal-ui.{{ config.domain }}"
+              TEMPORAL_NOTIFY_ON_NEW_VERSION: 'false'
+            networks:
+              - temporal
+              - traefik_traefik
+            logging:
+              driver: none
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.temporal-ui.rule=Host(`temporal-ui.{{ config.domain }}`)"
+                - "traefik.http.routers.temporal-ui.middlewares=traefik-internal,traefik-forward-auth"
+                - "traefik.http.routers.temporal-ui.entrypoints=websecure"
+                - "traefik.http.routers.temporal-ui.tls.certresolver=letsencrypt"
+                - "traefik.http.services.temporal-ui.loadbalancer.server.port=8080"
+              placement:
+                constraints:
+                  - 'node.labels.pi.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 125M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          temporal: {}
+          traefik_traefik:
+            external: true
+

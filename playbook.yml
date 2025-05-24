@@ -138,11 +138,8 @@
     - role: paper
       tags: paper
 
-    - role: temporalite
-      tags: temporalite
-
-    - role: temporal_web
-      tags: temporal_web
+    - role: temporal
+      tags: temporal
 
     - role: home_assistant
       tags: home_assistant

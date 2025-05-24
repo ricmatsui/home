@@ -4,23 +4,23 @@ Automation for Raspberry Pi servers
 
 ## Services
 
-- Docker Swarm
-- Docker Registry
-- Wireguard
-- Wireguard UI
 - Cloudflare DDNS
+- Datadog
+- Docker Registry
+- Docker Swarm
+- External USB Drive
+- GlusterFS
 - Home Assistant
+- Homepage
 - Jellyfin
-- Paper
-- Pi-hole
-- Traefik
-- Temporalite
-- Temporal Web
+- Let's Encrypt
+- Light Control
+- PaperMC
 - Resilio Sync
 - Selenium
-- Let's Encrypt
-- Datadog
-- External USB Drive
-- Homepage
-- Light Control
+- Temporal
+- Temporal UI
+- Traefik
+- Wireguard
+- Wireguard UI
 - Wireless AP
