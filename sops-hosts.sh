@@ -1,2 +1,2 @@
 #!/bin/sh
-sops -d hosts.json
+sops -d env/hosts.json

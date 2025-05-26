@@ -1,0 +1,8 @@
+---
+
+- name: restart overlay
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: wg-quick@overlay.service
+    state: restarted
+  listen: overlay_restart

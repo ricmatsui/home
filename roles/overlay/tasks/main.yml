@@ -1,0 +1,38 @@
+---
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - wireguard
+  notify: overlay_restart
+
+- name: create configuration directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/wg-quick@.service.d
+    owner: root
+    group: root
+    state: directory
+  notify: overlay_restart
+
+- name: configure
+  ansible.builtin.template:
+    src: overlay.conf
+    dest: /etc/wireguard/overlay.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+  notify: overlay_restart
+
+- name: configure service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg-quick@.service.d/override.conf
+    content: |
+      [Service]
+      Restart=on-failure
+  notify: overlay_restart
+
+- name: enable wireguard
+  ansible.builtin.systemd:
+    name: wg-quick@overlay.service
+    enabled: true
+    daemon_reload: true

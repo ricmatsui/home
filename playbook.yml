@@ -12,7 +12,7 @@
   tasks:
     - name: load config
       community.sops.load_vars:
-        file: config.yml
+        file: env/config.yml
 
 - name: external
   gather_facts: false
@@ -32,6 +32,14 @@
   roles:
     - role: setup
       tags: setup
+
+- name: overlay
+  gather_facts: false
+  hosts:
+    - overlay_peers
+  roles:
+    - role: overlay
+      tags: overlay
 
 - name: vpn
   gather_facts: false
