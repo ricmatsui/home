@@ -39,7 +39,7 @@
 
 - name: configure
   ansible.builtin.copy:
-    content: "{{ lookup('community.sops.sops', inventory_hostname_short ~ '/wg1.conf') }}"
+    content: "{{ vpn_config }}"
     dest: /etc/wireguard/wg1.conf
     owner: root
     group: root

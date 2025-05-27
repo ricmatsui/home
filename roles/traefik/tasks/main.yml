@@ -30,7 +30,7 @@
 - name: traefik forward auth config
   community.general.docker_secret:
     name: traefik_forward_auth_config_secret
-    data: "{{ lookup('community.sops.sops', 'traefik_forward_auth.ini') }}"
+    data: "{{ config.traefik.forward_auth_config }}"
     rolling_versions: true
   register: traefik_forward_auth_config_secret
 

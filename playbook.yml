@@ -1,19 +1,5 @@
 ---
 
-- name: config
-  gather_facts: false
-  hosts:
-    - pi
-    - tart
-    - cannoli
-    - localhost
-  tags:
-    - always
-  tasks:
-    - name: load config
-      community.sops.load_vars:
-        file: env/config.yml
-
 - name: external
   gather_facts: false
   hosts:
