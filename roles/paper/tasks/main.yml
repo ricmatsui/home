@@ -64,7 +64,7 @@
                 - "traefik.http.services.paper-ui.loadbalancer.server.port=7867"
               placement:
                 constraints:
-                  - 'node.labels.pi.instance_type == mbp'
+                  - 'node.labels.home.instance_type == mbp'
               resources:
                 limits:
                   cpus: '4.00'

@@ -44,7 +44,7 @@
                 - "traefik.http.services.registry.loadbalancer.server.port=5000"
               placement:
                 constraints:
-                  - 'node.labels.pi.storage == external'
+                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '0.25'

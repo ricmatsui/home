@@ -97,7 +97,7 @@
               placement:
                 constraints:
                   - 'node.role == manager'
-                  - 'node.labels.pi.storage == external'
+                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '1.00'
@@ -128,7 +128,7 @@
               placement:
                 constraints:
                   - 'node.role == manager'
-                  - 'node.labels.pi.storage == external'
+                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '1.00'

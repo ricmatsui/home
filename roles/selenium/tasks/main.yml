@@ -45,7 +45,7 @@
               replicas: 1
               placement:
                 constraints:
-                  - 'node.labels.pi.storage == external'
+                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '2.00'

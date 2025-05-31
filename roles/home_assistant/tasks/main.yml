@@ -45,7 +45,7 @@
                 - "traefik.http.services.home-assistant.loadbalancer.server.port=8123"
               placement:
                 constraints:
-                  - 'node.labels.pi.instance_type == mbp'
+                  - 'node.labels.home.instance_type == mbp'
               resources:
                 limits:
                   cpus: '1.00'

@@ -57,7 +57,7 @@
                 - "traefik.http.services.sync.loadbalancer.server.port=8888"
               placement:
                 constraints:
-                  - 'node.labels.pi.instance_type == mbp'
+                  - 'node.labels.home.instance_type == mbp'
               resources:
                 limits:
                   cpus: '0.50'

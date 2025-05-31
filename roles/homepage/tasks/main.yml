@@ -3,7 +3,7 @@
 - name: set dns record
   community.general.cloudflare_dns:
     zone: "{{ config.cloudflare.zone }}"
-    record: "pi.{{ config.domain }}"
+    record: "home.{{ config.domain }}"
     type: A
     value: "{{ config.ip }}"
     api_token: "{{ config.cloudflare.api_key }}"
@@ -44,7 +44,7 @@
               replicas: 1
               labels:
                 - "traefik.enable=true"
-                - "traefik.http.routers.homepage.rule=Host(`pi.{{ config.domain }}`)"
+                - "traefik.http.routers.homepage.rule=Host(`home.{{ config.domain }}`)"
                 - "traefik.http.routers.homepage.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.routers.homepage.entrypoints=websecure"
                 - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
@@ -52,7 +52,7 @@
               placement:
                 constraints:
                   - 'node.role == worker'
-                  - 'node.labels.pi.instance_type == pi'
+                  - 'node.labels.home.instance_type == pi'
               resources:
                 limits:
                   cpus: '0.15'

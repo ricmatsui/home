@@ -1,8 +1,4 @@
-# Pi Home Lab
-
-Automation for Raspberry Pi servers
-
-## Services
+# Home Lab
 
 - Cloudflare DDNS
 - Datadog
