@@ -2,65 +2,49 @@
 
 - name: external
   gather_facts: false
-  hosts:
-    - pi
-    - cannoli
+  hosts: external
   roles:
     - role: external
       tags: external
 
 - name: setup
   gather_facts: false
-  hosts:
-    - pi
-    - tart
-    - cannoli
+  hosts: all
   roles:
     - role: setup
       tags: setup
 
 - name: overlay
   gather_facts: false
-  hosts:
-    - overlay_peers
+  hosts: overlay_peers
   roles:
     - role: overlay
       tags: overlay
 
 - name: vpn
   gather_facts: false
-  hosts:
-    - pi
-    - tart
-    - cannoli
+  hosts: vpn
   roles:
     - role: vpn
       tags: vpn
 
 - name: gluster_server
   gather_facts: false
-  hosts:
-    - gluster_pool_servers
+  hosts: gluster_pool_servers
   roles:
     - role: gluster_server
       tags: gluster_server
 
 - name: gluster_client
   gather_facts: false
-  hosts:
-    - pi
-    - tart
-    - cannoli
+  hosts: all
   roles:
     - role: gluster_client
       tags: gluster_client
 
 - name: datadog
   gather_facts: false
-  hosts:
-    - pi
-    - tart
-    - cannoli
+  hosts: all
   roles:
     - role: datadog
       tags: datadog
@@ -104,7 +88,7 @@
 
 - name: deploy
   gather_facts: false
-  hosts: pi
+  hosts: manager
   roles:
     - role: docker_secrets
       tags:

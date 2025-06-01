@@ -65,7 +65,7 @@
                 - "traefik.http.services.vpn-ui.loadbalancer.server.port=5000"
               placement:
                 constraints:
-                  - 'node.role == manager'
+                  - 'node.labels.home.network == ingress'
                   - 'node.labels.home.storage == external'
               resources:
                 limits:

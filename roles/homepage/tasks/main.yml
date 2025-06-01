@@ -51,8 +51,8 @@
                 - "traefik.http.services.homepage.loadbalancer.server.port=80"
               placement:
                 constraints:
-                  - 'node.role == worker'
                   - 'node.labels.home.instance_type == pi'
+                  - 'node.labels.home.instance_size == extra_small'
               resources:
                 limits:
                   cpus: '0.15'

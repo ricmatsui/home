@@ -96,7 +96,7 @@
                 - "traefik.http.services.traefik.loadbalancer.server.port=80"
               placement:
                 constraints:
-                  - 'node.role == manager'
+                  - 'node.labels.home.network == ingress'
                   - 'node.labels.home.storage == external'
               resources:
                 limits:
@@ -127,7 +127,7 @@
                 - "traefik.http.middlewares.traefik-forward-auth.forwardauth.authResponseHeaders=X-Forwarded-User"
               placement:
                 constraints:
-                  - 'node.role == manager'
+                  - 'node.labels.home.network == ingress'
                   - 'node.labels.home.storage == external'
               resources:
                 limits:
@@ -145,4 +145,3 @@
             name: cloudflare_api_key_secret
         networks:
           traefik: {}
-
