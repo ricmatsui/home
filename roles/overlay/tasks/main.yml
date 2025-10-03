@@ -27,8 +27,12 @@
   ansible.builtin.copy:
     dest: /etc/systemd/system/wg-quick@.service.d/override.conf
     content: |
+      [Unit]
+      StartLimitIntervalSec=0
+
       [Service]
       Restart=on-failure
+      RestartSec=5s
   notify: overlay_restart
 
 - name: enable wireguard

@@ -26,3 +26,19 @@
     hostname: "{{ docker_hostname }}"
     labels: "{{ docker_labels }}"
     labels_state: replace
+
+- name: create macvlan config network
+  community.docker.docker_network:
+    name: macvlan-config
+    config_only: true
+    driver_options:
+      parent: "{{ docker_macvlan_parent }}"
+    ipam_config: "{{ config.docker.macvlan_ipam_config }}"
+
+- name: create macvlan network
+  community.docker.docker_network:
+    name: macvlan
+    driver: macvlan
+    scope: swarm
+    config_from: macvlan-config
+  when: inventory_hostname == groups['docker_managers'][0]

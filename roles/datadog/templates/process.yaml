@@ -1,0 +1,5 @@
+instances:
+{% for process in datadog_process_checks %}
+  - name: {{ process.name }}
+    search_string: {{ process.search_string|to_json }}
+{% endfor %}

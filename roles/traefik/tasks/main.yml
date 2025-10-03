@@ -56,6 +56,7 @@
               --entrypoints.web.http.redirections.entrypoint.to=websecure
               --entrypoints.websecure.address=:443
               --entrypoints.temporal.address=:7233
+              --entrypoints.mosquitto.address=:1883
               --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
               --certificatesresolvers.letsencrypt.acme.dnschallenge=true
               --certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare
@@ -73,6 +74,9 @@
                 mode: host
               - target: 7233
                 published: 7233
+                mode: host
+              - target: 1883
+                published: 1883
                 mode: host
             volumes:
               - /var/run/docker.sock:/var/run/docker.sock

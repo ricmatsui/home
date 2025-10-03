@@ -119,6 +119,9 @@
     - role: temporal
       tags: temporal
 
+    - role: mosquitto
+      tags: mosquitto
+
     - role: home_assistant
       tags: home_assistant
 

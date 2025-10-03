@@ -66,12 +66,16 @@
       dest: disk.d
     - src: glusterfs.yaml
       dest: glusterfs.d
+    - src: process.yaml
+      dest: process.d
     - src: system_swap.yaml
       dest: system_swap.d
     - src: systemd.yaml
       dest: systemd.d
     - src: journald.yaml
       dest: journald.d
-  when: item.src != 'glusterfs.yaml' or datadog_glusterfs_check_enabled
+  when:
+    - item.src != 'glusterfs.yaml' or datadog_glusterfs_check_enabled
+    - item.src != 'process.yaml' or datadog_process_checks|length > 0
   notify: datadog_restart
 

@@ -73,7 +73,7 @@
   tags:
     - swap
 
-- name: create apt timer directories
+- name: create override directories
   ansible.builtin.file:
     path: "{{ item }}"
     owner: root
@@ -82,6 +82,7 @@
   loop:
     - /etc/systemd/system/apt-daily.timer.d
     - /etc/systemd/system/apt-daily-upgrade.timer.d
+    - /etc/systemd/system/systemd-timesyncd.service.d
 
 - name: configure apt download timer
   ansible.builtin.copy:
@@ -102,6 +103,17 @@
       OnCalendar={{ apt_upgrade_time }}
       RandomizedDelaySec=10m
   notify: setup_apt_upgrade_restart
+
+- name: configure timesyncd
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/systemd-timesyncd.service.d/override.conf
+    content: |
+      [Unit]
+      StartLimitIntervalSec=0
+
+      [Service]
+      RestartSec=5s
+  notify: setup_timesyncd_restart
 
 - name: check cmdline
   ansible.builtin.stat:

@@ -1,0 +1,64 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "mosquitto.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/mosquitto/config
+    - /mnt/gluster/mosquitto/data
+    - /mnt/gluster/mosquitto/log
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: mosquitto
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          mosquitto:
+            image: eclipse-mosquitto:2.0.21@sha256:78dcae7eaf78fe7e5b7f5f0cedc35b0d222a5e5a2650d40c6ca1bc156af6281b
+            networks:
+              - mosquitto
+              - traefik_traefik
+            user: 1000:1000
+            volumes:
+              - /mnt/gluster/mosquitto/config:/mosquitto/config
+              - /mnt/gluster/mosquitto/data:/mosquitto/data
+              - /mnt/gluster/mosquitto/log:/mosquitto/log
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.tcp.routers.mosquitto.rule=HostSNI(`*`)"
+                - "traefik.tcp.routers.mosquitto.middlewares=traefik-internal-tcp"
+                - "traefik.tcp.routers.mosquitto.entrypoints=mosquitto"
+                - "traefik.tcp.services.mosquitto.loadbalancer.server.port=1883"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 50M
+              restart_policy:
+                delay: 5m
+              update_config:
+                order: stop-first
+        networks:
+          mosquitto: {}
+          traefik_traefik:
+            external: true

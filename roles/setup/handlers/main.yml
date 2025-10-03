@@ -14,6 +14,27 @@
     state: restarted
   listen: setup_apt_upgrade_restart
 
+- name: restart systemd timesyncd
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: systemd-timesyncd.service
+    state: restarted
+  listen: setup_timesyncd_restart
+
 - name: reboot
   ansible.builtin.reboot:
+  listen: setup_reboot
+
+- name: find stored journal
+  ansible.builtin.find:
+    paths: /var/log/journal
+    file_type: any
+  register: journal_files
+  listen: setup_reboot
+
+- name: clear stored journal
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ journal_files.files }}"
   listen: setup_reboot

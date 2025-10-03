@@ -1,5 +1,7 @@
 # Home Lab
 
+[Docs](https://book.ricmatsui.com/home-lab)
+
 - Cloudflare DDNS
 - Datadog
 - Docker Registry

@@ -4,3 +4,4 @@ collections:
     type: git
 
   - name: community.docker
+    version: 4.6.0
