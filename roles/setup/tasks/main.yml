@@ -115,6 +115,22 @@
       RestartSec=5s
   notify: setup_timesyncd_restart
 
+- name: check dhcpcd
+  ansible.builtin.stat:
+    path: /usr/sbin/dhcpcd
+  changed_when: false
+  register: dhcpcd_result
+  tags: dhcpcd
+
+- name: configure dhcpcd
+  ansible.builtin.blockinfile:
+    path: /etc/dhcpcd.conf
+    block: |
+      denyinterfaces veth*
+  when: dhcpcd_result.stat.exists
+  notify: setup_dhcpcd_restart
+  tags: dhcpcd
+
 - name: check cmdline
   ansible.builtin.stat:
     path: /boot/cmdline.txt

@@ -25,3 +25,11 @@
     opts: defaults,_netdev,noatime,x-systemd.automount
     passno: 1
     state: mounted
+
+- name: enable logging
+  ansible.builtin.systemd:
+    name: gluster-log@mnt-gluster
+    enabled: true
+    daemon_reload: true
+  notify: gluster_client_logging_restart
+  tags: gluster_logging

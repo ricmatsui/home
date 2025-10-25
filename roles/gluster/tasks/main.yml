@@ -1,0 +1,20 @@
+---
+
+- name: configure log forwarding
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-log@.service
+    content: |
+      [Unit]
+      Description=Gluster Log Forwarder
+      Before=mnt-gluster.mount
+      Before=glusterd.service
+      StartLimitIntervalSec=0
+
+      [Install]
+      WantedBy=multi-user.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/bin/systemd-cat -t gluster-%i /usr/bin/tail -n 0 -F /var/log/glusterfs/%i.log
+      Restart=always
+      RestartSec=5s

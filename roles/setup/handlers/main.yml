@@ -21,6 +21,13 @@
     state: restarted
   listen: setup_timesyncd_restart
 
+- name: restart dhcpcd
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: dhcpcd.service
+    state: restarted
+  listen: setup_dhcpcd_restart
+
 - name: reboot
   ansible.builtin.reboot:
   listen: setup_reboot

@@ -1,0 +1,64 @@
+---
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - rclone
+      - sqlite3
+
+# Example script:
+# ```
+# #!/bin/bash
+# set -o errexit -o nounset -o verbose -o pipefail
+#
+# rclone copy --immutable /mnt/gluster/backups \
+#   :s3:/bucket/gluster/backups
+# ```
+- name: create rclone gluster script
+  ansible.builtin.copy:
+    dest: /opt/rclone-gluster.sh
+    content: "{{ rclone_gluster_script }}"
+    owner: root
+    group: root
+    mode: u=rwx,g=,o=
+
+- name: configure rclone gluster service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/rclone-gluster.service
+    content: |
+      [Unit]
+      Description=Rclone Gluster
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/rclone-gluster.sh
+      TimeoutStartSec=infinity
+
+      Environment=RCLONE_S3_PROVIDER=AWS
+      Environment=RCLONE_S3_ENV_AUTH=true
+      Environment=RCLONE_S3_SERVER_SIDE_ENCRYPTION=AES256
+      Environment=RCLONE_S3_STORAGE_CLASS=DEEP_ARCHIVE
+      Environment=RCLONE_S3_ACCESS_KEY_ID={{ rclone_s3_access_key_id }}
+      Environment=RCLONE_S3_SECRET_ACCESS_KEY={{ rclone_s3_secret_access_key }}
+      Environment=RCLONE_S3_REGION={{ rclone_s3_region }}
+      Environment=RCLONE_BWLIMIT=200k
+      Environment=RCLONE_CHECKSUM=true
+      Environment=RCLONE_VERBOSE=1
+  notify: rclone_gluster_timer_restart
+
+- name: configure rclone gluster timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/rclone-gluster.timer
+    content: |
+      [Unit]
+      Description=Rclone Gluster
+
+      [Timer]
+      OnCalendar=*-01-02 00:00:00
+      RandomizedDelaySec=1h
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: rclone_gluster_timer_restart

@@ -1,0 +1,8 @@
+---
+
+- name: restart logging
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: gluster-log@mnt-gluster
+    state: restarted
+  listen: gluster_client_logging_restart

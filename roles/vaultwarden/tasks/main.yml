@@ -1,0 +1,62 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "vault.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/vaultwarden/data
+    - /mnt/gluster/vaultwarden/backups
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: vaultwarden
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          vaultwarden:
+            image: vaultwarden/server:1.34.3@sha256:e661c465d19682425280e51bd77561dbbf5bf208e9937c4390f847b5ccd8d6fc
+            networks:
+              - traefik_traefik
+            environment:
+              DOMAIN: "https://vault.{{ config.domain }}"
+            volumes:
+              - /mnt/gluster/vaultwarden/data:/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.vault.rule=Host(`vault.{{ config.domain }}`)"
+                - "traefik.http.routers.vault.middlewares=traefik-internal"
+                - "traefik.http.routers.vault.entrypoints=websecure"
+                - "traefik.http.routers.vault.tls.certresolver=letsencrypt"
+                - "traefik.http.services.vault.loadbalancer.server.port=80"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == pi'
+                  - 'node.labels.home.instance_size == extra_small'
+              resources:
+                limits:
+                  cpus: '0.50'
+                  memory: 50M
+              restart_policy:
+                delay: 5m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

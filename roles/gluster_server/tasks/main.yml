@@ -21,7 +21,6 @@
     content: |
       [Service]
       ExecStartPre=/bin/sleep 30
-      #Environment="GLUSTERD_OPTIONS=--logger=syslog"
   notify: gluster_server_restart
 
 - name: add backports
@@ -85,3 +84,16 @@
   when: >
     inventory_hostname in groups['gluster_management_server']
     and gluster_volume_config.stdout is not search('features\.bitrot\s+on')
+
+- name: enable logging
+  ansible.builtin.systemd:
+    name: gluster-log@{{ item }}
+    enabled: true
+    daemon_reload: true
+  loop:
+    - bitd
+    - glusterd
+    - glustershd
+    - scrub
+  notify: gluster_server_logging_restart
+  tags: gluster_logging

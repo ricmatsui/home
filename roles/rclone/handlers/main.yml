@@ -1,0 +1,8 @@
+---
+
+- name: restart rclone timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: rclone-gluster.timer
+    state: restarted
+  listen: rclone_gluster_timer_restart

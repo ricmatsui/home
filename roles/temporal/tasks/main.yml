@@ -25,12 +25,15 @@
     group: pi
     state: directory
 
-- name: create db directory
+- name: create directories
   ansible.builtin.file:
-    path: /mnt/gluster/temporal/db
+    path: "/mnt/gluster/temporal/{{ item }}"
     owner: 999
     group: pi
     state: directory
+  loop:
+    - db
+    - backups
 
 - name: create dynamic config
   ansible.builtin.copy:
@@ -108,6 +111,32 @@
                   memory: 200M
               restart_policy:
                 delay: 20s
+              update_config:
+                order: stop-first
+
+          temporal-db-backup:
+            image: prodrigestivill/postgres-backup-local:16@sha256:db7f68d896af85bb16bdd82462c16fd144e3eec4646416752c12ce1dabd54b44
+            environment:
+              POSTGRES_HOST: temporal_temporal-db
+              POSTGRES_DB: temporal
+              POSTGRES_USER: temporal
+              POSTGRES_PASSWORD: "{{ config.temporal.postgres_password }}"
+            networks:
+              - temporal
+            volumes:
+              - /mnt/gluster/temporal/backups:/backups
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 100M
+              restart_policy:
+                delay: 60s
               update_config:
                 order: stop-first
 

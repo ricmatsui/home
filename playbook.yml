@@ -28,6 +28,13 @@
     - role: vpn
       tags: vpn
 
+- name: gluster
+  gather_facts: false
+  hosts: all
+  roles:
+    - role: gluster
+      tags: gluster
+
 - name: gluster_server
   gather_facts: false
   hosts: gluster_pool_servers
@@ -41,6 +48,13 @@
   roles:
     - role: gluster_client
       tags: gluster_client
+
+- name: rclone
+  gather_facts: false
+  hosts: rclone
+  roles:
+    - role: rclone
+      tags: rclone
 
 - name: datadog
   gather_facts: false
@@ -74,7 +88,7 @@
 
 - name: wireless_ap
   gather_facts: false
-  hosts: tart
+  hosts: wireless_ap
   roles:
     - role: wireless_ap
       tags: wireless_ap
@@ -103,6 +117,9 @@
 
     - role: homepage
       tags: homepage
+
+    - role: vaultwarden
+      tags: vaultwarden
 
     - role: sync
       tags: sync

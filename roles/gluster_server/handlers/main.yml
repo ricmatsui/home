@@ -1,5 +1,17 @@
 ---
 
+- name: restart logging
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: gluster-log@{{ item }}
+    state: restarted
+  loop:
+    - bitd
+    - glusterd
+    - glustershd
+    - scrub
+  listen: gluster_server_logging_restart
+
 - name: restart gluster server
   ansible.builtin.systemd:
     daemon_reload: true
