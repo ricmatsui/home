@@ -4,3 +4,5 @@
   community.general.docker_secret:
     name: cloudflare_api_key_secret
     data: "{{ config.cloudflare.api_key }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

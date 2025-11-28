@@ -1,0 +1,9 @@
+---
+
+- name: full_disk_encryption_update_initramfs
+  ansible.builtin.command: update-initramfs -u
+  listen: full_disk_encryption_update_initramfs
+
+- name: full_disk_encryption_update_reboot
+  ansible.builtin.reboot:
+  listen: full_disk_encryption_update_reboot

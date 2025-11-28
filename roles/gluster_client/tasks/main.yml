@@ -1,14 +1,8 @@
 ---
 
-- name: add backports
-  ansible.builtin.apt_repository:
-    repo: deb http://deb.debian.org/debian bullseye-backports main
-    state: present
-
 - name: install
   ansible.builtin.apt:
     name: glusterfs-client
-    default_release: bullseye-backports
 
 - name: create mount point
   ansible.builtin.file:

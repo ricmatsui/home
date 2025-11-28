@@ -1,0 +1,105 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "paperless.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/paperless/data
+    - /mnt/gluster/paperless/media
+    - /mnt/gluster/paperless/export
+    - /mnt/gluster/paperless/consume
+    - /mnt/gluster/paperless/backups
+
+- name: create redis directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 999
+    group: 999
+    state: directory
+  loop:
+    - /mnt/gluster/paperless/redisdata
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: paperless
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          paperless-server:
+            image: ghcr.io/paperless-ngx/paperless-ngx:2.19.5@sha256:2a9c60571e7acce33ff269cfd058af04183eb0e18811111d404fc2f0781e1ec3
+            networks:
+              - traefik_traefik
+              - paperless
+            environment:
+              PAPERLESS_URL: "https://paperless.{{ config.domain }}"
+              PAPERLESS_SECRET_KEY: "{{ config.paperless.secret_key }}"
+              PAPERLESS_TIME_ZONE: America/Los_Angeles
+              PAPERLESS_OCR_LANGUAGE: eng
+              PAPERLESS_REDIS: redis://paperless-redis:6379
+              # Escape for Docker Compose templating, escape for Ansible templating
+              PAPERLESS_FILENAME_FORMAT: "{{ '{{' }}`{{ '{{' }} added_year {{ '}}' }}/{{ '{{' }} original_name {{ '}}' }}`{{ '}}' }}"
+            volumes:
+              - /mnt/gluster/paperless/data:/usr/src/paperless/data
+              - /mnt/gluster/paperless/media:/usr/src/paperless/media
+              - /mnt/gluster/paperless/export:/usr/src/paperless/export
+              - /mnt/gluster/paperless/consume:/usr/src/paperless/consume
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.paperless.rule=Host(`paperless.{{ config.domain }}`)"
+                - "traefik.http.routers.paperless.middlewares=traefik-internal"
+                - "traefik.http.routers.paperless.entrypoints=websecure"
+                - "traefik.http.routers.paperless.tls.certresolver=letsencrypt"
+                - "traefik.http.services.paperless.loadbalancer.server.port=8000"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 1000M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+
+          paperless-redis:
+            image: redis:8.2.3@sha256:b6cd50158f60fec3a8638e485385284bcfb1495617281adba2ceb1b020eb281f
+            networks:
+              - paperless
+            volumes:
+              - /mnt/gluster/paperless/redisdata:/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 100M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          paperless: {}
+          traefik_traefik:
+            external: true

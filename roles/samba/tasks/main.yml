@@ -1,0 +1,22 @@
+---
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - samba
+
+- name: configure
+  ansible.builtin.blockinfile:
+    path: /etc/samba/smb.conf
+    block: |
+      [global]
+      interfaces = {{ vpn_ip }}/24 wg1
+      bind interfaces only = yes
+
+      [homes]
+      available = no
+
+      [testshare]
+      path = /mnt/gluster/testshare
+      writable = yes
+  notify: samba_restart

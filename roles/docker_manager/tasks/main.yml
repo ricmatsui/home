@@ -4,11 +4,15 @@
   community.docker.docker_swarm:
     advertise_addr: "{{ docker_advertise_addr }}"
     default_addr_pool: "{{ docker_default_address_pool }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
   when: inventory_hostname == groups['docker_managers'][0]
 
 - name: get swarm info
   community.docker.docker_swarm_info:
   register: swarm_info
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
   delegate_to: "{{ groups['docker_managers']|first }}"
   when: inventory_hostname != groups['docker_managers'][0]
 
@@ -19,6 +23,8 @@
     remote_addrs:
       - "{{ hostvars[groups['docker_managers']|first]['docker_advertise_addr'] }}"
     advertise_addr: "{{ docker_advertise_addr }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
   when: inventory_hostname != groups['docker_managers'][0]
 
 - name: update node
@@ -26,6 +32,8 @@
     hostname: "{{ docker_hostname }}"
     labels: "{{ docker_labels }}"
     labels_state: replace
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: create macvlan config network
   community.docker.docker_network:
@@ -34,6 +42,8 @@
     driver_options:
       parent: "{{ docker_macvlan_parent }}"
     ipam_config: "{{ config.docker.macvlan_ipam_config }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: create macvlan network
   community.docker.docker_network:
@@ -41,4 +51,6 @@
     driver: macvlan
     scope: swarm
     config_from: macvlan-config
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
   when: inventory_hostname == groups['docker_managers'][0]

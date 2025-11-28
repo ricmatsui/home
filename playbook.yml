@@ -14,6 +14,20 @@
     - role: setup
       tags: setup
 
+- name: tang
+  gather_facts: false
+  hosts: tang
+  roles:
+    - role: tang
+      tags: tang
+
+- name: full_disk_encryption
+  gather_facts: false
+  hosts: full_disk_encryption
+  roles:
+    - role: full_disk_encryption
+      tags: full_disk_encryption
+
 - name: overlay
   gather_facts: false
   hosts: overlay_peers
@@ -56,12 +70,19 @@
     - role: rclone
       tags: rclone
 
-- name: datadog
+- name: rclone_backup
   gather_facts: false
-  hosts: all
+  hosts: rclone_backup
   roles:
-    - role: datadog
-      tags: datadog
+    - role: rclone_backup
+      tags: rclone_backup
+
+- name: samba
+  gather_facts: false
+  hosts: samba
+  roles:
+    - role: samba
+      tags: samba
 
 - name: docker
   gather_facts: false
@@ -85,6 +106,13 @@
   roles:
     - role: docker_worker
       tags: docker_worker
+
+- name: datadog
+  gather_facts: false
+  hosts: all
+  roles:
+    - role: datadog
+      tags: datadog
 
 - name: wireless_ap
   gather_facts: false
@@ -130,8 +158,17 @@
     - role: cloudflare
       tags: cloudflare
 
+    - role: convertx
+      tags: convertx
+
+    - role: donetick
+      tags: donetick
+
     - role: paper
       tags: paper
+
+    - role: paperless
+      tags: paperless
 
     - role: temporal
       tags: temporal

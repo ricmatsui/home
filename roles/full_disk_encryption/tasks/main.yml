@@ -1,0 +1,168 @@
+---
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - cryptsetup-initramfs
+      - clevis-initramfs
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: configure initramfs
+  ansible.builtin.blockinfile:
+    path: /etc/initramfs-tools/initramfs.conf
+    block: |
+      MODULES=most
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: configure crypttab
+  ansible.builtin.copy:
+    dest: /etc/crypttab
+    content: |
+      root UUID={{ full_disk_encryption_root_uuid }} none luks,initramfs
+    owner: root
+    group: root
+    mode: u=rw,g=r,o=r
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: configure fstab
+  ansible.posix.mount:
+    src: /dev/mapper/root
+    path: /
+    fstype: ext4
+    opts: defaults,noatime
+    passno: 1
+    state: present
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: Configure options in /boot/cmdline.txt
+  replace:
+    path: /boot/firmware/cmdline.txt
+    regexp: '^([\w](?!.*\b{{ item }}\b).*)$'
+    replace: '\1 {{ item }}'
+  loop:
+    - ip=:::::wlan0:dhcp
+    - root=/dev/mapper/root
+
+- name: configure wifi
+  ansible.builtin.copy:
+    dest: /etc/initramfs-tools/wpa_supplicant.conf
+    content: "{{ config.full_disk_encryption.wpa_supplicant_config }}"
+    mode: u=rw,g=,o=
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: configure initramfs hook
+  ansible.builtin.copy:
+    dest: /etc/initramfs-tools/hooks/nbde
+    content: |
+      #!/bin/sh
+      PREREQ=""
+      prereqs()
+      {
+          echo "$PREREQ"
+      }
+
+      case $1 in
+      prereqs)
+          prereqs
+          exit 0
+          ;;
+      esac
+
+      . /usr/share/initramfs-tools/hook-functions
+
+      # Switch to DRM early for HDMI output
+      {% if full_disk_encryption_early_drm | default(true) %}
+      manual_add_modules simpledrm
+      manual_add_modules vc4
+      manual_add_modules drm
+      manual_add_modules drm_kms_helper
+      manual_add_modules i2c_bcm2835
+      manual_add_modules bcm2835_dma
+      {% endif %}
+
+      # Encryption
+      manual_add_modules algif_skcipher
+      manual_add_modules xchacha20
+      manual_add_modules adiantum
+      manual_add_modules aes_arm64
+      manual_add_modules sha256
+      manual_add_modules nhpoly1305
+      manual_add_modules dm-crypt
+
+      # Wi-Fi
+      manual_add_modules brcmfmac
+      manual_add_modules brcmfmac_wcc
+
+      for f in /lib/firmware/brcm/brcmfmac*-sdio.*.bin; do
+        [ -e "${DESTDIR}${f}" ] || [ -L "${DESTDIR}${f}" ] || copy_file firmware "$f"
+      done
+      for f in /lib/firmware/brcm/brcmfmac*-sdio.*.txt; do
+        [ -e "${DESTDIR}${f}" ] || [ -L "${DESTDIR}${f}" ] || copy_file firmware "$f"
+      done
+
+      copy_exec /usr/sbin/rfkill
+      copy_exec /sbin/wpa_supplicant
+
+      copy_file config /etc/initramfs-tools/wpa_supplicant.conf /etc/wpa_supplicant.conf
+
+      # Troubleshooting
+      copy_exec /sbin/wpa_cli
+      copy_exec /usr/sbin/ip
+      copy_exec /usr/bin/curl
+    mode: u=rwx,g=rx,o=rx
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: configure start wifi
+  ansible.builtin.copy:
+    dest: /etc/initramfs-tools/scripts/init-premount/wifi
+    content: |
+      #!/bin/sh
+      PREREQ=""
+      prereqs()
+      {
+          echo "$PREREQ"
+      }
+
+      case $1 in
+      prereqs)
+          prereqs
+          exit 0
+          ;;
+      esac
+
+      . /scripts/functions
+
+      /usr/sbin/rfkill unblock all
+      /sbin/wpa_supplicant -i wlan0 -c /etc/wpa_supplicant.conf -P /run/initramfs-wpa_supplicant.pid -B -f /tmp/wpa_supplicant.log
+    mode: u=rwx,g=rx,o=rx
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: configure reset wifi
+  ansible.builtin.copy:
+    dest: /etc/initramfs-tools/scripts/local-bottom/reset-wifi
+    content: |
+      #!/bin/sh
+      PREREQ=""
+      prereqs()
+      {
+          echo "$PREREQ"
+      }
+
+      case $1 in
+      prereqs)
+          prereqs
+          exit 0
+          ;;
+      esac
+
+      kill $(cat /run/initramfs-wpa_supplicant.pid)
+    mode: u=rwx,g=rx,o=rx
+  notify:
+    - full_disk_encryption_update_initramfs

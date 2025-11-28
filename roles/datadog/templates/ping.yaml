@@ -1,0 +1,4 @@
+instances:
+  {% for host in datadog_ping_hosts %}
+  - host: {{ host }}
+  {% endfor %}

@@ -28,6 +28,13 @@
     state: restarted
   listen: setup_dhcpcd_restart
 
+- name: restart network manager
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: NetworkManager.service
+    state: restarted
+  listen: setup_network_manager_restart
+
 - name: reboot
   ansible.builtin.reboot:
   listen: setup_reboot

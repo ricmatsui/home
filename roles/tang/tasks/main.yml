@@ -1,0 +1,24 @@
+---
+
+- name: create configuration directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/tangd.socket.d
+    owner: root
+    group: root
+    state: directory
+  notify: tang_restart
+
+- name: configure
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/tangd.socket.d/override.conf
+    content: |
+      [Socket]
+      ListenStream=
+      ListenStream=0.0.0.0:7500
+  notify: tang_restart
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - tang
+  notify: tang_restart

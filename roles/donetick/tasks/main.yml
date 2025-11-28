@@ -1,0 +1,132 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "donetick.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/donetick/config
+    - /mnt/gluster/donetick/data
+    - /mnt/gluster/donetick/backups
+
+- name: configure
+  ansible.builtin.copy:
+    dest: /mnt/gluster/donetick/config/selfhosted.yaml
+    content: |
+      name: "selfhosted"
+      is_done_tick_dot_com: false
+      is_user_creation_disabled: false
+      telegram:
+        token: ""
+      pushover:
+        token: ""
+      database:
+        type: "sqlite"
+        migration: true
+      jwt:
+        secret: {{ config.donetick.secret }}
+        session_time: 168h
+        max_refresh: 168h
+      server:
+        port: 2021
+        read_timeout: 10s
+        write_timeout: 10s
+        rate_period: 60s
+        rate_limit: 300
+        cors_allow_origins:
+          - "http://localhost:5173"
+          - "http://localhost:7926"
+          # the below are required for the android app to work
+          - "https://localhost"
+          - "capacitor://localhost"
+        serve_frontend: true
+      logging:
+        level: "info"
+        encoding: "json"
+        development: false
+      scheduler_jobs:
+        due_job: 30m
+        overdue_job: 3h
+        pre_due_job: 3h
+      email:
+        host: 
+        port: 
+        key: 
+        email:  
+        appHost:  
+      oauth2:
+        client_id: 
+        client_secret: 
+        auth_url: 
+        token_url: 
+        user_info_url: 
+        redirect_url: 
+        name:
+      realtime:
+        enabled: true
+        sse_enabled: true
+        heartbeat_interval: 60s
+        connection_timeout: 120s
+        max_connections: 1000
+        max_connections_per_user: 5
+        event_queue_size: 2048
+        cleanup_interval: 2m
+        stale_threshold: 5m
+        enable_compression: true
+        enable_stats: true
+        allowed_origins:
+          - "*"
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: donetick
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          donetick:
+            image: donetick/donetick:v0.1.64@sha256:0bb0df048c6842c7aacdb74a04edfa81d9019498d2637c5d93e0f2ce27fd93a4
+            networks:
+              - traefik_traefik
+            environment:
+              DT_ENV: selfhosted
+              DT_SQLITE_PATH: /donetick-data/donetick.db
+            volumes:
+              - /mnt/gluster/donetick/config:/config
+              - /mnt/gluster/donetick/data:/donetick-data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.donetick.rule=Host(`donetick.{{ config.domain }}`)"
+                - "traefik.http.routers.donetick.middlewares=traefik-internal"
+                - "traefik.http.routers.donetick.entrypoints=websecure"
+                - "traefik.http.routers.donetick.tls.certresolver=letsencrypt"
+                - "traefik.http.services.donetick.loadbalancer.server.port=2021"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 80M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

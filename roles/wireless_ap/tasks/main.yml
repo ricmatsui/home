@@ -6,26 +6,6 @@
       - hostapd
   notify: wireless_ap_reboot
 
-- name: add backports
-  ansible.builtin.apt_repository:
-    repo: deb http://deb.debian.org/debian bullseye-backports main
-    state: present
-  register: backports_result
-
-- name: update cache
-  ansible.builtin.apt:
-    update_cache: true
-  when: backports_result is changed
-
-- name: install backports
-  ansible.builtin.apt:
-    name:
-      - systemd
-      - systemd-timesyncd
-      - libpam-systemd
-    default_release: bullseye-backports
-  notify: wireless_ap_reboot
-
 - name: configure ap interface service
   ansible.builtin.copy:
     dest: /etc/systemd/system/ap-interface.service

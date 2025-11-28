@@ -1,5 +1,9 @@
 ---
 
+- name: install acl
+  ansible.builtin.apt:
+    name: acl
+
 - name: install agent
   ansible.builtin.shell:
     cmd: >
@@ -8,6 +12,14 @@
       DD_SITE=datadoghq.com
       bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
     creates: /etc/datadog-agent/datadog.yaml
+
+- name: install ping integration
+  ansible.builtin.shell:
+    cmd: datadog-agent integration install -t datadog-ping==1.0.2
+    creates: /opt/datadog-agent/embedded/lib/python3.13/site-packages/datadog_checks/ping
+  become: true
+  become_user: dd-agent
+  notify: datadog_restart
 
 - name: install service
   ansible.builtin.template:
@@ -66,6 +78,8 @@
       dest: disk.d
     - src: glusterfs.yaml
       dest: glusterfs.d
+    - src: ping.yaml
+      dest: ping.d
     - src: process.yaml
       dest: process.d
     - src: system_swap.yaml
@@ -74,8 +88,12 @@
       dest: systemd.d
     - src: journald.yaml
       dest: journald.d
+    - src: redisdb.d/auto_conf.yaml
+      dest: redisdb.d
   when:
     - item.src != 'glusterfs.yaml' or datadog_glusterfs_check_enabled
+    - item.src != 'ping.yaml' or datadog_ping_hosts|length > 0
     - item.src != 'process.yaml' or datadog_process_checks|length > 0
   notify: datadog_restart
+  tags: datadog_checks
 

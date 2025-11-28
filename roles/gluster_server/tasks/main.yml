@@ -23,15 +23,9 @@
       ExecStartPre=/bin/sleep 30
   notify: gluster_server_restart
 
-- name: add backports
-  ansible.builtin.apt_repository:
-    repo: deb http://deb.debian.org/debian bullseye-backports main
-    state: present
-
 - name: install
   ansible.builtin.apt:
     name: glusterfs-server
-    default_release: bullseye-backports
   notify: gluster_server_restart
 
 - name: install gstatus
@@ -51,6 +45,7 @@
   gluster.gluster.gluster_peer:
     nodes: "{{ groups['gluster_pool_servers']|map('extract', hostvars, 'gluster_ip')|list }}"
   when: inventory_hostname in groups['gluster_management_server']
+  tags: gluster_peers
 
 - name: create gluster volume
   gluster.gluster.gluster_volume:

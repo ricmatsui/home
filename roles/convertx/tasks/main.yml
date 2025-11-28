@@ -1,0 +1,60 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "convertx.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/convertx/data
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: convertx
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          convertx:
+            image: ghcr.io/c4illin/convertx:v0.15.1@sha256:97a78ad5f00a522ee06f35179ad68000d46472d3e109c70cd643bc00cef879a8
+            networks:
+              - traefik_traefik
+            environment:
+              ALLOW_UNAUTHENTICATED: "true"
+            volumes:
+              - /mnt/gluster/convertx/data:/app/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.convertx.rule=Host(`convertx.{{ config.domain }}`)"
+                - "traefik.http.routers.convertx.middlewares=traefik-internal"
+                - "traefik.http.routers.convertx.entrypoints=websecure"
+                - "traefik.http.routers.convertx.tls.certresolver=letsencrypt"
+                - "traefik.http.services.convertx.loadbalancer.server.port=3000"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 1000M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true

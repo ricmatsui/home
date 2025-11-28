@@ -56,13 +56,6 @@
   tags:
     - journal
 
-- name: disable rsyslog service
-  ansible.builtin.systemd:
-    name: rsyslog
-    state: stopped
-    enabled: false
-  notify: setup_reboot
-
 - name: disable swap service
   ansible.builtin.systemd:
     name: dphys-swapfile
@@ -131,28 +124,46 @@
   notify: setup_dhcpcd_restart
   tags: dhcpcd
 
+- name: check nmcli
+  ansible.builtin.stat:
+    path: /usr/bin/nmcli
+  changed_when: false
+  register: nmcli_result
+  tags: network_manager
+
+- name: configure network manager
+  ansible.builtin.copy:
+    dest: /etc/NetworkManager/conf.d/unmanaged-devices.conf
+    content: |
+      [keyfile]
+      unmanaged-devices=interface-name:veth*
+  when: nmcli_result.stat.exists
+  notify: setup_network_manager_restart
+  tags: network_manager
+
 - name: check cmdline
   ansible.builtin.stat:
-    path: /boot/cmdline.txt
+    path: /boot/firmware/cmdline.txt
   changed_when: false
   register: cmdline_result
+  tags: cgroups
 
 - name: enable cgroups features
   ansible.builtin.lineinfile:
-    path: /boot/cmdline.txt
+    path: /boot/firmware/cmdline.txt
     backrefs: True
     regexp: '(^.+rootwait)$'
-    line: '\1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+    line: '\1 cfg80211.ieee80211_regdom=US cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
   when: cmdline_result.stat.exists
   notify: setup_reboot
-  tags:
-    - cgroups
+  tags: cgroups
 
 - name: check grub
   ansible.builtin.stat:
     path: /etc/default/grub
   changed_when: false
   register: grub_result
+  tags: cgroups
 
 - name: enable cgroups features
   ansible.builtin.lineinfile:
@@ -161,8 +172,7 @@
   when: grub_result.stat.exists
   register: enable_grub_cgroups
   notify: setup_reboot
-  tags:
-    - cgroups
+  tags: cgroups
 
 - name: update grub
   ansible.builtin.shell:
@@ -185,6 +195,8 @@
       - python3-venv
       - zram-tools
       - unattended-upgrades
+      - smartmontools
+      - squashfs-tools
   notify: setup_reboot
 
 - name: configure zram
@@ -207,11 +219,13 @@
       - docker
       - jsondiff
       - pyyaml
+    virtualenv: /opt/docker_venv
+    virtualenv_command: "python -m venv"
 
 - name: install poetry
   ansible.builtin.shell:
     cmd: >
       curl -sSL https://install.python-poetry.org
       | python -
-    creates: /home/{{ ansible_user }}/.poetry/bin/poetry
+    creates: /home/{{ ansible_user }}/.local/bin/poetry
   become_user: "{{ ansible_user }}"
