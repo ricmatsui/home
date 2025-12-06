@@ -5,3 +5,4 @@ init_config:
     - ^/var/lib/docker
 instances:
   - use_mount: false
+    use_lsblk: true

@@ -13,13 +13,22 @@
       bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
     creates: /etc/datadog-agent/datadog.yaml
 
+- name: check ping integration
+  ansible.builtin.shell:
+    cmd: datadog-agent integration show datadog-ping
+  failed_when: false
+  changed_when: false
+  register: datadog_ping_integration
+  tags: datadog_integrations
+
 - name: install ping integration
   ansible.builtin.shell:
     cmd: datadog-agent integration install -t datadog-ping==1.0.2
-    creates: /opt/datadog-agent/embedded/lib/python3.13/site-packages/datadog_checks/ping
   become: true
   become_user: dd-agent
+  when: datadog_ping_integration.rc != 0
   notify: datadog_restart
+  tags: datadog_integrations
 
 - name: install service
   ansible.builtin.template:

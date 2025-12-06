@@ -31,9 +31,8 @@
       After=network-online.target
 
       [Service]
-      Type=oneshot
+      Type=simple
       ExecStart=/opt/rclone-gluster.sh
-      TimeoutStartSec=infinity
 
       Environment=RCLONE_S3_PROVIDER=AWS
       Environment=RCLONE_S3_ENV_AUTH=true
