@@ -64,3 +64,20 @@
           traefik_traefik:
             external: true
 
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/actual.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      replicas=$(stop_docker_service actual_actual)
+
+      make_squashfs /mnt/gluster/actual/data \
+        /mnt/gluster/actual/backups/$BACKUP_DATE.squashfs
+
+      start_docker_service actual_actual "$replicas"
+
+      rclone copy --immutable /mnt/gluster/actual/backups \
+        :s3:/$ARCHIVE_PATH/actual/backups

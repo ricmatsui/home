@@ -63,3 +63,14 @@
           mosquitto: {}
           traefik_traefik:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/mosquitto.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone sync /mnt/gluster/mosquitto \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/mosquitto

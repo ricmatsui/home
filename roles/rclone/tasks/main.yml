@@ -3,24 +3,98 @@
 - name: install
   ansible.builtin.apt:
     name:
+      - jq
       - rclone
       - sqlite3
 
-# Example script:
-# ```
-# #!/bin/bash
-# set -o errexit -o nounset -o verbose -o pipefail
-#
-# rclone copy --immutable /mnt/gluster/backups \
-#   :s3:/bucket/gluster/backups
-# ```
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    state: directory
+  loop:
+    - /mnt/gluster/rclone/scripts
+
+- name: create rclone functions
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/functions
+    mode: u=rw,g=r,o=r
+    content: |
+      set -o errexit -o nounset -o verbose -o pipefail
+
+      backup_sqlite() {
+        local source="$1"
+        local destination="$2"
+
+        if [ -f "$destination" ]; then
+          return
+        fi
+
+        sqlite3 "$source" ".backup '$destination.tmp'"
+
+        mv "$destination.tmp" "$destination"
+      }
+
+      stop_docker_service() {
+        local service="$1"
+
+        replicas=$(docker service inspect "$service" | jq '.[0].Spec.Mode.Replicated.Replicas')
+
+        docker service scale "$service=0" >/dev/null 2>&1
+
+        attempts=0
+        while [ "$(docker service ls -f "name=$service" --format '{{ '{{' }}json .{{ '}}' }}' \
+          | jq -r '.Replicas | split("/") | .[0]')" != "0" ]; do
+          sleep 2
+          ((attempts++))
+
+          if [ "$attempts" -gt 10 ]; then
+            echo "Scale down timeout" >&2
+            exit 1
+          fi
+        done
+
+        echo "$replicas"
+      }
+
+      start_docker_service() {
+        local service="$1"
+        local replicas="$2"
+
+        docker service scale "$service=$replicas" >/dev/null 2>&1
+      }
+
+      make_squashfs() {
+        local source="$1"
+        local destination="$2"
+
+        if [ -f "$destination" ]; then
+          return
+        fi
+
+        mksquashfs "$source" "$destination.tmp" -noappend
+
+        mv "$destination.tmp" "$destination"
+      }
+
 - name: create rclone gluster script
   ansible.builtin.copy:
     dest: /opt/rclone-gluster.sh
-    content: "{{ rclone_gluster_script }}"
-    owner: root
-    group: root
-    mode: u=rwx,g=,o=
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      set -o errexit -o nounset -o verbose -o pipefail
+
+      export BACKUP_DATE=$(date +"%Y-01-02")
+
+      for script in /mnt/gluster/rclone/scripts/*; do
+        [ -f "$script" ] || continue
+
+        "$script" 2>&1 | while IFS= read -r line; do
+          printf '%s: %s\n' "$(basename "$script")" "$line"
+        done
+      done
 
 - name: configure rclone gluster service
   ansible.builtin.copy:
@@ -34,6 +108,7 @@
       Type=simple
       ExecStart=/opt/rclone-gluster.sh
 
+      Environment=ARCHIVE_PATH={{ rclone_gluster_archive_path }}
       Environment=RCLONE_S3_PROVIDER=AWS
       Environment=RCLONE_S3_ENV_AUTH=true
       Environment=RCLONE_S3_SERVER_SIDE_ENCRYPTION=AES256

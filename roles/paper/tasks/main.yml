@@ -75,3 +75,18 @@
         networks:
           traefik_traefik:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/paper.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy --immutable /mnt/gluster/resilio-sync/sync/Paper/plugins/Backuper/Backups \
+        :s3:/$ARCHIVE_PATH/resilio-sync/sync/Paper/plugins/Backuper/Backups \
+        --min-age 1d
+
+      rclone copyto /mnt/gluster/resilio-sync/sync/Paper/update.txt \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/resilio-sync/sync/Paper/update.txt

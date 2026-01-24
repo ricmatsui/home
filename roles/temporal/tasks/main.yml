@@ -180,3 +180,15 @@
           traefik_traefik:
             external: true
 
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/temporal.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy --immutable /mnt/gluster/temporal/backups/monthly \
+        :s3:/$ARCHIVE_PATH/temporal/backups/monthly \
+        --exclude "temporal-latest.sql.gz" \
+        --min-age 1d

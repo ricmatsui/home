@@ -3,7 +3,6 @@
 - name: install
   ansible.builtin.apt:
     name:
-      - jq
       - rclone
       - sqlite3
 

@@ -64,6 +64,24 @@
           traefik_traefik:
             external: true
 
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/gitea.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      replicas=$(stop_docker_service gitea_gitea)
+
+      make_squashfs /mnt/gluster/gitea/data \
+        /mnt/gluster/gitea/backups/$BACKUP_DATE.squashfs
+
+      start_docker_service gitea_gitea "$replicas"
+
+      rclone copy --immutable /mnt/gluster/gitea/backups \
+        :s3:/$ARCHIVE_PATH/gitea/backups
+
 - name: wait for gitea
   ansible.builtin.uri:
     method: GET

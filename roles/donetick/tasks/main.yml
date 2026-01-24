@@ -130,3 +130,17 @@
         networks:
           traefik_traefik:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/donetick.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      backup_sqlite /mnt/gluster/donetick/data/donetick.db \
+        /mnt/gluster/donetick/backups/db-$BACKUP_DATE.sqlite3
+
+      rclone copy --immutable /mnt/gluster/donetick/backups \
+        :s3:/$ARCHIVE_PATH/donetick/backups

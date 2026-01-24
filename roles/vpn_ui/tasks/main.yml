@@ -82,3 +82,14 @@
         networks:
           traefik_traefik:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/vpn-ui.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone sync /mnt/gluster/vpn-ui \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/vpn-ui

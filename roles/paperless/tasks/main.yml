@@ -104,3 +104,22 @@
           paperless: {}
           traefik_traefik:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/paperless.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      backup_sqlite /mnt/gluster/paperless/data/db.sqlite3 \
+        /mnt/gluster/paperless/backups/db-$BACKUP_DATE.sqlite3
+
+      rclone copy --immutable /mnt/gluster/paperless/backups \
+        :s3:/$ARCHIVE_PATH/paperless/backups
+
+      rclone copy --immutable /mnt/gluster/paperless/media \
+        :s3:/$ARCHIVE_PATH/paperless/media \
+        --exclude "media.lock" \
+        --min-age 1d

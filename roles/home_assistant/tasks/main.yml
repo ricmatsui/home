@@ -69,3 +69,15 @@
             external: true
           macvlan:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/home-assistant.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy --immutable /mnt/gluster/home-assistant/config/backups \
+        :s3:/$ARCHIVE_PATH/home-assistant/config/backups \
+        --min-age 1d

@@ -51,7 +51,7 @@
 - name: install docker
   ansible.builtin.shell:
     cmd: >
-      bash -c "$(curl -fsSL https://get.docker.com)"
+      bash -c "$(curl -fsSL https://get.docker.com)" -- --version 29.1.5
     creates: /usr/bin/docker
   notify: docker_restart
 

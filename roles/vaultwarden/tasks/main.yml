@@ -60,3 +60,21 @@
         networks:
           traefik_traefik:
             external: true
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/vaultwarden.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      backup_sqlite /mnt/gluster/vaultwarden/data/db.sqlite3 \
+        /mnt/gluster/vaultwarden/backups/db-$BACKUP_DATE.sqlite3
+
+      rclone copy --immutable /mnt/gluster/vaultwarden/backups \
+        :s3:/$ARCHIVE_PATH/vaultwarden/backups
+
+      rclone copy --immutable /mnt/gluster/vaultwarden/data/attachments \
+        :s3:/$ARCHIVE_PATH/vaultwarden/data/attachments \
+        --min-age 1d
