@@ -25,7 +25,8 @@
     group: root
     state: directory
   loop:
-    - /mnt/external/traefik/acme
+    - /mnt/gluster/traefik/acme
+  tags: traefik_update
 
 - name: traefik forward auth config
   community.general.docker_secret:
@@ -33,6 +34,7 @@
     data: "{{ config.traefik.forward_auth_config }}"
     rolling_versions: true
   register: traefik_forward_auth_config_secret
+  tags: traefik_update
 
 - name: deploy stack
   community.general.docker_stack:
@@ -43,7 +45,7 @@
       - version: '3.8'
         services:
           traefik:
-            image: traefik@sha256:2f603f8d3abe1dd3a4eb28960c55506be48293b41ea2c6ed4a4297c851a57a05
+            image: traefik:v2.11.35@sha256:df4488969fe0c16eb3bceb131d35982b2cec7c9142545057b329bf62078d873e
             command: >
               --api.dashboard=true
               --providers.docker
@@ -80,7 +82,7 @@
                 mode: host
             volumes:
               - /var/run/docker.sock:/var/run/docker.sock
-              - /mnt/external/traefik/acme:/etc/traefik/acme
+              - /mnt/gluster/traefik/acme:/etc/traefik/acme
             networks:
               - traefik
             logging:
@@ -101,7 +103,6 @@
               placement:
                 constraints:
                   - 'node.labels.home.network == ingress'
-                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '1.00'
@@ -132,7 +133,6 @@
               placement:
                 constraints:
                   - 'node.labels.home.network == ingress'
-                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '1.00'
@@ -149,3 +149,4 @@
             name: cloudflare_api_key_secret
         networks:
           traefik: {}
+  tags: traefik_update

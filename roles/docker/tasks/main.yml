@@ -54,3 +54,10 @@
       bash -c "$(curl -fsSL https://get.docker.com)"
     creates: /usr/bin/docker
   notify: docker_restart
+
+- name: log into registry
+  community.docker.docker_login:
+    registry_url: "gitea.{{ config.domain }}"
+    username: "{{ config.gitea.username }}"
+    password: "{{ config.gitea.token }}"
+  notify: docker_restart

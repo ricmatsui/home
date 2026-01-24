@@ -53,7 +53,7 @@
     name: gv0
     brick: /mnt/external/gluster
     cluster: "{{ groups['gluster_brick_servers']|map('extract', hostvars, 'gluster_ip')|list }}"
-    replicas: 2
+    replicas: 3
     options:
       cluster.server-quorum-ratio: '51'
       cluster.server-quorum-type: server
@@ -83,6 +83,7 @@
 - name: enable logging
   ansible.builtin.systemd:
     name: gluster-log@{{ item }}
+    state: started
     enabled: true
     daemon_reload: true
   loop:

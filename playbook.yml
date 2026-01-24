@@ -58,7 +58,7 @@
 
 - name: gluster_client
   gather_facts: false
-  hosts: all
+  hosts: gluster_client
   roles:
     - role: gluster_client
       tags: gluster_client
@@ -137,11 +137,11 @@
         - docker_secrets
         - traefik
 
+    - role: gitea
+      tags: gitea
+
     - role: traefik
       tags: traefik
-
-    - role: registry
-      tags: registry
 
     - role: homepage
       tags: homepage
@@ -154,6 +154,9 @@
 
     - role: jellyfin
       tags: jellyfin
+
+    - role: actual
+      tags: actual
 
     - role: cloudflare
       tags: cloudflare

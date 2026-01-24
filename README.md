@@ -2,11 +2,12 @@
 
 [Docs](https://book.ricmatsui.com/home-lab)
 
+- Actual Budget
 - Cloudflare DDNS
 - Datadog
-- Docker Registry
 - Docker Swarm
 - External USB Drive
+- Gitea
 - GlusterFS
 - Home Assistant
 - Homepage

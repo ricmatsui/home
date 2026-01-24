@@ -1,5 +1,10 @@
 ---
 
+- name: install
+  ansible.builtin.apt:
+    name:
+      - smartmontools
+
 - name: configure udev rule
   ansible.builtin.template:
     src: 10-external.rules

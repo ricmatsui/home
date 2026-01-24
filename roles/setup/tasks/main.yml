@@ -196,7 +196,6 @@
       - python3-venv
       - zram-tools
       - unattended-upgrades
-      - smartmontools
       - squashfs-tools
   notify: setup_reboot
 
@@ -213,6 +212,37 @@
       APT::Periodic::Update-Package-Lists "1";
       APT::Periodic::Unattended-Upgrade "1";
       Unattended-Upgrade::Automatic-Reboot "true";
+
+- name: configure log forwarding
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/unattended-upgrades-log@.service
+    content: |
+      [Unit]
+      Description=Unattended Upgrades Log Forwarder
+      Before=unattended-upgrades.service
+      StartLimitIntervalSec=0
+
+      [Install]
+      WantedBy=multi-user.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/bin/systemd-cat -t unattended-upgrades-%i /usr/bin/tail -n 0 -F /var/log/unattended-upgrades/%i.log
+      Restart=always
+      RestartSec=5s
+  tags: unattended_upgrades_log
+
+- name: enable log forwarding
+  ansible.builtin.systemd:
+    name: unattended-upgrades-log@{{ item }}
+    state: started
+    enabled: true
+    daemon_reload: true
+  loop:
+    - unattended-upgrades
+    - unattended-upgrades-dpkg
+    - unattended-upgrades-shutdown
+  tags: unattended_upgrades_log
 
 - name: install docker sdk
   ansible.builtin.pip:

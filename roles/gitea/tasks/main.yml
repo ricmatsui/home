@@ -1,0 +1,74 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "gitea.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 1000
+    group: 1000
+    state: directory
+  loop:
+    - /mnt/gluster/gitea/data
+    - /mnt/gluster/gitea/backups
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: gitea
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          gitea:
+            image: gitea/gitea:1.25.3@sha256:964bb626fe159c1996ef406148e822ee15aff0a251036efcc7c050d39b866d85
+            environment:
+              USER_UID: 1000
+              USER_GID: 1000
+            networks:
+              - traefik_traefik
+            volumes:
+              - /mnt/gluster/gitea/data:/data
+              - /etc/timezone:/etc/timezone:ro
+              - /etc/localtime:/etc/localtime:ro
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "traefik.enable=true"
+                - "traefik.http.routers.gitea.rule=Host(`gitea.{{ config.domain }}`)"
+                - "traefik.http.routers.gitea.middlewares=traefik-internal"
+                - "traefik.http.routers.gitea.entrypoints=websecure"
+                - "traefik.http.routers.gitea.tls.certresolver=letsencrypt"
+                - "traefik.http.services.gitea.loadbalancer.server.port=3000"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 1000M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true
+
+- name: wait for gitea
+  ansible.builtin.uri:
+    method: GET
+    url: "https://gitea.{{ config.domain }}"
+  register: result
+  until: result is succeeded
+  retries: 60
+  delay: 5

@@ -14,7 +14,7 @@
 - name: configure fstab
   ansible.posix.mount:
     path: /mnt/gluster
-    src: "{{ hostvars[groups['gluster_management_server'][0]]['gluster_ip'] }}:/gv0"
+    src: "{{ groups['gluster_pool_servers']|map('extract', hostvars, 'gluster_ip')|join(',') }}:/gv0"
     fstype: glusterfs
     opts: defaults,_netdev,noatime,x-systemd.automount
     passno: 1

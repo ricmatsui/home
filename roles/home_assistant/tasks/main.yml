@@ -51,6 +51,7 @@
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
               resources:
                 limits:
                   cpus: '1.00'

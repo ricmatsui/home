@@ -12,6 +12,7 @@
       DD_SITE=datadoghq.com
       bash -c "$(curl -L https://s3.amazonaws.com/dd-agent/scripts/install_script.sh)"
     creates: /etc/datadog-agent/datadog.yaml
+  tags: datadog_install
 
 - name: check ping integration
   ansible.builtin.shell:

@@ -6,4 +6,4 @@
 
 - name: full_disk_encryption_update_reboot
   ansible.builtin.reboot:
-  listen: full_disk_encryption_update_reboot
+  listen: full_disk_encryption_update_initramfs

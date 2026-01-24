@@ -11,7 +11,7 @@
 
 - name: build
   community.docker.docker_image:
-    name: "registry.{{ config.domain }}/homepage"
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/homepage:latest"
     source: build
     force_source: true
     push: true
