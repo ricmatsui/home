@@ -31,6 +31,23 @@
   loop:
     - /mnt/gluster/paperless/redisdata
 
+- name: mirror paperless server image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: paperless_server_image
+    name: paperless-server
+    # https://github.com/paperless-ngx/paperless-ngx/pkgs/container/paperless-ngx/568827382?tag=2.19.5
+    source: ghcr.io/paperless-ngx/paperless-ngx:2.19.5
+    image_id: sha256:5f2a72fd7be42c6b1d8fa1751606a140452d4c3e6e829ae6b1b15e3c95129481
+
+- name: mirror paperless redis image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: paperless_redis_image
+    name: paperless-redis
+    source: redis:8.2.3
+    image_id: sha256:c4316c4367348fcad30734d594a1f17153922f788a3f919592076e8340f7320d
+
 - name: deploy stack
   community.general.docker_stack:
     name: paperless
@@ -40,7 +57,7 @@
       - version: '3.8'
         services:
           paperless-server:
-            image: ghcr.io/paperless-ngx/paperless-ngx:2.19.5@sha256:2a9c60571e7acce33ff269cfd058af04183eb0e18811111d404fc2f0781e1ec3
+            image: "{{ paperless_server_image }}"
             networks:
               - traefik_traefik
               - paperless
@@ -81,7 +98,7 @@
                 order: stop-first
 
           paperless-redis:
-            image: redis:8.2.3@sha256:b6cd50158f60fec3a8638e485385284bcfb1495617281adba2ceb1b020eb281f
+            image: "{{ paperless_redis_image }}"
             networks:
               - paperless
             volumes:

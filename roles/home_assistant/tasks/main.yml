@@ -18,6 +18,15 @@
   loop:
     - /mnt/gluster/home-assistant/config
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: home_assistant_image
+    name: home-assistant
+    # https://github.com/home-assistant/core/pkgs/container/home-assistant/520919619?tag=2025.9.4
+    source: ghcr.io/home-assistant/home-assistant:2025.9.4
+    image_id: sha256:89ec0583c7f47c8a150204f6b5ed48b5432026012bebe1226cf72775a795a5e1
+
 - name: deploy stack
   community.general.docker_stack:
     name: home-assistant
@@ -27,14 +36,19 @@
       - version: '3.8'
         services:
           home-assistant:
-            # https://github.com/home-assistant/core/pkgs/container/home-assistant/520919619?tag=2025.9.4
-            image: ghcr.io/home-assistant/home-assistant:2025.9.4@sha256:3476d747306906d514934ad4cfe5c5f7ffaa69c55c51a36090b34bf5dc9ee46a
+            image: "{{ home_assistant_image }}"
+            labels:
+              - "sherpa.enable=true"
+              - "sherpa.dns/hostname={{ config.home_assistant.dns_name }}"
+              - "sherpa.dns/type=A"
+              - "sherpa.dns/network=ipvlan"
+              - "sherpa.dns/ttl=300"
+              - "sherpa.dns/proxied=false"
             networks:
               traefik_traefik:
               mosquitto_mosquitto:
               lock-proxy_lock-proxy:
-              macvlan:
-                ipv4_address: "{{ config.home_assistant.ip }}"
+              ipvlan:
             user: 1000:1000
             volumes:
               - /mnt/gluster/home-assistant/config:/config
@@ -67,7 +81,7 @@
             external: true
           lock-proxy_lock-proxy:
             external: true
-          macvlan:
+          ipvlan:
             external: true
 
 - name: configure backup

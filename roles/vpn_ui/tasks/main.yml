@@ -26,6 +26,14 @@
     rolling_versions: true
   register: vpn_ui_session_secret
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: vpn_ui_image
+    name: vpn-ui
+    source: ngoduykhanh/wireguard-ui:0.6.2
+    image_id: sha256:5213a3a3248441c3934ac522ee2c76656367e2edc009b55bc5e881b9d6105b88
+
 - name: deploy stack
   community.general.docker_stack:
     name: vpn-ui
@@ -35,7 +43,7 @@
       - version: '3.8'
         services:
           vpn-ui:
-            image: ngoduykhanh/wireguard-ui:0.6.2@sha256:f1c8397c1f7bd955cc70fb0dfcc18d36b68cab5ac19771d8e2188987404282ac
+            image: "{{ vpn_ui_image }}"
             secrets:
               - vpn_ui_session_secret
             environment:

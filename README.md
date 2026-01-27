@@ -17,6 +17,7 @@
 - PaperMC
 - Resilio Sync
 - Selenium
+- Sherpa DNS
 - Temporal
 - Temporal UI
 - Traefik

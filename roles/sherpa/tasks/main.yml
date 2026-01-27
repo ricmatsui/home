@@ -1,0 +1,119 @@
+---
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 65532
+    group: 65532
+    state: directory
+  loop:
+    - /mnt/gluster/sherpa/config
+    - /mnt/gluster/sherpa/proxy
+
+- name: configure
+  ansible.builtin.copy:
+    dest: /mnt/gluster/sherpa/config/sherpa-dns.yaml
+    content: |
+      source:
+        label_prefix: "sherpa.dns"
+        label_filter: "sherpa.enable=true"
+
+      provider:
+        name: "cloudflare"
+        cloudflare:
+          api_token: "${CLOUDFLARE_API_TOKEN}"
+          proxied_by_default: false
+
+      registry:
+        type: "txt"
+        txt_prefix: "sherpa-dns-"
+        txt_owner_id: "default"
+        txt_wildcard_replacement: "star"
+        encrypt: true
+        encryption_key: "${ENCRYPTION_KEY:-}"
+
+      controller:
+        interval: "1m"
+        once: false
+        dry_run: false
+        cleanup_on_stop: true
+        cleanup_delay: "15m"
+
+      domains:
+        include:
+          - "{{ config.sherpa.domain }}"
+
+      logging:
+        level: "info"
+
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: "{{ item.fact }}"
+    name: "{{ item.name }}"
+    source: "{{ item.source }}"
+    image_id: "{{ item.image_id }}"
+  loop:
+    - fact: sherpa_proxy_image
+      name: sherpa-proxy
+      source: 11notes/socket-proxy:2.1.4
+      image_id: sha256:440a0012eac63d3b3b29b0aab20268591fa3a209495d5e4143483355a1075eb1
+
+    - fact: sherpa_image
+      name: sherpa
+      source: ghcr.io/stedrow/sherpa-dns:0.2.3
+      image_id: sha256:0fe35dc49c2d5606c426ad3669f8c386c36e8c4d2d4e5420b65e08ac934db6e8
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: sherpa
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          sherpa-proxy:
+            image: "{{ sherpa_proxy_image }}"
+            read_only: true
+            user: "0:996"
+            environment:
+              SOCKET_PROXY_UID: "65532"
+              SOCKET_PROXY_GID: "65532"
+            volumes:
+              - /var/run/docker.sock:/run/docker.sock:ro
+              - /mnt/gluster/sherpa/proxy:/run/proxy
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 30M
+              restart_policy:
+                delay: 10m
+
+          sherpa:
+            image: "{{ sherpa_image }}"
+            environment:
+              CLOUDFLARE_API_TOKEN: "{{ config.cloudflare.api_key }}"
+              ENCRYPTION_KEY: "{{ config.sherpa.encryption_key }}"
+            volumes:
+              - /mnt/gluster/sherpa/proxy:/var/run
+              - /mnt/gluster/sherpa/config/sherpa-dns.yaml:/config/sherpa-dns.yaml:ro
+            deploy:
+              mode: replicated
+              replicas: 1
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 100M
+              restart_policy:
+                delay: 10m

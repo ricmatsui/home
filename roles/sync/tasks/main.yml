@@ -20,6 +20,14 @@
     - /mnt/gluster/resilio-sync/downloads
     - /mnt/gluster/resilio-sync/sync
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: resilio_sync_image
+    name: resilio-sync
+    source: linuxserver/resilio-sync:2.7.3.1381-1-ls171
+    image_id: sha256:71eb11a276eb82f056e92bb7d7d35bee43d764023f59a5e5355ccbf83314b84b
+
 - name: deploy stack
   community.general.docker_stack:
     name: resilio-sync
@@ -29,9 +37,17 @@
       - version: '3.8'
         services:
           resilio-sync:
-            image: linuxserver/resilio-sync:2.7.3.1381-1-ls171@sha256:6d21c4c24c48e4a990dcca5520b602b49f3102e44f1a6da040128dfd09af91f2
+            image: "{{ resilio_sync_image }}"
+            labels:
+              - "sherpa.enable=true"
+              - "sherpa.dns/hostname={{ config.sync.dns_name }}"
+              - "sherpa.dns/type=A"
+              - "sherpa.dns/network=ipvlan"
+              - "sherpa.dns/ttl=300"
+              - "sherpa.dns/proxied=false"
             networks:
-              - traefik_traefik
+              traefik_traefik:
+              ipvlan:
             environment:
               PUID: "1000"
               PGID: "1000"
@@ -41,8 +57,6 @@
               - /mnt/gluster/resilio-sync/config:/config
               - /mnt/gluster/resilio-sync/downloads:/downloads
               - /mnt/gluster/resilio-sync/sync:/sync
-            ports:
-              - 55555:55555
             logging:
               driver: none
             deploy:
@@ -69,6 +83,8 @@
                 order: stop-first
         networks:
           traefik_traefik:
+            external: true
+          ipvlan:
             external: true
 
 - name: configure backup

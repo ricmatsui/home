@@ -61,3 +61,14 @@
     username: "{{ config.gitea.username }}"
     password: "{{ config.gitea.token }}"
   notify: docker_restart
+
+- name: create ipvlan config network
+  community.docker.docker_network:
+    name: ipvlan-config
+    config_only: true
+    driver_options:
+      parent: "{{ docker_ipvlan_parent }}"
+    ipam_config: "{{ config.docker.ipvlan_ipam_config }}"
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: docker_ipvlan

@@ -1,0 +1,11 @@
+- name: mirror image
+  ansible.builtin.shell:
+    cmd: >
+      docker buildx imagetools create
+      --tag gitea.{{ config.domain }}/{{ config.gitea.username }}/{{ name }}
+      {{ source }}@{{ image_id }}
+  delegate_to: localhost
+
+- name: return image id
+  ansible.builtin.set_fact:
+    "{{ fact }}": gitea.{{ config.domain }}/{{ config.gitea.username }}/{{ name }}@{{ image_id }}

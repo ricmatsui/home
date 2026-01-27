@@ -43,6 +43,34 @@
         - value: 255
           constraints: {}
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: "{{ item.fact }}"
+    name: "{{ item.name }}"
+    source: "{{ item.source }}"
+    image_id: "{{ item.image_id }}"
+  loop:
+    - fact: temporal_server_image
+      name: temporal-server
+      source: temporalio/auto-setup:1.27.2
+      image_id: sha256:b44cbfeb43dbeae42db113b44fb8414c3452f05643b3d6b1592f955277d73526
+
+    - fact: temporal_db_image
+      name: temporal-db
+      source: postgres:16.8
+      image_id: sha256:5779f428edb411216d6960f2721974d7e71e124e3c41a3e625e47a9072949ed6
+
+    - fact: temporal_db_backup_image
+      name: temporal-db-backup
+      source: prodrigestivill/postgres-backup-local:16
+      image_id: sha256:a0103fbce0c48ccc7693ddbb2a2bfa733048db845354f635efef9e4566de185d
+
+    - fact: temporal_ui_image
+      name: temporal-ui
+      source: temporalio/ui:2.37.2
+      image_id: sha256:3d7b36849d7ca5245f59f6ab558bebbd6b83aa1518f4505e97927419360d1f25
+
 - name: deploy stack
   community.general.docker_stack:
     name: temporal
@@ -52,7 +80,7 @@
       - version: '3.8'
         services:
           temporal-server:
-            image: temporalio/auto-setup:1.27.2@sha256:cea82b3ed6c5f23a104b988bec43aa19a57affc085aaf43fb1f8debfc7dd36ed
+            image: "{{ temporal_server_image }}"
             environment:
               DB: postgres12
               DB_PORT: '5432'
@@ -92,7 +120,7 @@
                 order: stop-first
 
           temporal-db:
-            image: postgres:16.8@sha256:5779f428edb411216d6960f2721974d7e71e124e3c41a3e625e47a9072949ed6
+            image: "{{ temporal_db_image }}"
             environment:
               POSTGRES_USER: temporal
               POSTGRES_PASSWORD: "{{ config.temporal.postgres_password }}"
@@ -116,7 +144,7 @@
                 order: stop-first
 
           temporal-db-backup:
-            image: prodrigestivill/postgres-backup-local:16@sha256:db7f68d896af85bb16bdd82462c16fd144e3eec4646416752c12ce1dabd54b44
+            image: "{{ temporal_db_backup_image }}"
             environment:
               POSTGRES_HOST: temporal_temporal-db
               POSTGRES_DB: temporal
@@ -143,7 +171,7 @@
                 order: stop-first
 
           temporal-ui:
-            image: temporalio/ui:2.37.2@sha256:f377c1685f96bbe99103ee57b4115b0f0f6f4213fcfa6887d5e0a7d1a9bc48d1
+            image: "{{ temporal_ui_image }}"
             environment:
               TEMPORAL_ADDRESS: temporal_temporal-server:7233
               TEMPORAL_CORS_ORIGINS: "https://temporal-ui.{{ config.domain }}"

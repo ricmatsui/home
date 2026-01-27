@@ -143,6 +143,9 @@
     - role: traefik
       tags: traefik
 
+    - role: sherpa
+      tags: sherpa
+
     - role: homepage
       tags: homepage
 

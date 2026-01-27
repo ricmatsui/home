@@ -19,6 +19,14 @@
     - /mnt/gluster/actual/data
     - /mnt/gluster/actual/backups
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: actual_image
+    name: actual
+    source: actualbudget/actual-server:sha-2ed32c4
+    image_id: sha256:fb5848d8db69130a9b54059e9d07ae76dbfdc200c8ebefb19b7552ce5dbe447f
+
 - name: deploy stack
   community.general.docker_stack:
     name: actual
@@ -28,7 +36,7 @@
       - version: '3.8'
         services:
           actual:
-            image: actualbudget/actual-server:sha-2ed32c4@sha256:b34d19db889055f6724687f81cfe23f8e500274cf1df4a17130a574bdf27fad8
+            image: "{{ actual_image }}"
             networks:
               - traefik_traefik
             volumes:

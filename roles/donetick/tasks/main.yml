@@ -88,6 +88,14 @@
         allowed_origins:
           - "*"
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: donetick_image
+    name: donetick
+    source: donetick/donetick:v0.1.64
+    image_id: sha256:e2474d903a60df7d15142e89acc04f8ef32347bc13c3c6f47750f7f14c6dae34
+
 - name: deploy stack
   community.general.docker_stack:
     name: donetick
@@ -97,7 +105,7 @@
       - version: '3.8'
         services:
           donetick:
-            image: donetick/donetick:v0.1.64@sha256:0bb0df048c6842c7aacdb74a04edfa81d9019498d2637c5d93e0f2ce27fd93a4
+            image: "{{ donetick_image }}"
             networks:
               - traefik_traefik
             environment:

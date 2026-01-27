@@ -1,5 +1,13 @@
 ---
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: cloudflare_ddns_image
+    name: cloudflare-ddns
+    source: oznu/cloudflare-ddns:aarch64
+    image_id: sha256:957a3442e4415cc247376e695e58743448c5eb7d8ffd8c606054b5c7f84c31db
+
 - name: deploy stack
   community.general.docker_stack:
     name: cloudflare-ddns
@@ -9,7 +17,7 @@
       - version: '3.8'
         services:
           cloudflare-ddns:
-            image: oznu/cloudflare-ddns@sha256:957a3442e4415cc247376e695e58743448c5eb7d8ffd8c606054b5c7f84c31db
+            image: "{{ cloudflare_ddns_image }}"
             environment:
               ZONE: "{{ config.cloudflare.zone }}"
               SUBDOMAIN: "{{ config.cloudflare.subdomain }}"

@@ -18,6 +18,14 @@
   loop:
     - /mnt/external/selenium/profiles
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: selenium_image
+    name: selenium
+    source: seleniarm/standalone-chromium
+    image_id: sha256:ea7c849ec54f6a9da06634ec2392af3195a24a646b71841bfa986d34462a98b8
+
 - name: deploy stack
   community.general.docker_stack:
     name: selenium
@@ -27,7 +35,7 @@
       - version: '3.8'
         services:
           selenium:
-            image: seleniarm/standalone-chromium@sha256:ea7c849ec54f6a9da06634ec2392af3195a24a646b71841bfa986d34462a98b8
+            image: "{{ selenium_image }}"
             environment:
               SCREEN_WIDTH: '1024'
               SCREEN_HEIGHT: '768'
@@ -45,7 +53,8 @@
               replicas: 1
               placement:
                 constraints:
-                  - 'node.labels.home.storage == external'
+                  - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
               resources:
                 limits:
                   cpus: '2.00'

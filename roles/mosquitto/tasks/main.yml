@@ -20,6 +20,14 @@
     - /mnt/gluster/mosquitto/data
     - /mnt/gluster/mosquitto/log
 
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: mosquitto_image
+    name: mosquitto
+    source: eclipse-mosquitto:2.0.21
+    image_id: sha256:94f5a3d7deafa59fa3440d227ddad558f59d293c612138de841eec61bfa4d353
+
 - name: deploy stack
   community.general.docker_stack:
     name: mosquitto
@@ -29,7 +37,7 @@
       - version: '3.8'
         services:
           mosquitto:
-            image: eclipse-mosquitto:2.0.21@sha256:78dcae7eaf78fe7e5b7f5f0cedc35b0d222a5e5a2650d40c6ca1bc156af6281b
+            image: "{{ mosquitto_image }}"
             networks:
               - mosquitto
               - traefik_traefik

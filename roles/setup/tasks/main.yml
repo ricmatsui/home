@@ -260,3 +260,13 @@
       | python -
     creates: /home/{{ ansible_user }}/.local/bin/poetry
   become_user: "{{ ansible_user }}"
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "{{ dns_name }}"
+    type: A
+    value: "{{ ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+  tags: dns_record

@@ -36,6 +36,13 @@
   register: traefik_forward_auth_config_secret
   tags: traefik_update
 
+- name: set image
+  ansible.builtin.set_fact:
+    traefik_image_source: traefik:v2.11.35
+    traefik_image_id: sha256:ff7931742cdff6df8410aa1c3419a9e81ed7a983b866b781c4628088cf95110f
+    traefik_forward_auth_image_source: npawelek/traefik-forward-auth:v2.2.0
+    traefik_forward_auth_image_id: sha256:2a2d302c12b7e3aafade14b94ed31c182125934e1b0b499d81cbebf42c174fd5
+
 - name: deploy stack
   community.general.docker_stack:
     name: traefik
@@ -45,7 +52,7 @@
       - version: '3.8'
         services:
           traefik:
-            image: traefik:v2.11.35@sha256:df4488969fe0c16eb3bceb131d35982b2cec7c9142545057b329bf62078d873e
+            image: "{{ traefik_image_source }}@{{ traefik_image_id }}"
             command: >
               --api.dashboard=true
               --providers.docker
@@ -57,6 +64,8 @@
               --entrypoints.web.http.redirections.entrypoint.scheme=https
               --entrypoints.web.http.redirections.entrypoint.to=websecure
               --entrypoints.websecure.address=:443
+              --entrypoints.websecure.transport.respondingTimeouts.readTimeout=0s
+              --entrypoints.websecure.transport.respondingTimeouts.idleTimeout=0s
               --entrypoints.temporal.address=:7233
               --entrypoints.mosquitto.address=:1883
               --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
@@ -111,7 +120,7 @@
                 delay: 5s
 
           traefik-forward-auth:
-            image: npawelek/traefik-forward-auth:v2.2.0@sha256:2a2d302c12b7e3aafade14b94ed31c182125934e1b0b499d81cbebf42c174fd5
+            image: "{{ traefik_forward_auth_image_source }}@{{ traefik_forward_auth_image_id }}"
             secrets:
               - traefik_forward_auth_config_secret
             environment:
@@ -150,3 +159,34 @@
         networks:
           traefik: {}
   tags: traefik_update
+
+- name: wait for traefik update
+  ansible.builtin.pause:
+    seconds: 10
+
+- name: wait for gitea
+  ansible.builtin.uri:
+    method: GET
+    url: "https://gitea.{{ config.domain }}"
+  register: result
+  until: result is succeeded
+  retries: 60
+  delay: 5
+
+- name: back up image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: "{{ item.fact }}"
+    name: "{{ item.name }}"
+    source: "{{ item.source }}"
+    image_id: "{{ item.image_id }}"
+  loop:
+    - fact: traefik_image
+      name: traefik
+      source: "{{ traefik_image_source }}"
+      image_id: "{{ traefik_image_id }}"
+
+    - fact: traefik_forward_auth_image
+      name: traefik-forward-auth
+      source: "{{ traefik_forward_auth_image_source }}"
+      image_id: "{{ traefik_forward_auth_image_id }}"

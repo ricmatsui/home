@@ -36,22 +36,13 @@
     ansible_python_interpreter: /opt/docker_venv/bin/python
   delegate_to: "{{ groups['docker_managers']|first }}"
 
-- name: create macvlan config network
+- name: create ipvlan network
   community.docker.docker_network:
-    name: macvlan-config
-    config_only: true
-    driver_options:
-      parent: "{{ docker_macvlan_parent }}"
-    ipam_config: "{{ config.docker.macvlan_ipam_config }}"
-  vars:
-    ansible_python_interpreter: /opt/docker_venv/bin/python
-
-- name: create macvlan network
-  community.docker.docker_network:
-    name: macvlan
-    driver: macvlan
+    name: ipvlan
+    driver: ipvlan
     scope: swarm
-    config_from: macvlan-config
+    config_from: ipvlan-config
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
   when: inventory_hostname == groups['docker_managers'][0]
+  tags: docker_ipvlan
