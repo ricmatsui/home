@@ -10,7 +10,7 @@
     path: /etc/samba/smb.conf
     block: |
       [global]
-      interfaces = {{ vpn_ip }}/24 wg1
+      interfaces = {{ config.ip }}/24 wg1
       bind interfaces only = yes
 
       [homes]

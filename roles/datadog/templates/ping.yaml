@@ -1,4 +1,5 @@
 instances:
-  {% for host in datadog_ping_hosts %}
+{% for host in datadog_ping_hosts %}
   - host: {{ host }}
-  {% endfor %}
+    min_collection_interval: 300
+{% endfor %}

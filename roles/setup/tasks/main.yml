@@ -261,6 +261,12 @@
     creates: /home/{{ ansible_user }}/.local/bin/poetry
   become_user: "{{ ansible_user }}"
 
+- name: authorize keys
+  ansible.posix.authorized_key:
+    user: "{{ ansible_user }}"
+    state: present
+    key: "{{ config.authorized_keys|join('\n') }}"
+
 - name: set dns record
   community.general.cloudflare_dns:
     zone: "{{ config.cloudflare.zone }}"

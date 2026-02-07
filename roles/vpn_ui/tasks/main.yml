@@ -17,7 +17,6 @@
     state: directory
   loop:
     - /mnt/gluster/vpn-ui/db
-    - /mnt/gluster/vpn-ui/wireguard
 
 - name: vpn-ui session secret
   community.general.docker_secret:
@@ -60,7 +59,7 @@
               - traefik_traefik
             volumes:
               - /mnt/gluster/vpn-ui/db:/app/db
-              - /etc/wireguard:/etc/wireguard
+              - /mnt/gluster/vpn-ui/wireguard:/etc/wireguard
             deploy:
               mode: replicated
               replicas: 1
@@ -74,7 +73,6 @@
               placement:
                 constraints:
                   - 'node.labels.home.network == ingress'
-                  - 'node.labels.home.storage == external'
               resources:
                 limits:
                   cpus: '1.00'

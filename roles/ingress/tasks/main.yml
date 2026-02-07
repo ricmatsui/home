@@ -1,0 +1,237 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "{{ item.record }}"
+    type: A
+    value: "{{ item.value }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  run_once: true
+  delegate_to: localhost
+  loop:
+    - record: "{{ config.ingress.dns_name }}"
+      value: "{{ config.ingress.ip }}"
+
+    - record: "{{ config.ingress.network_dns_name }}"
+      value: "{{ config.ingress.network_ip }}"
+
+    - record: "ingress.{{ config.domain }}"
+      value: "{{ config.ip }}"
+  tags: ingress_dns_records
+
+- name: install
+  ansible.builtin.apt:
+    name:
+      - wireguard
+  notify: ingress_systemd_reload
+
+- name: create network configuration directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/wg-quick@.service.d
+    owner: root
+    group: root
+    state: directory
+  notify: ingress_systemd_reload
+
+- name: configure host network
+  ansible.builtin.template:
+    src: ingress-host.conf
+    dest: /etc/wireguard/ingress-host.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+  notify: ingress_systemd_reload
+
+- name: configure peer network
+  ansible.builtin.template:
+    src: ingress-peer.conf
+    dest: /etc/wireguard/ingress-peer.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+  notify: ingress_systemd_reload
+
+- name: ipv4 forward
+  ansible.posix.sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes
+  notify: ingress_service_restart
+  when: ingress_host_candidate
+
+- name: ipv6 forward
+  ansible.posix.sysctl:
+    name: net.ipv6.conf.all.forwarding
+    value: '1'
+    state: present
+    reload: yes
+  notify: ingress_service_restart
+  when: ingress_host_candidate
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 1000
+    group: 1000
+    state: directory
+  run_once: true
+  loop:
+    - /mnt/gluster/vpn-ui/wireguard
+  when: ingress_host_candidate
+
+- name: check configuration
+  ansible.builtin.stat:
+    path: /mnt/gluster/vpn-ui/wireguard/vpn.conf
+  run_once: true
+  register: vpn_config
+  when: ingress_host_candidate
+
+- name: configure
+  ansible.builtin.copy:
+    content: "{{ config.vpn.initial_config }}"
+    dest: /mnt/gluster/vpn-ui/wireguard/vpn.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+  run_once: true
+  when: ingress_host_candidate and not vpn_config.stat.exists
+
+- name: symlink vpn configuration
+  ansible.builtin.file:
+    src: /mnt/gluster/vpn-ui/wireguard/vpn.conf
+    dest: /etc/wireguard/vpn.conf
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
+    state: link
+  notify: ingress_service_restart
+  when: ingress_host_candidate
+
+- ansible.builtin.blockinfile:
+    path: /etc/nftables.conf
+    block: |
+      add table wireguard-nat
+
+      table ip wireguard-nat {
+        chain prerouting {
+          type nat hook prerouting priority -100; policy accept;
+        }
+
+        chain postrouting {
+          type nat hook postrouting priority 100; policy accept;
+          oifname "{{ ingress_interface }}" masquerade
+        }
+      }
+  notify: ingress_nftables_restart
+  when: ingress_host_candidate
+
+- name: enable nftables
+  ansible.builtin.systemd:
+    name: nftables
+    enabled: true
+  when: ingress_host_candidate
+
+- name: configure vpn sync service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vpn-sync.service
+    content: |
+      [Unit]
+      Description=Sync vpn config
+      After=wg-quick@vpn.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/bash -c '/usr/bin/wg show vpn >/dev/null 2>&1 || exit 0; /usr/bin/wg syncconf vpn <(/usr/bin/wg-quick strip vpn)'
+  notify: ingress_vpn_sync_restart
+  when: ingress_host_candidate
+
+- name: configure vpn sync timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vpn-sync.timer
+    content: |
+      [Unit]
+      Description=Sync vpn config
+
+      [Timer]
+      OnCalendar=*-*-* *:*:30
+      RandomizedDelaySec=5s
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: ingress_vpn_sync_restart
+  when: ingress_host_candidate
+
+- name: enable vpn sync timer
+  ansible.builtin.systemd:
+    name: vpn-sync.timer
+    enabled: true
+  when: ingress_host_candidate
+
+- name: create bastion user
+  ansible.builtin.user:
+    name: bastion
+    uid: 2000
+  tags: bastion_user
+  when: ingress_host_candidate
+
+- name: authorize bastion keys
+  ansible.posix.authorized_key:
+    user: bastion
+    state: present
+    key: "{{ config.authorized_keys|join('\n') }}"
+  tags: bastion_user
+  when: ingress_host_candidate
+
+- name: configure network service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/wg-quick@.service.d/override.conf
+    content: |
+      [Unit]
+      StartLimitIntervalSec=0
+
+      [Service]
+      Restart=on-failure
+      RestartSec=5s
+  notify: ingress_systemd_reload
+
+- name: create ingress script
+  ansible.builtin.copy:
+      dest: /opt/ingress.sh
+      src: ingress.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=r,o=r
+  notify: ingress_service_restart
+  tags: enable_ingress_service
+
+- name: configure ingress service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ingress.service
+    content: |
+      [Unit]
+      Description=Ingress
+      After=network-online.target
+
+      [Install]
+      WantedBy=multi-user.target
+
+      [Service]
+      Type=simple
+      ExecStart=/opt/ingress.sh
+      Restart=always
+      RestartSec=5s
+
+      Environment=INTERFACE={{ ingress_interface }}
+      Environment=INGRESS_IP={{ config.ingress.ip }}
+  notify: ingress_service_restart
+  tags: enable_ingress_service
+
+- name: enable ingress service
+  ansible.builtin.systemd:
+    name: ingress
+    enabled: true
+  notify: ingress_service_restart
+  tags: enable_ingress_service

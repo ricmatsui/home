@@ -35,13 +35,6 @@
     - role: overlay
       tags: overlay
 
-- name: vpn
-  gather_facts: false
-  hosts: vpn
-  roles:
-    - role: vpn
-      tags: vpn
-
 - name: gluster
   gather_facts: false
   hosts: all
@@ -127,6 +120,13 @@
   roles:
     - role: light
       tags: light
+
+- name: ingress
+  gather_facts: false
+  hosts: ingress_peers
+  roles:
+    - role: ingress
+      tags: ingress
 
 - name: deploy
   gather_facts: false

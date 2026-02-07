@@ -1,0 +1,24 @@
+---
+
+- name: systemd reload
+  ansible.builtin.systemd:
+    daemon_reload: true
+  listen: ingress_systemd_reload
+
+- name: restart ingress vpn sync timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: vpn-sync.timer
+    state: restarted
+  listen: ingress_vpn_sync_restart
+
+- name: restart ingress service
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: ingress
+    state: restarted
+  listen: ingress_service_restart
+
+- name: restart nftables
+  ansible.builtin.reboot:
+  listen: ingress_nftables_restart
