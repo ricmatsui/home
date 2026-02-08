@@ -16,7 +16,40 @@
     group: pi
     state: directory
   loop:
+    - /mnt/gluster/vpn-ui/config
     - /mnt/gluster/vpn-ui/db
+
+- name: configure template
+  ansible.builtin.copy:
+    dest: /mnt/gluster/vpn-ui/config/template.conf
+    content: |
+      [Interface]
+      Address = {{ config.ip }}/24
+      ListenPort = {{ config.vpn.listen_port }}
+      PrivateKey = {{ config.vpn.private_key }}
+
+      {% raw %}
+      {{range .clientDataList}}{{if eq .Client.Enabled true}}
+      # Name:         {{ .Client.Name }}
+      [Peer]
+      PublicKey = {{ .Client.PublicKey }}
+      {{if .Client.PresharedKey}}PresharedKey = {{ .Client.PresharedKey }}{{end}}
+      AllowedIPs = {{$first :=true}}{{range .Client.AllocatedIPs }}{{if $first}}{{$first = false}}{{else}},{{end}}{{.}}{{end}}{{range .Client.ExtraAllowedIPs }},{{.}}{{end}}
+      {{if $.globalSettings.PersistentKeepalive}}PersistentKeepalive = {{ $.globalSettings.PersistentKeepalive }}{{end}}
+      {{if .Client.Endpoint}}Endpoint = {{ .Client.Endpoint }}{{end}}
+      {{end}}{{end}}
+      {% endraw %}
+
+
+      {% for peer in groups['ingress_peers'] %}
+      [Peer]
+      PublicKey = {{ hostvars[peer]['vpn_peer_public_key'] }}
+      AllowedIPs = {{ hostvars[peer]['vpn_peer_ip'] }}/32
+
+      {% endfor %}
+    owner: root
+    group: root
+    mode: u=rw,g=,o=
 
 - name: vpn-ui session secret
   community.general.docker_secret:
@@ -48,16 +81,19 @@
             environment:
               SESSION_SECRET_FILE: /run/secrets/vpn_ui_session_secret
               SUBNET_RANGES: "{{ config.vpn_ui.subnet_ranges }}"
+              WGUI_CONFIG_FILE_PATH: "/etc/wireguard/vpn-host.conf"
               WGUI_ENDPOINT_ADDRESS: "{{ config.domain }}"
               WGUI_MTU: ""
               WGUI_PERSISTENT_KEEPALIVE: ""
               WGUI_FIREWALL_MARK: "{{ config.vpn_ui.firewall_mark }}"
               WGUI_TABLE: ""
-              WGUI_SERVER_LISTEN_PORT: "{{ config.vpn_ui.server_listen_port }}"
+              WGUI_SERVER_LISTEN_PORT: "{{ config.vpn.listen_port }}"
               WGUI_DEFAULT_CLIENT_ALLOWED_IPS: "{{ config.vpn_ui.default_client_allowed_ips }}"
+              WG_CONF_TEMPLATE: /config/template.conf
             networks:
               - traefik_traefik
             volumes:
+              - /mnt/gluster/vpn-ui/config:/config
               - /mnt/gluster/vpn-ui/db:/app/db
               - /mnt/gluster/vpn-ui/wireguard:/etc/wireguard
             deploy:

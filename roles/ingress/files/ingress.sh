@@ -10,23 +10,21 @@ done
 
 handle_host() {
     echo "Switching to host"
-    systemctl stop wg-quick@ingress-peer
+    systemctl stop wg-quick@vpn-peer
     if [[ -z "$(ip addr show dev "$INTERFACE" to "$INGRESS_IP")" ]]; then
         ip addr add "$INGRESS_IP/24" dev "$INTERFACE"
     fi
-    systemctl start wg-quick@ingress-host
-    systemctl start wg-quick@vpn
+    systemctl start wg-quick@vpn-host
     echo "Switched to host"
 }
 
 handle_peer() {
     echo "Switching to peer"
-    systemctl stop wg-quick@vpn
-    systemctl stop wg-quick@ingress-host
+    systemctl stop wg-quick@vpn-host
     if [[ -n "$(ip addr show dev "$INTERFACE" to "$INGRESS_IP")" ]]; then
         ip addr del "$INGRESS_IP/24" dev "$INTERFACE"
     fi
-    systemctl start wg-quick@ingress-peer
+    systemctl start wg-quick@vpn-peer
     echo "Switched to peer"
 }
 

@@ -10,15 +10,17 @@
   delegate_to: localhost
 
 - name: build
-  community.docker.docker_image:
-    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/homepage:latest"
-    source: build
-    force_source: true
-    push: true
-    build:
-      pull: false
-      path: "{{ role_path }}/files"
-      platform: linux/arm64/v8
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/homepage"
+    tag: latest
+    path: "{{ role_path }}/files"
+    rebuild: always
+    platform:
+      - linux/amd64
+      - linux/arm64/v8
+    outputs:
+      - type: image
+        push: true
   delegate_to: localhost
   register: build_result
 

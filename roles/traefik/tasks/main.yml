@@ -168,7 +168,6 @@
   ansible.builtin.uri:
     method: GET
     url: "https://gitea.{{ config.domain }}"
-  delegate_to: localhost
   register: result
   until: result is succeeded
   retries: 60

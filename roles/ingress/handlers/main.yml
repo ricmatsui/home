@@ -5,12 +5,12 @@
     daemon_reload: true
   listen: ingress_systemd_reload
 
-- name: restart ingress vpn sync timer
+- name: restart ingress vpn host sync timer
   ansible.builtin.systemd:
     daemon_reload: true
-    name: vpn-sync.timer
+    name: vpn-host-sync.timer
     state: restarted
-  listen: ingress_vpn_sync_restart
+  listen: ingress_vpn_host_sync_restart
 
 - name: restart ingress service
   ansible.builtin.systemd:
