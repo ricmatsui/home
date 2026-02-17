@@ -29,10 +29,12 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=1"
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == pi'
-                  - 'node.labels.home.instance_size == extra_small'
               resources:
                 limits:
                   cpus: '0.15'
@@ -45,3 +47,5 @@
           cloudflare_api_key_secret:
             external: true
             name: cloudflare_api_key_secret
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

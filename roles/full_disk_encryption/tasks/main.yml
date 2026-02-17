@@ -21,6 +21,9 @@
     dest: /etc/crypttab
     content: |
       root UUID={{ full_disk_encryption_root_uuid }} none luks,initramfs
+      {% if full_disk_encryption_external_uuid is defined %}
+      external UUID={{ full_disk_encryption_external_uuid }} none luks,initramfs
+      {% endif %}
     owner: root
     group: root
     mode: u=rw,g=r,o=r

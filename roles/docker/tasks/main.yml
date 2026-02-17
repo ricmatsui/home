@@ -61,6 +61,7 @@
     username: "{{ config.gitea.username }}"
     password: "{{ config.gitea.token }}"
   notify: docker_restart
+  tags: docker_login
 
 - name: create ipvlan config network
   community.docker.docker_network:

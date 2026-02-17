@@ -54,6 +54,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
                 - "traefik.enable=true"
                 - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.{{ config.domain }}`)"
                 - "traefik.http.routers.jellyfin.middlewares=traefik-internal"
@@ -78,3 +80,5 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

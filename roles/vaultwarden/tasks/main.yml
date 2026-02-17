@@ -47,6 +47,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=40"
                 - "traefik.enable=true"
                 - "traefik.http.routers.vault.rule=Host(`vault.{{ config.domain }}`)"
                 - "traefik.http.routers.vault.middlewares=traefik-internal"
@@ -68,6 +70,8 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:

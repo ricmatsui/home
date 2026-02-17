@@ -101,6 +101,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
                 - "traefik.enable=true"
                 - "traefik.tcp.routers.temporal.rule=HostSNI(`*`)"
                 - "traefik.tcp.routers.temporal.middlewares=traefik-internal-tcp"
@@ -131,6 +133,9 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == mbp'
@@ -157,6 +162,9 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == mbp'
@@ -185,6 +193,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
                 - "traefik.enable=true"
                 - "traefik.http.routers.temporal-ui.rule=Host(`temporal-ui.{{ config.domain }}`)"
                 - "traefik.http.routers.temporal-ui.middlewares=traefik-internal,traefik-forward-auth"
@@ -207,6 +217,8 @@
           temporal: {}
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:

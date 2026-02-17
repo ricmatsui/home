@@ -149,11 +149,15 @@
   tags: cgroups
 
 - name: enable cgroups features
-  ansible.builtin.lineinfile:
+  replace:
     path: /boot/firmware/cmdline.txt
-    backrefs: True
-    regexp: '(^.+rootwait)$'
-    line: '\1 cfg80211.ieee80211_regdom=US cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory'
+    regexp: '^([\w](?!.*\b{{ item }}\b).*)$'
+    replace: '\1 {{ item }}'
+  loop:
+    - cfg80211.ieee80211_regdom=US
+    - cgroup_enable=cpuset
+    - cgroup_memory=1
+    - cgroup_enable=memory
   when: cmdline_result.stat.exists
   notify: setup_reboot
   tags: cgroups
@@ -186,6 +190,8 @@
   ansible.builtin.apt:
     name:
       - curl
+      - jq
+      - most
       - vim
       - lsof
       - git
@@ -266,6 +272,7 @@
     user: "{{ ansible_user }}"
     state: present
     key: "{{ config.authorized_keys|join('\n') }}"
+  tags: authorized_keys
 
 - name: set dns record
   community.general.cloudflare_dns:

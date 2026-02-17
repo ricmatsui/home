@@ -77,6 +77,13 @@
     - role: samba
       tags: samba
 
+- name: ingress
+  gather_facts: false
+  hosts: ingress_peers
+  roles:
+    - role: ingress
+      tags: ingress
+
 - name: docker
   gather_facts: false
   hosts:
@@ -121,12 +128,12 @@
     - role: light
       tags: light
 
-- name: ingress
+- name: scheduler
   gather_facts: false
-  hosts: ingress_peers
+  hosts: docker_managers
   roles:
-    - role: ingress
-      tags: ingress
+    - role: scheduler
+      tags: scheduler
 
 - name: deploy
   gather_facts: false

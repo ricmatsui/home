@@ -45,16 +45,14 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
                 - "traefik.enable=true"
                 - "traefik.http.routers.homepage.rule=Host(`home.{{ config.domain }}`)"
                 - "traefik.http.routers.homepage.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.routers.homepage.entrypoints=websecure"
                 - "traefik.http.routers.homepage.tls.certresolver=letsencrypt"
                 - "traefik.http.services.homepage.loadbalancer.server.port=80"
-              placement:
-                constraints:
-                  - 'node.labels.home.instance_type == pi'
-                  - 'node.labels.home.instance_size == extra_small'
               resources:
                 limits:
                   cpus: '0.15'
@@ -66,3 +64,5 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

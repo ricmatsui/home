@@ -63,6 +63,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
                 - "traefik.enable=true"
                 - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
                 - "traefik.http.routers.sync.middlewares=traefik-internal,traefik-forward-auth"
@@ -86,6 +88,8 @@
             external: true
           ipvlan:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:

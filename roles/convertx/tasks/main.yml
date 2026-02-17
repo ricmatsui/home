@@ -46,6 +46,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
                 - "traefik.enable=true"
                 - "traefik.http.routers.convertx.rule=Host(`convertx.{{ config.domain }}`)"
                 - "traefik.http.routers.convertx.middlewares=traefik-internal"
@@ -66,3 +68,5 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

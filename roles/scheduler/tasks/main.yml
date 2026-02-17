@@ -1,0 +1,42 @@
+---
+
+- name: create scheduler script
+  ansible.builtin.copy:
+      dest: /opt/scheduler.sh
+      src: scheduler.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=r,o=r
+  notify: scheduler_service_restart
+
+- name: configure scheduler service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/scheduler.service
+    content: |
+      [Unit]
+      Description=Scheduler
+      After=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/scheduler.sh
+
+- name: configure scheduler timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/scheduler.timer
+    content: |
+      [Unit]
+      Description=Scheduler
+
+      [Timer]
+      OnCalendar=*-*-* *:*:00
+      RandomizedDelaySec=5s
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+- name: enable scheduler timer
+  ansible.builtin.systemd:
+    name: scheduler.timer
+    enabled: true

@@ -44,12 +44,15 @@
       {% for peer in groups['ingress_peers'] %}
       [Peer]
       PublicKey = {{ hostvars[peer]['vpn_peer_public_key'] }}
+      Endpoint = {{ hostvars[peer]['ip'] }}:{{ config.vpn.listen_port }}
       AllowedIPs = {{ hostvars[peer]['vpn_peer_ip'] }}/32
+      PersistentKeepalive = 25
 
       {% endfor %}
     owner: root
     group: root
     mode: u=rw,g=,o=
+  tags: vpn_ui_template
 
 - name: vpn-ui session secret
   community.general.docker_secret:
@@ -100,15 +103,14 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=40"
                 - "traefik.enable=true"
                 - "traefik.http.routers.vpn-ui.rule=Host(`vpn-ui.{{ config.domain }}`)"
                 - "traefik.http.routers.vpn-ui.middlewares=traefik-internal,traefik-forward-auth"
                 - "traefik.http.routers.vpn-ui.entrypoints=websecure"
                 - "traefik.http.routers.vpn-ui.tls.certresolver=letsencrypt"
                 - "traefik.http.services.vpn-ui.loadbalancer.server.port=5000"
-              placement:
-                constraints:
-                  - 'node.labels.home.network == ingress'
               resources:
                 limits:
                   cpus: '1.00'
@@ -124,6 +126,8 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:

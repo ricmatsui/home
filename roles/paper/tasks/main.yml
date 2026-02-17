@@ -54,8 +54,10 @@
               - /mnt/gluster/resilio-sync/sync/Paper:/data
             deploy:
               mode: replicated
-              replicas: 1
+              replicas: 0
               labels:
+                - "home.scheduler.replicas=0"
+                - "home.scheduler.priority=50"
                 - "traefik.enable=true"
                 - "traefik.http.routers.paper-ui.rule=Host(`paper-ui.{{ config.domain }}`)"
                 - "traefik.http.routers.paper-ui.middlewares=traefik-internal,traefik-forward-auth"
@@ -75,6 +77,8 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:

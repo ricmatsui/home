@@ -1,0 +1,8 @@
+---
+
+- name: restart scheduler service
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: scheduler.timer
+    state: restarted
+  listen: scheduler_service_restart

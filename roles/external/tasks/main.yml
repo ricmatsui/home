@@ -13,6 +13,7 @@
     group: root
   notify: external_reboot
   when: external.usb
+  tags: external_udev
 
 - name: list block devices
   ansible.builtin.shell:

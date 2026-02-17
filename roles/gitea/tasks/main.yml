@@ -47,6 +47,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=20"
                 - "traefik.enable=true"
                 - "traefik.http.routers.gitea.rule=Host(`gitea.{{ config.domain }}`)"
                 - "traefik.http.routers.gitea.middlewares=traefik-internal"
@@ -68,6 +70,8 @@
         networks:
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:
@@ -86,6 +90,10 @@
 
       rclone copy --immutable /mnt/gluster/gitea/backups \
         :s3:/$ARCHIVE_PATH/gitea/backups
+
+- name: wait for gitea update
+  ansible.builtin.pause:
+    seconds: 10
 
 - name: wait for gitea
   ansible.builtin.uri:

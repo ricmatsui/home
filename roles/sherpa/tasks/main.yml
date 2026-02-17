@@ -85,6 +85,9 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=20"
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == mbp'
@@ -107,6 +110,9 @@
             deploy:
               mode: replicated
               replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=20"
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == mbp'
@@ -117,3 +123,5 @@
                   memory: 100M
               restart_policy:
                 delay: 10m
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

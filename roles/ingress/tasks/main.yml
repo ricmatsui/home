@@ -84,7 +84,9 @@
       {% for peer in groups['ingress_peers'] %}
       [Peer]
       PublicKey = {{ hostvars[peer]['vpn_peer_public_key'] }}
+      Endpoint = {{ hostvars[peer]['ip'] }}:{{ config.vpn.listen_port }}
       AllowedIPs = {{ hostvars[peer]['vpn_peer_ip'] }}/32
+      PersistentKeepalive = 25
 
       {% endfor %}
     owner: root
@@ -180,7 +182,6 @@
       RandomizedDelaySec=5s
       Persistent=true
 
-
       [Install]
       WantedBy=timers.target
   notify: ingress_vpn_host_sync_restart
@@ -204,7 +205,9 @@
     user: bastion
     state: present
     key: "{{ config.authorized_keys|join('\n') }}"
-  tags: bastion_user
+  tags:
+    - bastion_user
+    - authorized_keys
   when: ingress_host_candidate
 
 - name: create network configuration directory

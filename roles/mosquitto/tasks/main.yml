@@ -50,6 +50,8 @@
               mode: replicated
               replicas: 1
               labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
                 - "traefik.enable=true"
                 - "traefik.tcp.routers.mosquitto.rule=HostSNI(`*`)"
                 - "traefik.tcp.routers.mosquitto.middlewares=traefik-internal-tcp"
@@ -71,6 +73,8 @@
           mosquitto: {}
           traefik_traefik:
             external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
 
 - name: configure backup
   ansible.builtin.copy:
