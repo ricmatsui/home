@@ -195,6 +195,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.temporal-ui.rule=Host(`temporal-ui.{{ config.domain }}`)"
                 - "traefik.http.routers.temporal-ui.middlewares=traefik-internal,traefik-forward-auth"

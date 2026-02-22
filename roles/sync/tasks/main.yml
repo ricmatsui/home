@@ -65,6 +65,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=30"
+                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.sync.rule=Host(`sync.{{ config.domain }}`)"
                 - "traefik.http.routers.sync.middlewares=traefik-internal,traefik-forward-auth"

@@ -49,6 +49,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=40"
+                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.vault.rule=Host(`vault.{{ config.domain }}`)"
                 - "traefik.http.routers.vault.middlewares=traefik-internal"

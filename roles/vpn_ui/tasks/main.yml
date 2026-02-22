@@ -59,6 +59,8 @@
     name: vpn_ui_session_secret
     data: "{{ config.vpn_ui.session_secret }}"
     rolling_versions: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
   register: vpn_ui_session_secret
 
 - name: mirror image
@@ -105,6 +107,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=40"
+                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.vpn-ui.rule=Host(`vpn-ui.{{ config.domain }}`)"
                 - "traefik.http.routers.vpn-ui.middlewares=traefik-internal,traefik-forward-auth"

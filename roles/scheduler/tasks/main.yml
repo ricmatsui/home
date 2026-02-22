@@ -9,6 +9,31 @@
       mode: u=rwx,g=r,o=r
   notify: scheduler_service_restart
 
+- name: create scheduler restart script
+  ansible.builtin.copy:
+      dest: /opt/scheduler-restart.sh
+      src: scheduler-restart.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=r,o=r
+  notify: scheduler_restart_service_restart
+
+- name: create scheduler status script
+  ansible.builtin.copy:
+      dest: /opt/scheduler-status.sh
+      src: scheduler-status.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=rx,o=rx
+  tags: scheduler_status
+
+- name: install scheduler status script
+  ansible.builtin.file:
+    src: /opt/scheduler-status.sh
+    dest: /usr/local/bin/scheduler-status.sh
+    state: link
+  tags: scheduler_status
+
 - name: configure scheduler service
   ansible.builtin.copy:
     dest: /etc/systemd/system/scheduler.service
@@ -18,8 +43,22 @@
       After=network-online.target
 
       [Service]
-      Type=oneshot
+      Type=simple
       ExecStart=/opt/scheduler.sh
+  notify: scheduler_service_restart
+
+- name: configure scheduler restart service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/scheduler-restart.service
+    content: |
+      [Unit]
+      Description=Scheduler Restart
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/opt/scheduler-restart.sh
+  notify: scheduler_restart_service_restart
 
 - name: configure scheduler timer
   ansible.builtin.copy:
@@ -35,8 +74,30 @@
 
       [Install]
       WantedBy=timers.target
+  notify: scheduler_service_restart
+
+- name: configure scheduler restart timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/scheduler-restart.timer
+    content: |
+      [Unit]
+      Description=Scheduler Restart
+
+      [Timer]
+      OnCalendar=Sat *-*-* 12:00:00
+      RandomizedDelaySec=600s
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: scheduler_restart_service_restart
 
 - name: enable scheduler timer
   ansible.builtin.systemd:
     name: scheduler.timer
+    enabled: true
+
+- name: enable scheduler restart timer
+  ansible.builtin.systemd:
+    name: scheduler-restart.timer
     enabled: true

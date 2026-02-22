@@ -53,6 +53,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.actual.rule=Host(`actual.{{ config.domain }}`)"
                 - "traefik.http.routers.actual.middlewares=traefik-internal"

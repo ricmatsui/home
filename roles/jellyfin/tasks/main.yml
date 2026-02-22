@@ -56,6 +56,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.jellyfin.rule=Host(`jellyfin.{{ config.domain }}`)"
                 - "traefik.http.routers.jellyfin.middlewares=traefik-internal"

@@ -32,6 +32,7 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=1"
+                - "home.scheduler.restart=true"
               placement:
                 constraints:
                   - 'node.labels.home.instance_type == pi'
