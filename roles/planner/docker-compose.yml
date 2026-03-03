@@ -1,0 +1,14 @@
+name: planner
+version: '3'
+services:
+  db:
+    image: postgres:16.8@sha256:5779f428edb411216d6960f2721974d7e71e124e3c41a3e625e47a9072949ed6
+    ports:
+      - '5432:5432'
+    environment:
+      - POSTGRES_PASSWORD
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: always
+volumes:
+  db_data:

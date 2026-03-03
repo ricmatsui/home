@@ -1,0 +1,131 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "dbos.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 999
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/dbos/db
+    - /mnt/gluster/dbos/backups
+
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: "{{ item.fact }}"
+    name: "{{ item.name }}"
+    source: "{{ item.source }}"
+    image_id: "{{ item.image_id }}"
+  loop:
+    - fact: dbos_db_image
+      name: dbos-db
+      source: postgres:16.8
+      image_id: sha256:5779f428edb411216d6960f2721974d7e71e124e3c41a3e625e47a9072949ed6
+
+    - fact: dbos_db_backup_image
+      name: dbos-db-backup
+      source: prodrigestivill/postgres-backup-local:16
+      image_id: sha256:a0103fbce0c48ccc7693ddbb2a2bfa733048db845354f635efef9e4566de185d
+
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: dbos
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          dbos-db:
+            image: "{{ dbos_db_image }}"
+            environment:
+              POSTGRES_USER: dbos
+              POSTGRES_PASSWORD: "{{ config.dbos.postgres_password }}"
+            networks:
+              - dbos
+              - traefik_traefik
+            volumes:
+              - /mnt/gluster/dbos/db:/var/lib/postgresql/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
+                - "traefik.enable=true"
+                - "traefik.tcp.routers.dbos.rule=HostSNI(`dbos.{{ config.domain }}`)"
+                - "traefik.tcp.routers.dbos.entrypoints=postgres"
+                - "traefik.tcp.routers.dbos.tls.certresolver=letsencrypt"
+                - "traefik.tcp.routers.dbos.middlewares=traefik-internal-tcp"
+                - "traefik.tcp.services.dbos.loadbalancer.server.port=5432"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 200M
+              restart_policy:
+                delay: 20s
+              update_config:
+                order: stop-first
+
+          dbos-db-backup:
+            image: "{{ dbos_db_backup_image }}"
+            environment:
+              POSTGRES_HOST: dbos_dbos-db
+              POSTGRES_CLUSTER: 'TRUE'
+              POSTGRES_DB: postgres
+              POSTGRES_USER: dbos
+              POSTGRES_PASSWORD: "{{ config.dbos.postgres_password }}"
+            networks:
+              - dbos
+            volumes:
+              - /mnt/gluster/dbos/backups:/backups
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 100M
+              restart_policy:
+                delay: 60s
+              update_config:
+                order: stop-first
+
+        networks:
+          dbos: {}
+          traefik_traefik:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/dbos.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy --immutable /mnt/gluster/dbos/backups/monthly \
+        :s3:/$ARCHIVE_PATH/dbos/backups/monthly \
+        --exclude "postgres-latest.sql.gz" \
+        --min-age 1d

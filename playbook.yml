@@ -186,6 +186,12 @@
     - role: temporal
       tags: temporal
 
+    - role: dbos
+      tags: dbos
+
+    - role: planner
+      tags: planner
+
     - role: mosquitto
       tags: mosquitto
 

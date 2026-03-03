@@ -50,7 +50,7 @@ target_service_json="$(
     echo "${managed_services_json}" \
     | jq -c '
         sort_by(.priority, .name)
-        | map(select(.is_stable and .running < .replicas))
+        | map(select(.running < .replicas))
         | .[0] // empty
     '
 )"
@@ -61,11 +61,17 @@ if [[ -z "${target_service_json}" ]]; then
 fi
 
 target_name="$(echo "${target_service_json}" | jq -r '.name')"
+
+echo "Target service: ${target_name}"
+
+if [[ "$(echo "${target_service_json}" | jq -r '.is_stable')" != "true" ]]; then
+    echo "Target service is not stable"
+    exit 0
+fi
+
 target_desired="$(echo "${target_service_json}" | jq -r '.desired')"
 target_replicas="$(echo "${target_service_json}" | jq -r '.replicas')"
 target_priority="$(echo "${target_service_json}" | jq -r '.priority')"
-
-echo "Target service: ${target_name}"
 
 if [[ "${target_desired}" -lt "${target_replicas}" ]]; then
     target_new_desired="$((target_desired + 1))"
@@ -86,7 +92,6 @@ donor_service_json="$(
             | reverse
             | map(select(
                 .name != $target_name
-                and .is_stable
                 and .desired > 0
                 and (
                     .priority > $target_priority
@@ -103,9 +108,16 @@ if [[ -z "${donor_service_json}" ]]; then
 fi
 
 donor_name="$(echo "${donor_service_json}" | jq -r '.name')"
+
+echo "Donor service: ${donor_name}"
+
+if [[ "$(echo "${donor_service_json}" | jq -r '.is_stable')" != "true" ]]; then
+    echo "Donor service is not stable"
+    exit 0
+fi
+
 donor_desired="$(echo "${donor_service_json}" | jq -r '.desired')"
 donor_new_desired="$((donor_desired - 1))"
 
-echo "Donor service: ${donor_name}"
 echo "Scaling donor down: ${donor_desired} -> ${donor_new_desired}"
 docker service scale -d "${donor_name}=${donor_new_desired}"

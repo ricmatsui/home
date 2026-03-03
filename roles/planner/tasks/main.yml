@@ -1,0 +1,60 @@
+---
+
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/planner"
+    tag: latest
+    path: "{{ role_path }}"
+    rebuild: always
+    platform:
+      - linux/amd64
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: planner
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          planner:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            networks:
+              - dbos_dbos
+            volumes:
+              - /mnt/gluster/resilio-sync/sync/Wiki:/wiki
+            environment:
+              DBOS_SYSTEM_DATABASE_URL: "{{ config.planner.dbos_system_database_url }}"
+              WIKI_PATH: /wiki
+              WIKI_REMOTE: "{{ config.planner.wiki_remote }}"
+              DOMAIN: "{{ config.domain }}"
+              TZ: America/Los_Angeles
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 300M
+              restart_policy:
+                delay: 1m
+              update_config:
+                order: stop-first
+
+        networks:
+          dbos_dbos:
+            external: true
+
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

@@ -78,6 +78,7 @@
               --entrypoints.websecure.transport.respondingTimeouts.readTimeout=0s
               --entrypoints.websecure.transport.respondingTimeouts.idleTimeout=0s
               --entrypoints.temporal.address=:7233
+              --entrypoints.postgres.address=:5432
               --entrypoints.mosquitto.address=:1883
               --certificatesresolvers.letsencrypt.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
               --certificatesresolvers.letsencrypt.acme.dnschallenge=true
@@ -96,6 +97,9 @@
                 mode: host
               - target: 7233
                 published: 7233
+                mode: host
+              - target: 5432
+                published: 5432
                 mode: host
               - target: 1883
                 published: 1883
