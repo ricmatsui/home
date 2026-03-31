@@ -1,0 +1,15 @@
+diff --git a/node_modules/@dbos-inc/dbos-sdk/dist/src/scheduler/scheduler.js b/node_modules/@dbos-inc/dbos-sdk/dist/src/scheduler/scheduler.js
+index 1fa0e24..690a07c 100644
+--- a/node_modules/@dbos-inc/dbos-sdk/dist/src/scheduler/scheduler.js
++++ b/node_modules/@dbos-inc/dbos-sdk/dist/src/scheduler/scheduler.js
+@@ -126,6 +126,10 @@ class DynamicSchedulerLoop {
+             if (signal.aborted) {
+                 break;
+             }
++            if (!timeMatcher.match(nextExec)) {
++                lastExec = nextExec;
++                continue;
++            }
+             const date = new Date(nextExec);
+             const workflowID = `sched-${scheduleName}-${date.toISOString()}`;
+             try {

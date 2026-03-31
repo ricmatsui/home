@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(yarn build:*)",
+      "Bash(node --test dist/lib.test.js)"
+    ]
+  }
+}

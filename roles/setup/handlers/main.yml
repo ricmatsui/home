@@ -35,6 +35,13 @@
     state: restarted
   listen: setup_network_manager_restart
 
+- name: restart preconfigured network reconnect timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: preconfigured-network-reconnect.timer
+    state: restarted
+  listen: setup_preconfigured_network_reconnect_restart
+
 - name: reboot
   ansible.builtin.reboot:
   listen: setup_reboot

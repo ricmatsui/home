@@ -31,7 +31,7 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=1"
+                - "home.scheduler.priority=15"
                 - "home.scheduler.restart=true"
               placement:
                 constraints:

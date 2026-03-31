@@ -3,5 +3,9 @@
   "data-root": "/mnt/external/docker",
   {% endif %}
   "log-driver": "journald",
-  "cgroup-parent": "docker.slice"
+  "cgroup-parent": "docker.slice",
+  "storage-driver": "overlay2",
+  "features": {
+    "containerd-snapshotter": false
+  }
 }

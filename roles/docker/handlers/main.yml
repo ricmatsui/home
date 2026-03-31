@@ -9,3 +9,10 @@
     - docker.service
     - containerd.service
   listen: docker_restart
+
+- name: restart docker prune timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: docker-prune.timer
+    state: restarted
+  listen: docker_prune_restart

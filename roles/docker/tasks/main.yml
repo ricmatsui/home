@@ -63,6 +63,42 @@
   notify: docker_restart
   tags: docker_login
 
+- name: configure docker prune service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker-prune.service
+    content: |
+      [Unit]
+      Description=Docker system prune
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/docker system prune -f
+  notify: docker_prune_restart
+  tags: docker_prune
+
+- name: configure docker prune timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker-prune.timer
+    content: |
+      [Unit]
+      Description=Run docker system prune monthly
+
+      [Timer]
+      OnCalendar=monthly
+      Persistent=true
+      RandomizedDelaySec=1h
+
+      [Install]
+      WantedBy=timers.target
+  notify: docker_prune_restart
+  tags: docker_prune
+
+- name: enable docker prune timer
+  ansible.builtin.systemd:
+    name: docker-prune.timer
+    enabled: true
+  tags: docker_prune
+
 - name: create ipvlan config network
   community.docker.docker_network:
     name: ipvlan-config

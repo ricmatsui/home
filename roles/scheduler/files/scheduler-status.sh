@@ -1,6 +1,16 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+if [[ -t 1 ]] && tput colors &>/dev/null && [[ "$(tput colors)" -ge 8 ]]; then
+    GREEN='\e[32m'
+    RED='\e[31m'
+    RESET='\e[0m'
+else
+    GREEN=''
+    RED=''
+    RESET=''
+fi
+
 mapfile -t service_ids < <(docker service ls --format json | jq -r '.ID')
 if [[ "${#service_ids[@]}" -eq 0 ]]; then
     echo "No services"
@@ -65,6 +75,16 @@ if [[ "$(echo "${services_json}" | jq 'length')" -eq 0 ]]; then
     echo "No services"
     exit 0
 fi
+
+total_running=$(echo "${services_json}" | jq '[.[] | select(.running != "-") | .running | tonumber] | add // 0')
+total_replicas=$(echo "${services_json}" | jq '[.[] | select(.replicas_display != "-") | .replicas_display | tonumber] | add // 0')
+
+if [[ "${total_running}" -eq "${total_replicas}" ]]; then
+    printf "${GREEN}● running${RESET} (%s/%s)\n" "${total_running}" "${total_replicas}"
+else
+    printf "${RED}● degraded${RESET} (%s/%s)\n" "${total_running}" "${total_replicas}"
+fi
+echo ""
 
 printf '%-8s %-40s %-8s %-8s %-8s %-8s %-22s %-12s %s\n' "PRIORITY" "SERVICE" "RUNNING" "DESIRED" "REPLICAS" "RESTART" "UPDATED" "RELATIVE" "NODES"
 echo "${services_json}" \

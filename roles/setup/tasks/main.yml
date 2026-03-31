@@ -141,6 +141,75 @@
   notify: setup_network_manager_restart
   tags: network_manager
 
+- name: check preconfigured network
+  ansible.builtin.stat:
+    path: /etc/NetworkManager/system-connections/preconfigured.nmconnection
+  changed_when: false
+  register: preconfigured_network_result
+  tags: preconfigured_network
+
+- name: configure preconfigured network reconnect
+  ansible.builtin.copy:
+    dest: /opt/preconfigured-network-reconnect.sh
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+
+      state="$(nmcli -t -f GENERAL.STATE connection show preconfigured 2>/dev/null | cut -d: -f2)"
+
+      if [ "$state" == "activated" ]; then
+        echo "Network activated"
+        exit 0
+      fi
+
+      echo "Activating network"
+      nmcli connection up preconfigured
+    owner: root
+    group: root
+    mode: u=rwx,g=rx,o=rx
+  when: preconfigured_network_result.stat.exists
+  tags: preconfigured_network
+
+- name: configure preconfigured network reconnect service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/preconfigured-network-reconnect.service
+    content: |
+      [Unit]
+      Description=Reconnect preconfigured network
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/opt/preconfigured-network-reconnect.sh
+  notify: setup_preconfigured_network_reconnect_restart
+  when: preconfigured_network_result.stat.exists
+  tags: preconfigured_network
+
+- name: configure preconfigured network reconnect timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/preconfigured-network-reconnect.timer
+    content: |
+      [Unit]
+      Description=Reconnect preconfigured network
+
+      [Timer]
+      OnCalendar=*-*-* *:*:00
+      RandomizedDelaySec=5s
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: setup_preconfigured_network_reconnect_restart
+  when: preconfigured_network_result.stat.exists
+  tags: preconfigured_network
+
+- name: enable preconfigured network reconnect timer
+  ansible.builtin.systemd:
+    name: preconfigured-network-reconnect.timer
+    enabled: true
+  when: preconfigured_network_result.stat.exists
+  tags: preconfigured_network
+
 - name: check cmdline
   ansible.builtin.stat:
     path: /boot/firmware/cmdline.txt

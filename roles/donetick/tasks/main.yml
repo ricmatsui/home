@@ -120,7 +120,7 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=40"
+                - "home.scheduler.priority=50"
                 - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.donetick.rule=Host(`donetick.{{ config.domain }}`)"

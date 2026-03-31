@@ -26,7 +26,6 @@
     state: directory
   loop:
     - /mnt/gluster/traefik/acme
-  tags: traefik_update
 
 - name: traefik forward auth config
   community.general.docker_secret:
@@ -36,7 +35,6 @@
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
   register: traefik_forward_auth_config_secret
-  tags: traefik_update
 
 - name: create traefik forward auth index manifest
   ansible.builtin.shell:
@@ -49,8 +47,8 @@
 
 - name: set image
   ansible.builtin.set_fact:
-    traefik_image_source: traefik:v2.11.35
-    traefik_image_id: sha256:ff7931742cdff6df8410aa1c3419a9e81ed7a983b866b781c4628088cf95110f
+    traefik_image_source: traefik:v3.6.9
+    traefik_image_id: sha256:9004e1cd1e33c5eb0b6ec02bc6cfda61fe9caca36751114b1c9c6662f01b264a
     traefik_forward_auth_image_source: ricmatsui/npawelek-traefik-forward-auth:v2.2.0
     traefik_forward_auth_image_id: sha256:f396d90d80ac468a0ebaef70552301428be204388a03acafd978532ac792bf19
 
@@ -66,10 +64,9 @@
             image: "{{ traefik_image_source }}@{{ traefik_image_id }}"
             command: >
               --api.dashboard=true
-              --providers.docker
-              --providers.docker.swarmMode=true
-              --providers.docker.exposedbydefault=false
-              --providers.docker.network=traefik_traefik
+              --providers.swarm.endpoint=unix:///var/run/docker.sock
+              --providers.swarm.exposedByDefault=false
+              --providers.swarm.network=traefik_traefik
               --entrypoints.web.address=:80
               --entrypoints.web.http.redirections.entrypoint.permanent=false
               --entrypoints.web.http.redirections.entrypoint.scheme=https
@@ -116,10 +113,10 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=1"
+                - "home.scheduler.priority=10"
                 - "traefik.enable=true"
-                - "traefik.http.middlewares.traefik-internal.ipwhitelist.sourcerange=10.3.0.0/24,172.18.0.0/16,192.168.3.0/24,192.168.4.0/24"
-                - "traefik.tcp.middlewares.traefik-internal-tcp.ipwhitelist.sourcerange=10.3.0.0/24,172.18.0.0/16,192.168.3.0/24,192.168.4.0/24"
+                - "traefik.http.middlewares.traefik-internal.ipallowlist.sourcerange=10.3.0.0/24,172.18.0.0/16,192.168.3.0/24,192.168.4.0/24"
+                - "traefik.tcp.middlewares.traefik-internal-tcp.ipallowlist.sourcerange=10.3.0.0/24,172.18.0.0/16,192.168.3.0/24,192.168.4.0/24"
                 - "traefik.http.routers.traefik.rule=Host(`traefik.{{ config.domain }}`)"
                 - "traefik.http.routers.traefik.entrypoints=websecure"
                 - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
@@ -149,7 +146,7 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=1"
+                - "home.scheduler.priority=10"
                 - "traefik.enable=true"
                 - "traefik.http.routers.traefik-forward-auth.rule=Host(`auth.{{ config.domain }}`)"
                 - "traefik.http.routers.traefik-forward-auth.middlewares=traefik-internal,traefik-forward-auth"
@@ -179,7 +176,6 @@
           traefik: {}
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
-  tags: traefik_update
 
 - name: wait for traefik update
   ansible.builtin.pause:

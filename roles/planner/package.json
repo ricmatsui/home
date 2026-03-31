@@ -2,19 +2,27 @@
     "name": "planner",
     "version": "1.0.0",
     "license": "MIT",
+    "type": "module",
     "scripts": {
         "dev": "nodemon",
         "build": "tsc || exit 1",
-        "start": "node --env-file=.env dist/index.js"
+        "test": "tsc && node --test dist/lib.test.js",
+        "start": "node --env-file=.env dist/index.js",
+        "postinstall": "patch-package"
     },
     "dependencies": {
         "@dbos-inc/dbos-sdk": "^4.9.11",
         "@dbos-inc/otel": "^4.9.11",
+        "patch-package": "^8.0.1",
         "simple-git": "^3.32.3"
     },
     "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.0.3",
+        "globals": "^17.4.0",
         "nodemon": "^3.1.14",
         "typescript": "^5.9.3",
+        "typescript-eslint": "^8.56.1",
         "typescript-language-server": "^5.1.3"
     }
 }

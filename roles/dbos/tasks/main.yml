@@ -84,8 +84,7 @@
             image: "{{ dbos_db_backup_image }}"
             environment:
               POSTGRES_HOST: dbos_dbos-db
-              POSTGRES_CLUSTER: 'TRUE'
-              POSTGRES_DB: postgres
+              POSTGRES_DB: planner
               POSTGRES_USER: dbos
               POSTGRES_PASSWORD: "{{ config.dbos.postgres_password }}"
             networks:
@@ -127,5 +126,5 @@
 
       rclone copy --immutable /mnt/gluster/dbos/backups/monthly \
         :s3:/$ARCHIVE_PATH/dbos/backups/monthly \
-        --exclude "postgres-latest.sql.gz" \
+        --exclude "planner-latest.sql.gz" \
         --min-age 1d

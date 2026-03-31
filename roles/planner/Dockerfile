@@ -3,6 +3,7 @@ FROM node:24.14-trixie@sha256:81649592d9833d9220423561fc517b34e932b751873274024c
 WORKDIR /home/node/app
 
 COPY package.json yarn.lock ./
+COPY patches ./patches
 RUN yarn install --frozen-lockfile
 
 COPY src ./src

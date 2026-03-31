@@ -80,7 +80,7 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=40"
+                - "home.scheduler.priority=60"
                 - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.paperless.rule=Host(`paperless.{{ config.domain }}`)"
@@ -111,7 +111,7 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=40"
+                - "home.scheduler.priority=50"
                 - "home.scheduler.restart=true"
               placement:
                 constraints:
