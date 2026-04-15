@@ -24,8 +24,8 @@
   vars:
     fact: actual_image
     name: actual
-    source: actualbudget/actual-server:sha-2ed32c4
-    image_id: sha256:fb5848d8db69130a9b54059e9d07ae76dbfdc200c8ebefb19b7552ce5dbe447f
+    source: actualbudget/actual-server:26.4.0
+    image_id: sha256:b0e732e2c41b3dc468a71548e88ef76d3f0c157fc43d15fa05d14ec1c5747e1e
 
 - name: deploy stack
   community.general.docker_stack:
@@ -37,6 +37,12 @@
         services:
           actual:
             image: "{{ actual_image }}"
+            environment:
+              ACTUAL_OPENID_DISCOVERY_URL: 'https://accounts.google.com/.well-known/openid-configuration'
+              ACTUAL_OPENID_CLIENT_ID: "{{ config.actual.google_client_id }}"
+              ACTUAL_OPENID_CLIENT_SECRET: "{{ config.actual.google_client_secret }}"
+              ACTUAL_OPENID_SERVER_HOSTNAME: "https://actual.{{ config.domain }}"
+              ACTUAL_OPENID_ENFORCE: "true"
             networks:
               - traefik_traefik
             volumes:
