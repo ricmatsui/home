@@ -46,6 +46,11 @@ if [[ "$(echo "${managed_services_json}" | jq 'length')" -eq 0 ]]; then
     exit 0
 fi
 
+if [[ "$(echo "${managed_services_json}" | jq '[.[] | .is_stable] | all')" != "true" ]]; then
+    echo "Not all services are stable"
+    exit 0
+fi
+
 target_service_json="$(
     echo "${managed_services_json}" \
     | jq -c '
@@ -63,11 +68,6 @@ fi
 target_name="$(echo "${target_service_json}" | jq -r '.name')"
 
 echo "Target service: ${target_name}"
-
-if [[ "$(echo "${target_service_json}" | jq -r '.is_stable')" != "true" ]]; then
-    echo "Target service is not stable"
-    exit 0
-fi
 
 target_desired="$(echo "${target_service_json}" | jq -r '.desired')"
 target_replicas="$(echo "${target_service_json}" | jq -r '.replicas')"
@@ -110,11 +110,6 @@ fi
 donor_name="$(echo "${donor_service_json}" | jq -r '.name')"
 
 echo "Donor service: ${donor_name}"
-
-if [[ "$(echo "${donor_service_json}" | jq -r '.is_stable')" != "true" ]]; then
-    echo "Donor service is not stable"
-    exit 0
-fi
 
 donor_desired="$(echo "${donor_service_json}" | jq -r '.desired')"
 donor_new_desired="$((donor_desired - 1))"

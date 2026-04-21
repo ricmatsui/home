@@ -109,7 +109,7 @@
 
 - name: datadog
   gather_facts: false
-  hosts: all
+  hosts: datadog
   roles:
     - role: datadog
       tags: datadog

@@ -88,13 +88,19 @@
         allowed_origins:
           - "*"
 
-- name: mirror image
-  include_tasks: tasks/docker_mirror_image.yml
-  vars:
-    fact: donetick_image
-    name: donetick
-    source: donetick/donetick:v0.1.71
-    image_id: sha256:9f7a796839f382c1be29ee446a9337281c9c483d41b736da67d939949bd429c2
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/donetick"
+    tag: latest
+    path: "{{ role_path }}"
+    rebuild: always
+    platform:
+      - linux/amd64
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
 
 - name: deploy stack
   community.general.docker_stack:
@@ -105,7 +111,7 @@
       - version: '3.8'
         services:
           donetick:
-            image: "{{ donetick_image }}"
+            image: "{{ build_result.image.RepoDigests[0] }}"
             networks:
               - traefik_traefik
             environment:

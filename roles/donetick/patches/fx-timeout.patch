@@ -1,0 +1,11 @@
+--- a/main.go
++++ b/main.go
+@@ -68,6 +68,8 @@ func main() {
+ 	app := fx.New(
+ 		fx.Supply(cfg),
+ 		fx.Supply(logging.DefaultLogger().Desugar()),
++		fx.StartTimeout(60*time.Second),
++		fx.StopTimeout(60*time.Second),
+
+ 		// fx.Provide(config.NewConfig),
+ 		fx.Provide(auth.NewAuthMiddleware),
