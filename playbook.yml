@@ -135,6 +135,13 @@
     - role: scheduler
       tags: scheduler
 
+- name: watchdog
+  gather_facts: false
+  hosts: watchdog
+  roles:
+    - role: watchdog
+      tags: watchdog
+
 - name: deploy
   gather_facts: false
   hosts: manager

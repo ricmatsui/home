@@ -1,0 +1,24 @@
+---
+
+- name: install watchdog
+  ansible.builtin.apt:
+    name:
+      - watchdog
+
+- name: configure watchdog
+  ansible.builtin.blockinfile:
+    path: /etc/watchdog.conf
+    block: |
+      watchdog-device = /dev/watchdog
+      watchdog-timeout = 12
+
+      interval = 5
+      retry-timeout = 120
+
+      ping = {{ watchdog_ip }}
+  notify: watchdog_restart
+
+- name: enable watchdog
+  ansible.builtin.systemd:
+    name: watchdog
+    enabled: true

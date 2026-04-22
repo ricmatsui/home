@@ -1,0 +1,16 @@
+---
+
+# Stop then start due to watchdog limitation on restarting
+
+- name: stop watchdog
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: watchdog
+    state: stopped
+  listen: watchdog_restart
+
+- name: start watchdog
+  ansible.builtin.systemd:
+    name: watchdog
+    state: started
+  listen: watchdog_restart
