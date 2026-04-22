@@ -6,13 +6,14 @@
     "scripts": {
         "dev": "nodemon",
         "build": "tsc || exit 1",
-        "test": "tsc && node --test dist/lib.test.js",
+        "test": "tsc && TZ=UTC node --test dist/lib.test.js",
         "start": "node --env-file=.env dist/index.js",
         "postinstall": "patch-package"
     },
     "dependencies": {
         "@dbos-inc/dbos-sdk": "^4.9.11",
         "@dbos-inc/otel": "^4.9.11",
+        "chrono-node": "^2.9.0",
         "patch-package": "^8.0.1",
         "simple-git": "^3.32.3"
     },

@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { simpleGit } from 'simple-git';
+import * as chrono from 'chrono-node';
 import { Status, TodoItem, Section, Action } from './types.js';
 
 function requireEnv(name: string): string {
@@ -15,26 +16,56 @@ const env = {
     get DOMAIN() { return requireEnv('DOMAIN'); },
 };
 
-export function resolveNextDate(mmdd: string, referenceDate: Date): string {
-    const [mm, dd] = mmdd.split('-').map(Number);
-    const refYear = referenceDate.getUTCFullYear();
-    const refMonth = referenceDate.getUTCMonth() + 1;
-    const refDay = referenceDate.getUTCDate();
+const ACTION_PREFIX = '-> ';
 
-    let year = refYear;
-    if (mm < refMonth || (mm === refMonth && dd <= refDay)) {
-        year++;
-    }
+const MONTH_NAMES = [
+    'january', 'february', 'march', 'april', 'may', 'june',
+    'july', 'august', 'september', 'october', 'november', 'december',
+];
 
-    return formatDateStr(new Date(year, mm - 1, dd));
+const MMDD_PATTERN = /^\d{2}-\d{2}$/;
+
+function preprocessActionInput(input: string): string {
+    const lower = input.toLowerCase().trim();
+
+    // "next week" → "sunday" (with forwardDate, gives the nearest upcoming Sunday)
+    if (lower === 'next week') return 'sunday';
+
+    // Bare month name → "{month} 1st"
+    if (MONTH_NAMES.includes(lower)) return `${lower} 1st`;
+
+    // "Move to MM-DD" → "MM/DD"
+    const moveToMatch = input.match(/^Move to (\d{2}-\d{2})$/i);
+    if (moveToMatch) return moveToMatch[1].replace('-', '/');
+
+    // Bare "MM-DD" → "MM/DD" (chrono doesn't parse MM-DD but does parse MM/DD)
+    if (MMDD_PATTERN.test(input.trim())) return input.trim().replace('-', '/');
+
+    return input;
 }
 
-const ACTION_PATTERN = /^-> Move to (\d{2}-\d{2})$/;
+export function parseAction(
+    text: string,
+    referenceDate: Date,
+): { kind: 'moveTo'; targetDate: string } | null {
+    if (!text.startsWith(ACTION_PREFIX)) return null;
 
-function parseAction(text: string): { kind: 'moveTo'; mmdd: string } | null {
-    const match = text.match(ACTION_PATTERN);
-    if (!match) return null;
-    return { kind: 'moveTo', mmdd: match[1] };
+    const input = text.slice(ACTION_PREFIX.length).trim();
+    if (!input) return null;
+
+    // Normalize referenceDate to local noon to avoid UTC-offset skew with chrono
+    const localNoon = new Date(
+        referenceDate.getUTCFullYear(),
+        referenceDate.getUTCMonth(),
+        referenceDate.getUTCDate(),
+        12, 0, 0,
+    );
+
+    const preprocessed = preprocessActionInput(input);
+    const parsed = chrono.parseDate(preprocessed, localNoon, { forwardDate: true });
+    if (!parsed) return null;
+
+    return { kind: 'moveTo', targetDate: formatDateStr(parsed) };
 }
 
 function cloneAncestorChain(ancestors: TodoItem[], leafChildren: TodoItem[]): TodoItem {
@@ -65,11 +96,11 @@ function extractActionsFromItem(
     const path = [...ancestors, item];
 
     for (const child of item.children) {
-        const parsed = parseAction(child.text);
+        const parsed = parseAction(child.text, referenceDate);
         if (parsed) {
-            const targetDate = resolveNextDate(parsed.mmdd, referenceDate);
             const cloned = cloneAncestorChain(path, []);
-            actions.push({ kind: 'addItem', targetDate, sectionName, item: cloned });
+            actions.push({ kind: 'addItem', targetDate: parsed.targetDate, sectionName, item: cloned });
+            child.text = `${child.text} => ${parsed.targetDate}`;
             child.status = 'completed';
             item.status = 'completed';
         } else {
@@ -265,6 +296,13 @@ function serializeItem(item: TodoItem, depth: number): string {
         result += serializeItem(child, depth + 1);
     }
     return result;
+}
+
+export function sortSectionItems(sections: Section[]): Section[] {
+    return sections.map(section => ({
+        ...section,
+        items: [...section.items].sort((a, b) => (a.status === 'started' ? 0 : 1) - (b.status === 'started' ? 0 : 1)),
+    }));
 }
 
 export function serializeSections(sections: Section[]): string {

@@ -2,7 +2,7 @@ import { DBOS, WorkflowQueue } from '@dbos-inc/dbos-sdk';
 import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
-import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions } from './lib.js';
+import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems } from './lib.js';
 
 const { PLANNER_DEBUG } = process.env;
 
@@ -102,7 +102,7 @@ const wikiFunction = async (nextDate: Date) => {
 
     await DBOS.runStep(async () => {
         if (!mergedNextData) return;
-        await writeDayFile(nextDayFilePath, mergedNextData);
+        await writeDayFile(nextDayFilePath, sortSectionItems(mergedNextData));
     });
 
     await DBOS.runStep(async () => {
@@ -138,7 +138,7 @@ const wikiFunction = async (nextDate: Date) => {
                 targetSections.push({ name: action.sectionName, items: [action.item] });
             }
 
-            await writeDayFile(targetPath, targetSections);
+            await writeDayFile(targetPath, sortSectionItems(targetSections));
         });
     }
 
