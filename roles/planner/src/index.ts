@@ -39,7 +39,7 @@ const wikiFunction = async (nextDate: Date) => {
             return { processedSections: null as Section[] | null, actions: [] as Action[] };
         }
 
-        const result = extractActions(sections, nextDate);
+        const result = extractActions(sections, date);
         return { processedSections: result.sections, actions: result.actions };
     });
 
@@ -133,7 +133,7 @@ const wikiFunction = async (nextDate: Date) => {
 
             const existingSection = targetSections.find(s => s.name === action.sectionName);
             if (existingSection) {
-                existingSection.items.push(action.item);
+                existingSection.items.unshift(action.item);
             } else {
                 targetSections.push({ name: action.sectionName, items: [action.item] });
             }

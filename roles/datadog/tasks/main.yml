@@ -77,6 +77,26 @@
         log_file: /run/log/datadog/process-agent.log
   notify: datadog_restart
 
+- name: install gluster mount check
+  ansible.builtin.template:
+    src: custom_gluster_mount.py
+    dest: /etc/datadog-agent/checks.d/custom_gluster_mount.py
+    owner: root
+    group: root
+  when: inventory_hostname in groups.get('gluster_client', [])
+  notify: datadog_restart
+  tags: datadog_checks
+
+- name: configure gluster mount check
+  ansible.builtin.template:
+    src: custom_gluster_mount.yaml
+    dest: /etc/datadog-agent/conf.d/custom_gluster_mount.yaml
+    owner: root
+    group: root
+  when: inventory_hostname in groups.get('gluster_client', [])
+  notify: datadog_restart
+  tags: datadog_checks
+
 - name: configure checks
   ansible.builtin.template:
     src: "{{ item.src }}"

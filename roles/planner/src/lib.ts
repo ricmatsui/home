@@ -34,10 +34,6 @@ function preprocessActionInput(input: string): string {
     // Bare month name → "{month} 1st"
     if (MONTH_NAMES.includes(lower)) return `${lower} 1st`;
 
-    // "Move to MM-DD" → "MM/DD"
-    const moveToMatch = input.match(/^Move to (\d{2}-\d{2})$/i);
-    if (moveToMatch) return moveToMatch[1].replace('-', '/');
-
     // Bare "MM-DD" → "MM/DD" (chrono doesn't parse MM-DD but does parse MM/DD)
     if (MMDD_PATTERN.test(input.trim())) return input.trim().replace('-', '/');
 
@@ -53,17 +49,19 @@ export function parseAction(
     const input = text.slice(ACTION_PREFIX.length).trim();
     if (!input) return null;
 
-    // Normalize referenceDate to local noon to avoid UTC-offset skew with chrono
-    const localNoon = new Date(
-        referenceDate.getUTCFullYear(),
-        referenceDate.getUTCMonth(),
-        referenceDate.getUTCDate(),
-        12, 0, 0,
-    );
-
     const preprocessed = preprocessActionInput(input);
-    const parsed = chrono.parseDate(preprocessed, localNoon, { forwardDate: true });
-    if (!parsed) return null;
+    const results = chrono.parse(preprocessed, referenceDate, { forwardDate: true });
+    if (!results.length) return null;
+
+    const parsed = results[0].start.date();
+
+    // Weekday-only reference that resolved to the same day → advance to next week
+    if (results[0].start.isCertain('weekday') && !results[0].start.isCertain('day') &&
+        parsed.getFullYear() === referenceDate.getFullYear() &&
+        parsed.getMonth() === referenceDate.getMonth() &&
+        parsed.getDate() === referenceDate.getDate()) {
+        parsed.setDate(parsed.getDate() + 7);
+    }
 
     return { kind: 'moveTo', targetDate: formatDateStr(parsed) };
 }
@@ -91,37 +89,63 @@ function extractActionsFromItem(
     ancestors: TodoItem[],
     sectionName: string,
     referenceDate: Date,
-    actions: Action[],
-): void {
+): Action[] {
     const path = [...ancestors, item];
+    const actions: Action[] = [];
 
-    for (const child of item.children) {
-        const parsed = parseAction(child.text, referenceDate);
-        if (parsed) {
-            const cloned = cloneAncestorChain(path, []);
-            actions.push({ kind: 'addItem', targetDate: parsed.targetDate, sectionName, item: cloned });
-            child.text = `${child.text} => ${parsed.targetDate}`;
+    const parsed = item.children.map(c => parseAction(c.text, referenceDate));
+    const siblings = item.children.filter((_, i) => !parsed[i]).map(s => ({ ...s, children: [...s.children] }));
+
+    for (let i = 0; i < item.children.length; i++) {
+        const child = item.children[i];
+        if (parsed[i]) {
+            const cloned = cloneAncestorChain(path, siblings);
+            actions.push({ kind: 'addItem', targetDate: parsed[i]!.targetDate, sectionName, item: cloned });
+            child.text = `${child.text} => ${parsed[i]!.targetDate}`;
             child.status = 'completed';
             item.status = 'completed';
         } else {
-            extractActionsFromItem(child, path, sectionName, referenceDate, actions);
+            actions.push(...extractActionsFromItem(child, path, sectionName, referenceDate));
         }
     }
+
+    if (parsed.some(Boolean)) {
+        item.children = item.children.filter((_, i) => parsed[i]);
+    }
+
+    return actions;
+}
+
+function earliestTargetDate(actions: Action[]): string {
+    return actions.reduce((min, a) => a.targetDate < min ? a.targetDate : min, actions[0].targetDate);
 }
 
 export function extractActions(
     sections: Section[],
     referenceDate: Date,
 ): { sections: Section[]; actions: Action[] } {
-    const actions: Action[] = [];
+    const allActions: Action[] = [];
 
     for (const section of sections) {
+        const actionsByItem = new Map<TodoItem, Action[]>();
+
         for (const item of section.items) {
-            extractActionsFromItem(item, [], section.name, referenceDate, actions);
+            const itemActions = extractActionsFromItem(item, [], section.name, referenceDate);
+            if (itemActions.length > 0) {
+                actionsByItem.set(item, itemActions);
+                allActions.push(...itemActions);
+            }
+        }
+
+        if (actionsByItem.size > 0) {
+            const unmoved = section.items.filter(i => !actionsByItem.has(i));
+            const moved = section.items.filter(i => actionsByItem.has(i));
+            moved.sort((a, b) => earliestTargetDate(actionsByItem.get(a)!).localeCompare(earliestTargetDate(actionsByItem.get(b)!)));
+            section.items = [...unmoved, ...moved];
         }
     }
 
-    return { sections, actions };
+    return { sections, actions: allActions };
 }
 
 export async function unlockWikiIfPossible(): Promise<void> {
