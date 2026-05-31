@@ -1,0 +1,25 @@
+instances:
+{% for check in datadog_http_checks | default([]) %}
+  - name: {{ check.name }}
+    url: {{ check.url }}
+    timeout: {{ check.timeout | default(5) }}
+    min_collection_interval: {{ check.min_collection_interval | default(30) }}
+{% if check.http_response_status_code is defined %}
+    http_response_status_code: {{ check.http_response_status_code | to_json }}
+{% endif %}
+{% if check.headers is defined %}
+    headers:
+{% for k, v in check.headers.items() %}
+      {{ k }}: {{ v | to_json }}
+{% endfor %}
+{% endif %}
+{% if check.content_match is defined %}
+    content_match: {{ check.content_match | to_json }}
+{% endif %}
+{% if check.tags is defined %}
+    tags:
+{% for tag in check.tags %}
+      - {{ tag }}
+{% endfor %}
+{% endif %}
+{% endfor %}

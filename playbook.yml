@@ -135,6 +135,13 @@
     - role: scheduler
       tags: scheduler
 
+- name: backup
+  gather_facts: false
+  hosts: pi
+  roles:
+    - role: backup
+      tags: backup
+
 - name: watchdog
   gather_facts: false
   hosts: watchdog
@@ -207,3 +214,6 @@
 
     - role: vpn_ui
       tags: vpn_ui
+
+    - role: impression
+      tags: impression

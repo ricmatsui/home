@@ -110,6 +110,8 @@
       dest: glusterfs.d
     - src: ping.yaml
       dest: ping.d
+    - src: http_check.yaml
+      dest: http_check.d
     - src: process.yaml
       dest: process.d
     - src: system_swap.yaml
@@ -123,6 +125,7 @@
   when:
     - item.src != 'glusterfs.yaml' or datadog_glusterfs_check_enabled
     - item.src != 'ping.yaml' or datadog_ping_hosts|length > 0
+    - item.src != 'http_check.yaml' or (datadog_http_checks | default([]))|length > 0
     - item.src != 'process.yaml' or datadog_process_checks|length > 0
   notify: datadog_restart
   tags: datadog_checks

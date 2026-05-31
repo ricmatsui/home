@@ -2,37 +2,73 @@
 set -Exeuo pipefail
 
 LABEL="com.docker.swarm.service.name=traefik_traefik"
+TICK_SECS=300
 
 until ip addr show dev "$INTERFACE" | grep -q "inet "; do
-    echo "Waiting for interface...";
-    sleep 1;
+    echo "Waiting for interface..."
+    sleep 1
 done
 
-handle_host() {
-    echo "Switching to host"
-    systemctl stop wg-quick@vpn-peer
-    if [[ -z "$(ip addr show dev "$INTERFACE" to "$INGRESS_IP")" ]]; then
-        ip addr add "$INGRESS_IP/24" dev "$INTERFACE"
+ensure_up() {
+    local iface=$1
+    if systemctl is-active --quiet "wg-quick@$iface"; then
+        return 0
     fi
-    systemctl start wg-quick@vpn-host
-    echo "Switched to host"
+    echo "Starting wg-quick@$iface"
+    if ip link show dev "$iface" &>/dev/null; then
+        echo "Removing stale $iface interface"
+        ip link delete dev "$iface"
+    fi
+    systemctl reset-failed "wg-quick@$iface" 2>/dev/null || true
+    systemctl start "wg-quick@$iface"
+}
+
+ensure_down() {
+    local iface=$1
+    if systemctl is-active --quiet "wg-quick@$iface"; then
+        echo "Stopping wg-quick@$iface"
+        systemctl stop "wg-quick@$iface" || true
+    fi
+    if ip link show dev "$iface" &>/dev/null; then
+        echo "Removing stale $iface interface"
+        ip link delete dev "$iface"
+    fi
+    systemctl reset-failed "wg-quick@$iface" 2>/dev/null || true
+}
+
+ensure_address_present() {
+    if [[ -n "$(ip addr show dev "$INTERFACE" to "$INGRESS_IP")" ]]; then
+        return 0
+    fi
+    echo "Adding $INGRESS_IP to $INTERFACE"
+    ip addr add "$INGRESS_IP/24" dev "$INTERFACE"
+}
+
+ensure_address_absent() {
+    if [[ -z "$(ip addr show dev "$INTERFACE" to "$INGRESS_IP")" ]]; then
+        return 0
+    fi
+    echo "Removing $INGRESS_IP from $INTERFACE"
+    ip addr del "$INGRESS_IP/24" dev "$INTERFACE"
+}
+
+handle_host() {
+    ensure_down vpn-peer
+    ensure_address_present
+    ensure_up vpn-host
 }
 
 handle_peer() {
-    echo "Switching to peer"
-    systemctl stop wg-quick@vpn-host
-    if [[ -n "$(ip addr show dev "$INTERFACE" to "$INGRESS_IP")" ]]; then
-        ip addr del "$INGRESS_IP/24" dev "$INTERFACE"
-    fi
-    systemctl start wg-quick@vpn-peer
-    echo "Switched to peer"
+    ensure_down vpn-host
+    ensure_address_absent
+    ensure_up vpn-peer
 }
 
 trap handle_peer ERR EXIT
 
 get_state() {
-    local ids=$(docker ps -q --filter "label=$LABEL")
-
+    local ids
+    ids=$(docker ps -q --filter "label=$LABEL")
     if [[ -n "$ids" ]]; then
         echo "host"
     else
@@ -40,37 +76,26 @@ get_state() {
     fi
 }
 
-last_state=""
-
-apply_state() {
-    local new_state="$1"
-
-    if [[ "$new_state" == "$last_state" ]]; then
-        return 0
-    fi
-
-    case "$new_state" in
-        host)
-            handle_host
-            ;;
-        peer)
-            handle_peer
-            ;;
+apply_current_state() {
+    case "$(get_state)" in
+        host) handle_host ;;
+        peer) handle_peer ;;
     esac
-
-    last_state="$new_state"
 }
 
 if ! command -v docker; then
-    apply_state "peer"
+    handle_peer
     sleep infinity
 fi
 
-apply_state "$(get_state)"
+coproc DOCKER_EVENTS { docker events --filter "label=$LABEL"; }
 
-docker events --filter "label=$LABEL" | while read -r _; do
-    apply_state "$(get_state)"
+while true; do
+    apply_current_state
+    rc=0
+    read -r -t "$TICK_SECS" -u "${DOCKER_EVENTS[0]}" _ || rc=$?
+    if (( rc > 0 && rc <= 128 )); then
+        echo "docker events stream ended"
+        exit 1
+    fi
 done
-
-echo "Docker events stream ended"
-exit 1

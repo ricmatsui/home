@@ -1,0 +1,29 @@
+---
+
+- name: create backup mount script
+  ansible.builtin.template:
+      dest: /opt/backup-mount.sh
+      src: backup-mount.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=r,o=r
+
+- name: install backup mount script
+  ansible.builtin.file:
+    src: /opt/backup-mount.sh
+    dest: /usr/local/bin/backup-mount.sh
+    state: link
+
+- name: create backup unmount script
+  ansible.builtin.template:
+      dest: /opt/backup-unmount.sh
+      src: backup-unmount.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=r,o=r
+
+- name: install backup unmount script
+  ansible.builtin.file:
+    src: /opt/backup-unmount.sh
+    dest: /usr/local/bin/backup-unmount.sh
+    state: link

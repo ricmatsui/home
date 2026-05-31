@@ -1,0 +1,68 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "impression.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/impression-proxy"
+    tag: latest
+    path: "{{ role_path }}/files"
+    rebuild: always
+    platform:
+      - linux/amd64
+      - linux/arm64/v8
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: impression-proxy
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          impression-proxy:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            environment:
+              IMPRESSION_HOST: "{{ config.impression.dns_name }}"
+            networks:
+              - traefik_traefik
+            logging:
+              driver: none
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=40"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.impression.rule=Host(`impression.{{ config.domain }}`)"
+                - "traefik.http.routers.impression.middlewares=traefik-internal"
+                - "traefik.http.routers.impression.entrypoints=websecure"
+                - "traefik.http.routers.impression.tls.certresolver=letsencrypt"
+                - "traefik.http.services.impression.loadbalancer.server.port=80"
+              resources:
+                limits:
+                  cpus: '0.15'
+                  memory: 10M
+              restart_policy:
+                delay: 30s
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
