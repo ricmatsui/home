@@ -40,6 +40,8 @@
         max_refresh: 1440h
       server:
         port: 2021
+        serve_swagger: true
+        public_host: "https://donetick.{{ config.domain }}"
         read_timeout: 10s
         write_timeout: 10s
         rate_period: 60s

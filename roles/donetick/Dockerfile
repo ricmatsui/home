@@ -1,7 +1,7 @@
 FROM node:20-alpine AS frontend
 
-# donetick/frontend v0.1.71 dev
-ARG DONETICK_FRONTEND_COMMIT=d8d7b6a7660b2e2cf40f318b400e466bc2edc964
+# donetick/frontend develop, closest after backend v0.1.75 (2026-04-20)
+ARG DONETICK_FRONTEND_COMMIT=ca7d71eed419f41b02226006f1e632728b995822
 
 RUN apk --no-cache add git
 
@@ -16,8 +16,8 @@ RUN npm run build-selfhosted
 
 FROM golang:1.24-alpine AS builder
 
-# donetick/donetick v0.1.71
-ARG DONETICK_COMMIT=9ebd53b1cd39b73250a897696dc9e987c2ea93aa
+# donetick/donetick v0.1.75
+ARG DONETICK_COMMIT=eb5c9be4c2abcf3ccdb26f889b10fa44f798e172
 
 RUN apk --no-cache add git
 

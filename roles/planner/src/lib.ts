@@ -1,8 +1,15 @@
 import fs from 'fs';
 import path from 'path';
-import { simpleGit } from 'simple-git';
+import { simpleGit, SimpleGit, PushResult } from 'simple-git';
 import * as chrono from 'chrono-node';
+import { StatsD } from 'hot-shots';
 import { Status, TodoItem, Section, Action } from './types.js';
+
+const dogstatsd = new StatsD({
+    prefix: 'planner.',
+    protocol: 'uds',
+    path: '/opt/datadog-agent/run/dogstatsd.sock',
+});
 
 function requireEnv(name: string): string {
     const value = process.env[name];
@@ -497,9 +504,18 @@ export function findDayFilePath(todoFile: TodoFileInfo, dateStr: string): string
     return path.resolve(env.WIKI_PATH, `${match[1]}.md`);
 }
 
+async function countCommitsPushed(git: SimpleGit, result: PushResult): Promise<number> {
+    const hash = result.update?.hash;
+    if (!hash) return 0;
+    const out = await git.raw(['rev-list', '--count', `${hash.from}..${hash.to}`]);
+    return parseInt(out.trim(), 10) || 0;
+}
+
 export async function pushWiki(): Promise<void> {
     console.log('Pushing wiki');
     const git = simpleGit({ baseDir: path.resolve(env.WIKI_PATH) });
-    await git.push(env.WIKI_REMOTE, 'main');
-    console.log('Pushed wiki');
+    const result = await git.push(env.WIKI_REMOTE, 'main');
+    const commitsPushed = await countCommitsPushed(git, result);
+    dogstatsd.increment('wiki.commits_pushed', commitsPushed, ['repo:wiki']);
+    console.log('Pushed wiki', { commitsPushed });
 }

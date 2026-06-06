@@ -28,6 +28,7 @@
               - dbos_dbos
             volumes:
               - /mnt/gluster/resilio-sync/sync/Wiki:/wiki
+              - /opt/datadog-agent/run:/opt/datadog-agent/run
             environment:
               DBOS_SYSTEM_DATABASE_URL: "{{ config.planner.dbos_system_database_url }}"
               WIKI_PATH: /wiki

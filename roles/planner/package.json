@@ -14,6 +14,7 @@
         "@dbos-inc/dbos-sdk": "^4.9.11",
         "@dbos-inc/otel": "^4.9.11",
         "chrono-node": "^2.9.0",
+        "hot-shots": "^11.3.0",
         "patch-package": "^8.0.1",
         "simple-git": "^3.32.3"
     },

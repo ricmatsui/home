@@ -53,8 +53,8 @@
   loop:
     - fact: temporal_server_image
       name: temporal-server
-      source: temporalio/auto-setup:1.27.2
-      image_id: sha256:b44cbfeb43dbeae42db113b44fb8414c3452f05643b3d6b1592f955277d73526
+      source: temporalio/auto-setup:1.29.6.1
+      image_id: sha256:1263120feed69d82e4ca23b8ca6f1d702c3029fe70714e382966d0192318eab6
 
     - fact: temporal_db_image
       name: temporal-db
@@ -68,8 +68,8 @@
 
     - fact: temporal_ui_image
       name: temporal-ui
-      source: temporalio/ui:2.37.2
-      image_id: sha256:3d7b36849d7ca5245f59f6ab558bebbd6b83aa1518f4505e97927419360d1f25
+      source: temporalio/ui:2.51.0
+      image_id: sha256:5c72329a014fb247ef66d051dd45b3a5c251d06f82709a852e364f0fd8b69a04
 
 - name: deploy stack
   community.general.docker_stack:
