@@ -107,7 +107,7 @@ const wikiFunction = async (nextDate: Date) => {
 
     await DBOS.runStep(async () => {
         if (!lastData || !dayFilePath) return;
-        await writeDayFile(dayFilePath, lastData);
+        await writeDayFile(dayFilePath, sortSectionItems(lastData));
     });
 
     await DBOS.runStep(async () => {

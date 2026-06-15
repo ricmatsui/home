@@ -329,10 +329,18 @@ function serializeItem(item: TodoItem, depth: number): string {
     return result;
 }
 
+const STATUS_SORT_ORDER: Record<Status, number> = {
+    completed: 0,
+    note: 1,
+    started: 2,
+    incomplete: 3,
+    rejected: 4,
+};
+
 export function sortSectionItems(sections: Section[]): Section[] {
     return sections.map(section => ({
         ...section,
-        items: [...section.items].sort((a, b) => (a.status === 'started' ? 0 : 1) - (b.status === 'started' ? 0 : 1)),
+        items: [...section.items].sort((a, b) => STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status]),
     }));
 }
 

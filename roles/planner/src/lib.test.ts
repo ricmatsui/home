@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, extractActions } from './lib.js';
+import { parseAction, extractActions, sortSectionItems } from './lib.js';
 import { Section } from './types.js';
 
 describe('parseAction', () => {
@@ -616,5 +616,89 @@ describe('extractActions', () => {
             }],
             actions: [],
         });
+    });
+});
+
+describe('sortSectionItems', () => {
+    it('orders items by status: completed, note, started, incomplete, rejected', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [
+                { status: 'rejected', text: 'r', children: [] },
+                { status: 'note', text: 'n', children: [] },
+                { status: 'incomplete', text: 'i', children: [] },
+                { status: 'started', text: 's', children: [] },
+                { status: 'completed', text: 'c', children: [] },
+            ],
+        }];
+
+        assert.deepEqual(sortSectionItems(sections), [{
+            name: 'Work',
+            items: [
+                { status: 'completed', text: 'c', children: [] },
+                { status: 'note', text: 'n', children: [] },
+                { status: 'started', text: 's', children: [] },
+                { status: 'incomplete', text: 'i', children: [] },
+                { status: 'rejected', text: 'r', children: [] },
+            ],
+        }]);
+    });
+
+    it('keeps relative order of items with the same status (stable)', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [
+                { status: 'incomplete', text: 'i1', children: [] },
+                { status: 'started', text: 's1', children: [] },
+                { status: 'incomplete', text: 'i2', children: [] },
+                { status: 'started', text: 's2', children: [] },
+            ],
+        }];
+
+        assert.deepEqual(sortSectionItems(sections), [{
+            name: 'Work',
+            items: [
+                { status: 'started', text: 's1', children: [] },
+                { status: 'started', text: 's2', children: [] },
+                { status: 'incomplete', text: 'i1', children: [] },
+                { status: 'incomplete', text: 'i2', children: [] },
+            ],
+        }]);
+    });
+
+    it('sorts items within each section independently', () => {
+        const sections: Section[] = [
+            {
+                name: 'A',
+                items: [
+                    { status: 'rejected', text: 'a-r', children: [] },
+                    { status: 'completed', text: 'a-c', children: [] },
+                ],
+            },
+            {
+                name: 'B',
+                items: [
+                    { status: 'started', text: 'b-s', children: [] },
+                    { status: 'note', text: 'b-n', children: [] },
+                ],
+            },
+        ];
+
+        assert.deepEqual(sortSectionItems(sections), [
+            {
+                name: 'A',
+                items: [
+                    { status: 'completed', text: 'a-c', children: [] },
+                    { status: 'rejected', text: 'a-r', children: [] },
+                ],
+            },
+            {
+                name: 'B',
+                items: [
+                    { status: 'note', text: 'b-n', children: [] },
+                    { status: 'started', text: 'b-s', children: [] },
+                ],
+            },
+        ]);
     });
 });
