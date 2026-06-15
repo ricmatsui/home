@@ -200,6 +200,9 @@
     - role: temporal
       tags: temporal
 
+    - role: vikunja
+      tags: vikunja
+
     - role: dbos
       tags: dbos
 

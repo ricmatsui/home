@@ -22,6 +22,7 @@
 - Temporal UI
 - Traefik
 - Vaultwarden
+- Vikunja
 - Wireguard
 - Wireguard UI
 - Wireless AP

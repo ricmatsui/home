@@ -1,0 +1,187 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "vikunja.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create db and backup directories
+  ansible.builtin.file:
+    path: "/mnt/gluster/vikunja/{{ item }}"
+    owner: 999
+    group: pi
+    state: directory
+  loop:
+    - db
+    - backups
+
+- name: create files directory
+  ansible.builtin.file:
+    path: /mnt/gluster/vikunja/files
+    owner: 1000
+    group: 1000
+    state: directory
+
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: "{{ item.fact }}"
+    name: "{{ item.name }}"
+    source: "{{ item.source }}"
+    image_id: "{{ item.image_id }}"
+  loop:
+    - fact: vikunja_image
+      name: vikunja
+      source: vikunja/vikunja:2.3.0
+      image_id: sha256:f6b80393c1998cd5cd0dc38d24762c59ab4c10000a6f1032ef5b554e262cab93
+
+    - fact: vikunja_db_image
+      name: vikunja-db
+      source: postgres:16.8
+      image_id: sha256:5779f428edb411216d6960f2721974d7e71e124e3c41a3e625e47a9072949ed6
+
+    - fact: vikunja_db_backup_image
+      name: vikunja-db-backup
+      source: prodrigestivill/postgres-backup-local:16
+      image_id: sha256:a0103fbce0c48ccc7693ddbb2a2bfa733048db845354f635efef9e4566de185d
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: vikunja
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          vikunja:
+            image: "{{ vikunja_image }}"
+            environment:
+              VIKUNJA_DATABASE_TYPE: postgres
+              VIKUNJA_DATABASE_HOST: vikunja_vikunja-db
+              VIKUNJA_DATABASE_USER: vikunja
+              VIKUNJA_DATABASE_PASSWORD: "{{ config.vikunja.postgres_password }}"
+              VIKUNJA_DATABASE_DATABASE: vikunja
+              VIKUNJA_SERVICE_PUBLICURL: "https://vikunja.{{ config.domain }}"
+              VIKUNJA_SERVICE_SECRET: "{{ config.vikunja.service_secret }}"
+              VIKUNJA_SERVICE_TIMEZONE: America/Los_Angeles
+              VIKUNJA_SERVICE_ENABLEREGISTRATION: "false"
+              VIKUNJA_SERVICE_JWTTTL: "2592000"
+              VIKUNJA_AUTH_LOCAL_ENABLED: "false"
+              VIKUNJA_AUTH_OPENID_ENABLED: "true"
+              VIKUNJA_AUTH_OPENID_PROVIDERS_GOOGLE_NAME: Google
+              VIKUNJA_AUTH_OPENID_PROVIDERS_GOOGLE_AUTHURL: https://accounts.google.com
+              VIKUNJA_AUTH_OPENID_PROVIDERS_GOOGLE_CLIENTID: "{{ config.vikunja.google_client_id }}"
+              VIKUNJA_AUTH_OPENID_PROVIDERS_GOOGLE_CLIENTSECRET: "{{ config.vikunja.google_client_secret }}"
+              TZ: America/Los_Angeles
+            networks:
+              - vikunja
+              - traefik_traefik
+            volumes:
+              - /mnt/gluster/vikunja/files:/app/vikunja/files
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.vikunja.rule=Host(`vikunja.{{ config.domain }}`)"
+                - "traefik.http.routers.vikunja.middlewares=traefik-internal"
+                - "traefik.http.routers.vikunja.entrypoints=websecure"
+                - "traefik.http.routers.vikunja.tls.certresolver=letsencrypt"
+                - "traefik.http.services.vikunja.loadbalancer.server.port=3456"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 300M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+
+          vikunja-db:
+            image: "{{ vikunja_db_image }}"
+            environment:
+              POSTGRES_USER: vikunja
+              POSTGRES_PASSWORD: "{{ config.vikunja.postgres_password }}"
+            networks:
+              - vikunja
+            volumes:
+              - /mnt/gluster/vikunja/db:/var/lib/postgresql/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 200M
+              restart_policy:
+                delay: 20s
+              update_config:
+                order: stop-first
+
+          vikunja-db-backup:
+            image: "{{ vikunja_db_backup_image }}"
+            environment:
+              POSTGRES_HOST: vikunja_vikunja-db
+              POSTGRES_DB: vikunja
+              POSTGRES_USER: vikunja
+              POSTGRES_PASSWORD: "{{ config.vikunja.postgres_password }}"
+            networks:
+              - vikunja
+            volumes:
+              - /mnt/gluster/vikunja/backups:/backups
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 100M
+              restart_policy:
+                delay: 60s
+              update_config:
+                order: stop-first
+
+        networks:
+          vikunja: {}
+          traefik_traefik:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/vikunja.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy --immutable /mnt/gluster/vikunja/backups/monthly \
+        :s3:/$ARCHIVE_PATH/vikunja/backups/monthly \
+        --exclude "vikunja-latest.sql.gz" \
+        --min-age 1d
+
+      rclone copy --immutable /mnt/gluster/vikunja/files \
+        :s3:/$ARCHIVE_PATH/vikunja/files
