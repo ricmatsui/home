@@ -5,6 +5,14 @@
     name:
       - libglib2.0-dev
 
+- name: install poetry
+  ansible.builtin.shell:
+    cmd: >
+      curl -sSL https://install.python-poetry.org
+      | python -
+    creates: /home/pi/.local/bin/poetry
+  become_user: pi
+
 - name: create directory
   ansible.builtin.file:
     path: /home/pi/light-puck

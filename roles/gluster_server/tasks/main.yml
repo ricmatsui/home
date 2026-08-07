@@ -93,3 +93,52 @@
     - scrub
   notify: gluster_server_logging_restart
   tags: gluster_logging
+
+- name: create gluster recover script
+  ansible.builtin.copy:
+    dest: /opt/gluster-recover.sh
+    src: gluster-recover.sh
+    owner: root
+    group: root
+    mode: u=rwx,g=rx,o=rx
+  notify: gluster_recover_reload
+  tags: gluster_recover
+
+- name: configure gluster recover service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-recover.service
+    content: |
+      [Unit]
+      Description=Gluster Volume Recovery
+      After=glusterd.service
+      Requires=glusterd.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/opt/gluster-recover.sh
+  notify: gluster_recover_reload
+  tags: gluster_recover
+
+- name: configure gluster recover timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-recover.timer
+    content: |
+      [Unit]
+      Description=Gluster Volume Recovery
+
+      [Timer]
+      OnCalendar=*-*-* *:{{ gluster_recover_offset_minutes }}:00
+      RandomizedDelaySec=60s
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  notify: gluster_recover_reload
+  tags: gluster_recover
+
+- name: enable gluster recover timer
+  ansible.builtin.systemd:
+    name: gluster-recover.timer
+    enabled: true
+    state: started
+  tags: gluster_recover

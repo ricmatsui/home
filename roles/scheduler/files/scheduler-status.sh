@@ -76,7 +76,7 @@ if [[ "$(echo "${services_json}" | jq 'length')" -eq 0 ]]; then
     exit 0
 fi
 
-total_running=$(echo "${services_json}" | jq '[.[] | select(.running != "-") | .running | tonumber] | add // 0')
+total_running=$(echo "${services_json}" | jq '[.[] | select(.replicas_display != "-") | [(if .running == "-" then 0 else (.running | tonumber) end), (.replicas_display | tonumber)] | min] | add // 0')
 total_replicas=$(echo "${services_json}" | jq '[.[] | select(.replicas_display != "-") | .replicas_display | tonumber] | add // 0')
 
 if [[ "${total_running}" -eq "${total_replicas}" ]]; then

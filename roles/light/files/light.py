@@ -11,7 +11,7 @@ from threading import Thread
 import logging
 import queue
 
-initialize()
+initialize(statsd_host=os.environ['LIGHT_STATSD_HOST'])
 
 logging.basicConfig()
 

@@ -68,6 +68,7 @@
     path: /etc/datadog-agent/datadog.yaml
     block: |
       dogstatsd_socket: /opt/datadog-agent/run/dogstatsd.sock
+      dogstatsd_non_local_traffic: true
       log_file: /run/log/datadog/agent.log
       logs_enabled: true
       apm_config:

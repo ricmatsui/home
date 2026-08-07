@@ -123,7 +123,7 @@
 
 - name: light
   gather_facts: false
-  hosts: tart
+  hosts: light
   roles:
     - role: light
       tags: light

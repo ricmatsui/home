@@ -11,5 +11,6 @@ ExecStart=/home/pi/.local/bin/poetry run python3 -u light.py
 Environment=LIGHT_IP_ADDRESS={{ config.light.ip_address }}
 Environment=LIGHT_CHILD_ID={{ config.light.child_id }}
 Environment=LIGHT_PUCK_MAC_ADDRESSES={{ config.light.puck_mac_addresses|join(',') }}
+Environment=LIGHT_STATSD_HOST={{ config.light.statsd_host }}
 Restart=on-failure
 RestartSec=5s

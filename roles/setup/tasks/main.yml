@@ -260,6 +260,7 @@
     name:
       - curl
       - jq
+      - kitty-terminfo
       - most
       - vim
       - lsof

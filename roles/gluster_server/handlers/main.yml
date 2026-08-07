@@ -18,3 +18,10 @@
     name: glusterd.service
     state: restarted
   listen: gluster_server_restart
+
+- name: reload gluster recover timer
+  ansible.builtin.systemd:
+    name: gluster-recover.timer
+    daemon_reload: true
+    state: restarted
+  listen: gluster_recover_reload

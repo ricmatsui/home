@@ -68,6 +68,7 @@
               PAPERLESS_OCR_LANGUAGE: eng
               PAPERLESS_REDIS: redis://paperless-redis:6379
               PAPERLESS_CONSUMER_POLLING: 60
+              PAPERLESS_WORKER_TIMEOUT: 10800
               # Escape for Docker Compose templating, escape for Ansible templating
               PAPERLESS_FILENAME_FORMAT: "{{ '{{' }}`{{ '{{' }} added_year {{ '}}' }}/{{ '{{' }} original_name {{ '}}' }}`{{ '}}' }}"
             volumes:
@@ -94,7 +95,7 @@
               resources:
                 limits:
                   cpus: '1.00'
-                  memory: 1000M
+                  memory: 2000M
               restart_policy:
                 delay: 10m
               update_config:

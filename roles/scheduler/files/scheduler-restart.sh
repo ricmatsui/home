@@ -44,7 +44,9 @@ for index in "${!restart_service_names[@]}"; do
     name="${restart_service_names[${index}]}"
     number="$((index + 1))"
     echo "Restarting ${name} (${number}/${restart_service_count})"
-    docker service update --quiet --force "${name}"
+    if ! docker service update --quiet --force "${name}"; then
+        echo "Failed to restart ${name}, continuing"
+    fi
     echo "Sleeping for 300 seconds"
     sleep 300
 done
