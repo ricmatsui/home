@@ -6,3 +6,10 @@
     name: gluster-log@mnt-gluster
     state: restarted
   listen: gluster_client_logging_restart
+
+- name: reload gluster mount recover timer
+  ansible.builtin.systemd:
+    name: gluster-mount-recover.timer
+    daemon_reload: true
+    state: restarted
+  listen: gluster_mount_recover_reload

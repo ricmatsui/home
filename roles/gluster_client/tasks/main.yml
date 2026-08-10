@@ -27,3 +27,50 @@
     daemon_reload: true
   notify: gluster_client_logging_restart
   tags: gluster_logging
+
+- name: create gluster mount recover script
+  ansible.builtin.copy:
+    dest: /opt/gluster-mount-recover.sh
+    src: gluster-mount-recover.sh
+    owner: root
+    group: root
+    mode: u=rwx,g=rx,o=rx
+  notify: gluster_mount_recover_reload
+  tags: gluster_mount_recover
+
+- name: configure gluster mount recover service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-mount-recover.service
+    content: |
+      [Unit]
+      Description=Gluster Mount Recovery
+
+      [Service]
+      Type=oneshot
+      TimeoutStartSec=300
+      ExecStart=/opt/gluster-mount-recover.sh
+  notify: gluster_mount_recover_reload
+  tags: gluster_mount_recover
+
+- name: configure gluster mount recover timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-mount-recover.timer
+    content: |
+      [Unit]
+      Description=Gluster Mount Recovery
+
+      [Timer]
+      OnCalendar=*:0/2
+      RandomizedDelaySec=30s
+
+      [Install]
+      WantedBy=timers.target
+  notify: gluster_mount_recover_reload
+  tags: gluster_mount_recover
+
+- name: enable gluster mount recover timer
+  ansible.builtin.systemd:
+    name: gluster-mount-recover.timer
+    enabled: true
+    state: started
+  tags: gluster_mount_recover
