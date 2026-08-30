@@ -28,7 +28,7 @@ if [[ "$failures" -lt "$FAILURE_THRESHOLD" ]]; then
 fi
 
 echo "Probe failed for $MOUNT_POINT ($failures/$FAILURE_THRESHOLD), remounting"
-umount -l "$MOUNT_POINT" || echo "Lazy unmount reported failure, continuing"
+umount -f -l "$MOUNT_POINT" || echo "Unmount reported failure, continuing"
 sleep 2
 systemctl restart "$MOUNT_UNIT"
 
