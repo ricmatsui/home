@@ -1,2 +1,4 @@
 /node_modules
 /ansible_collections
+/.claude/*.local.json
+/.claude/worktrees

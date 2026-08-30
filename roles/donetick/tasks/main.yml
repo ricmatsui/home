@@ -42,8 +42,8 @@
         port: 2021
         serve_swagger: true
         public_host: "https://donetick.{{ config.domain }}"
-        read_timeout: 10s
-        write_timeout: 10s
+        read_timeout: 30s
+        write_timeout: 30s
         rate_period: 60s
         rate_limit: 300
         cors_allow_origins:
@@ -95,8 +95,8 @@
   vars:
     fact: donetick_image
     name: donetick
-    source: donetick/donetick:v0.1.76
-    image_id: sha256:2f32646ef4e613f44066163646f53c02d6d5b728b31abe47dfd111b3dfd53643
+    source: donetick/donetick:v0.1.79
+    image_id: sha256:a1cc21dd5a37acb5009009f13e5d2529153049361afb0a1cd94bde312382d36a
 
 - name: deploy stack
   community.general.docker_stack:

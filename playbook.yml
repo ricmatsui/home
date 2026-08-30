@@ -191,6 +191,9 @@
     - role: donetick
       tags: donetick
 
+    - role: ticker
+      tags: ticker
+
     - role: paper
       tags: paper
 

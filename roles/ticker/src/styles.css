@@ -1,0 +1,486 @@
+/*
+ * Ticker — a departure board for overdue chores.
+ *
+ * Light mode is a printed station timetable: warm paper, ink, red stamps.
+ * Dark mode is the illuminated board itself: near-black, amber phosphor.
+ *
+ * No webfonts on purpose. This is opened to be used, not admired, and a
+ * blocking font download is the slowest thing on the page.
+ *
+ * The board character comes from case and tracking, not from the typeface.
+ * This was a monospace stack, on the theory that mono reads as a timetable —
+ * but the face that ships with the OS is the most legible thing already on
+ * the device, and being read at arm's length beats looking like a departure
+ * board. Consequence: its digits are proportional, so anything that has to
+ * line up column-wise must ask for tabular-nums (see .row__due).
+ */
+
+:root {
+    color-scheme: light dark;
+
+    --font-display: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+    --paper: #f4efe4;
+    --paper-raised: #fbf8f1;
+    --rule: #ddd3bf;
+    --ink: #1c1a16;
+    --ink-soft: #6b6357;
+    --accent: #a8320f;
+    --accent-ink: #fbf8f1;
+    --danger: #a8320f;
+    --done: #4a7c3f;
+    /*
+     * Its own token rather than --accent, which in light mode is the same red
+     * as --danger: an in-flight row sitting next to a failed one would be
+     * drawn in the colour of the failure. Amber keeps the four button states
+     * on four hues — ink idle, amber working, green done, red failed.
+     */
+    --pending: #c2620d;
+
+    /*
+     * Donetick only really distinguishes P1 (red) from P2 (amber) and leaves
+     * P3/P4 neutral. Four bands are worth telling apart at arm's length, so
+     * these are pushed further apart in hue and lightness than Donetick's
+     * while staying inside the warm board palette.
+     */
+    --p1: #c22d10;
+    --p2: #e07a0a;
+    --p3: #c7a90d;
+    --p4: #8a8377;
+
+    /*
+     * How much of a row's state colour is washed across the row itself. A
+     * percentage rather than a finished colour so pending, done, and error
+     * all mix their own hue at one strength — change the wash here and the
+     * three states stay in step.
+     */
+    --wash: 15%;
+    /* The bottom rule takes the same hue, further up, so a run of rows in
+     * one state fuses into a block instead of reading as separate stripes. */
+    --wash-rule: 45%;
+    /*
+     * And the text, further up again. Full-strength ink on a washed ground
+     * reads as two unrelated things stacked; carrying some of the hue into
+     * the letters settles them onto it. Type can take far more of the hue
+     * than the ground can, because it starts from ink rather than paper.
+     */
+    --tint: 35%;
+
+    /*
+     * Secondary text on a washed row. --ink-soft is tuned against bare paper,
+     * where it clears 5:1 comfortably — but the wash raises the ground under
+     * it and every state row lands below 4.5:1. Pulling it halfway back to
+     * --ink buys that margin back without making it a second heading.
+     */
+    --ink-muted: color-mix(in srgb, var(--ink) 50%, var(--ink-soft));
+
+    --radius: 3px;
+    --gap: 0.85rem;
+    --edge: clamp(0.75rem, 3vw, 1.5rem);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --paper: #0c0d0f;
+        --paper-raised: #16181c;
+        --rule: #24272d;
+        --ink: #f0b323;
+        --ink-soft: #8a8478;
+        --accent: #f0b323;
+        --accent-ink: #0c0d0f;
+        --danger: #ff6b5e;
+        --done: #5fbf6a;
+        /* Orange, not the board amber: --ink is amber here, so reusing it
+         * would leave pending and idle the same colour in dark mode. */
+        --pending: #ff9a2b;
+
+        --p1: #ff6b5e;
+        --p2: #ffa033;
+        --p3: #e8d24a;
+        --p4: #7d776a;
+
+        /* Stronger here than on paper. The same 15% that reads clearly over
+         * #f4efe4 all but vanishes over a near-black board, because there is
+         * so little light in the ground for the mix to shift. */
+        --wash: 22%;
+    }
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background-color: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-display);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.app {
+    max-width: 46rem;
+    margin-inline: auto;
+    padding-inline: var(--edge);
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom));
+}
+
+/* ---- Header ---------------------------------------------------------- */
+
+/*
+ * Sticky because refresh is manual only: on a long list the one control
+ * that updates the board must never scroll out of reach.
+ */
+.header {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap);
+    padding-block: 1rem 0.75rem;
+    padding-top: calc(1rem + env(safe-area-inset-top));
+    background-color: var(--paper);
+    border-bottom: 2px solid var(--ink);
+}
+
+.header__title {
+    margin: 0;
+    font-size: clamp(1.1rem, 0.8rem + 1vw, 1.6rem);
+    font-weight: 700;
+    /*
+     * Every tracked rule below is 0.6× what it was under the monospace board.
+     * A proportional face arrives optically spaced already; the wide tracking
+     * that made mono read as a timetable only pulls these words apart. Case
+     * is now doing the board-character work on its own.
+     */
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+/* The header's controls travel together, tighter than the gap that holds
+ * them off the title, so they read as one cluster rather than three items
+ * spread across the rule. */
+.header__actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/*
+ * One button style for the whole header. Named for the job rather than for
+ * Refresh, which used to be the only one wearing it.
+ */
+.control {
+    min-height: 2.75rem;
+    padding-inline: 1.15rem;
+    border: 2px solid var(--ink);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: clamp(0.8rem, 0.65rem + 0.45vw, 1rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.control:hover:not(:disabled),
+.control:focus-visible {
+    background-color: var(--ink);
+    color: var(--paper);
+}
+
+/*
+ * A toggle that is on fills in — the same inversion hover already uses, made
+ * permanent. Outline reads as "available", solid as "in force", which is the
+ * one thing the board must not leave ambiguous: a filtered list looks exactly
+ * like a short one, and the only clue that chores are being held back is this
+ * button. Ink rather than a colour of its own, because every hue on this board
+ * already means a row state.
+ */
+.control[aria-pressed='true'] {
+    background-color: var(--ink);
+    color: var(--paper);
+}
+
+.control:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/* ---- Banner ---------------------------------------------------------- */
+
+.banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap);
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding: 0.85rem 1rem;
+    border: 2px solid var(--danger);
+    border-radius: var(--radius);
+    color: var(--danger);
+}
+
+.banner__message {
+    margin: 0;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+}
+
+.banner__action {
+    min-height: 2.75rem;
+    padding-inline: 1.15rem;
+    border: 2px solid var(--danger);
+    border-radius: var(--radius);
+    background: var(--danger);
+    color: var(--accent-ink);
+    font-family: inherit;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+/* ---- List ------------------------------------------------------------ */
+
+.list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    min-height: 3.5rem;
+    padding: 0.7rem 0.9rem;
+    border-bottom: 1px solid var(--rule);
+    /*
+     * Always 8px, transparent when no priority is set, so every name in the
+     * list starts on the same vertical line whether or not it has a band.
+     */
+    border-left: 8px solid transparent;
+    transition: background-color 180ms ease, border-color 180ms ease;
+}
+
+.row[data-priority='1'] {
+    border-left-color: var(--p1);
+}
+.row[data-priority='2'] {
+    border-left-color: var(--p2);
+}
+.row[data-priority='3'] {
+    border-left-color: var(--p3);
+}
+.row[data-priority='4'] {
+    border-left-color: var(--p4);
+}
+
+.row__text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    flex: 1;
+    min-width: 0;
+}
+
+/* The colour transitions sit on the elements that own the colour — transition
+ * does not inherit, so declaring it on .row__text would animate nothing. Both
+ * match the 180ms the ground and rule take, so the row changes state as one. */
+.row__name {
+    font-size: clamp(1rem, 0.6rem + 1.2vw, 1.6rem);
+    line-height: 1.25;
+    letter-spacing: 0.01em;
+    overflow-wrap: anywhere;
+    transition: color 180ms ease;
+}
+
+.row__due {
+    color: var(--ink-soft);
+    font-size: clamp(0.75rem, 0.62rem + 0.4vw, 0.95rem);
+    /*
+     * Load-bearing now that the face is proportional: without it the digits
+     * change width as the time counts down and the column jitters on refresh.
+     */
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: color 180ms ease;
+}
+
+/*
+ * Always rendered inline, never a tooltip: the wall tablet has no hover,
+ * so a hidden error message would simply never be seen there.
+ */
+.row__error {
+    margin-top: 0.15rem;
+    color: var(--danger);
+    font-size: clamp(0.75rem, 0.62rem + 0.4vw, 0.9rem);
+    letter-spacing: 0.01em;
+}
+
+/*
+ * An outline box that fills in when the chore is done: empty reads as "still
+ * to do", solid reads as "struck off". 3rem square clears the 44px touch
+ * minimum in every direction, so it is a larger target than the wide, short
+ * button it replaces.
+ */
+.row__action {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 3rem;
+    height: 3rem;
+    padding: 0;
+    /*
+     * Ink rather than accent: in light mode the accent is the same red as
+     * the error styling, and a red tick next to a failed row reads as the
+     * failure rather than as the thing to press. Neutral -> green is the
+     * only colour change on the row, so it is unambiguous.
+     */
+    border: 2px solid var(--ink);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    transition: transform 90ms ease, opacity 120ms ease, background-color 140ms ease,
+        color 140ms ease, border-color 140ms ease;
+}
+
+.row__icon {
+    width: 1.5rem;
+    height: 1.5rem;
+}
+
+.row__action:active:not(:disabled) {
+    transform: scale(0.94);
+}
+
+/*
+ * Pending, done, and error wash the whole row in the same hue as their button,
+ * so the state is legible from across the room rather than only from the 3rem
+ * glyph at the end of it. The button is the control; the wash is the
+ * announcement.
+ *
+ * Each state names its hue once, and the three surfaces that carry it — ground,
+ * rule, text — are written once against --hue rather than three times each.
+ * Adding a state means adding a hue, not another block of near-identical rules.
+ */
+.row[data-status='pending'] {
+    --hue: var(--pending);
+}
+.row[data-status='done'] {
+    --hue: var(--done);
+}
+.row[data-status='error'] {
+    --hue: var(--danger);
+}
+
+.row[data-status='pending'],
+.row[data-status='done'],
+.row[data-status='error'] {
+    background-color: color-mix(in srgb, var(--hue) var(--wash), transparent);
+    border-bottom-color: color-mix(in srgb, var(--hue) var(--wash-rule), var(--rule));
+}
+
+/*
+ * The letters take the hue too, further up than the rule. Ink at full strength
+ * on a coloured ground reads as type sitting on top of a state rather than
+ * type belonging to one, and the contrast it spends doing so is contrast the
+ * name has to spare — every combination below stays above 5:1.
+ */
+.row[data-status='pending'] .row__name,
+.row[data-status='error'] .row__name {
+    color: color-mix(in srgb, var(--hue) var(--tint), var(--ink));
+}
+
+.row[data-status='pending'] .row__due,
+.row[data-status='done'] .row__due,
+.row[data-status='error'] .row__due {
+    color: color-mix(in srgb, var(--hue) var(--tint), var(--ink-muted));
+}
+
+/*
+ * Pending recolours the button in place and swaps the tick for an hourglass.
+ * Not dimmed: a faded control reads as unavailable, which is the opposite of
+ * "something is happening right now". Still no size change — the row must not
+ * resize while a thumb is resting on it.
+ */
+.row[data-status='pending'] .row__action {
+    border-color: var(--pending);
+    color: var(--pending);
+    cursor: default;
+}
+
+/*
+ * The flap has turned. Row keeps its height so the list never reflows.
+ *
+ * A done name recedes by colour, not by fading. This was opacity, which is the
+ * obvious way to say "finished" and the wrong one: at 0.55 the name measured
+ * 3.2:1 against its own wash, so the row you had just cleared was the hardest
+ * one on the board to read. Muted ink plus the hue lands at 5.2:1 and still
+ * sits a clear step behind the live rows around it.
+ */
+.row[data-status='done'] .row__name {
+    color: color-mix(in srgb, var(--hue) var(--tint), var(--ink-muted));
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+/* Filled, not outlined. A solid box is what reads as done from across a room. */
+.row[data-status='done'] .row__action {
+    border-color: var(--done);
+    background: var(--done);
+    color: var(--paper);
+    cursor: default;
+}
+
+/*
+ * The one place the tint runs the other way: this text is already the state
+ * colour, at full saturation, on a ground made of that same colour — the
+ * loudest thing on the board and the least readable of the reds. Pulling ink
+ * into it darkens it away from its own wash, which calms it and takes it from
+ * 4.7:1 to 6.1:1 at the same time.
+ */
+.row[data-status='error'] .row__error {
+    color: color-mix(in srgb, var(--ink) 25%, var(--danger));
+}
+
+/* ---- Empty and loading ----------------------------------------------- */
+
+.empty,
+.loading {
+    margin: 0;
+    padding: 3.5rem 0;
+    color: var(--ink-soft);
+    font-size: clamp(0.95rem, 0.8rem + 0.5vw, 1.2rem);
+    letter-spacing: 0.13em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+/* The board is between flaps. Pulsing marks it as busy rather than empty. */
+.loading {
+    animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* ---- Focus ----------------------------------------------------------- */
+
+:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+}

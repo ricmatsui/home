@@ -1,0 +1,16 @@
+<!--
+  Ticker's mark: the checkmark from the row button, on the dark board.
+
+  Flat on purpose — no gradient, no shadow, no split-flap detail. Earlier
+  drafts had all three and lost the tick entirely below about 40px, which is
+  the size that actually matters on a home screen and in a browser tab.
+
+  The stroke is centred in the canvas by its bounding box, not by its path
+  points: the round caps add half a stroke width on every side, so the raw
+  coordinates are deliberately off-centre.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0c0d0f"/>
+  <path d="M 132 264 L 222 354 L 380 158" fill="none" stroke="#f0b323"
+        stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

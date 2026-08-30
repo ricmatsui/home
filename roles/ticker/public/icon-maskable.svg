@@ -1,0 +1,18 @@
+<!--
+  The same mark, scaled to 0.82, for Android adaptive icons.
+
+  A maskable icon may be cropped to any shape inside a circle of 80% of the
+  canvas, so the tick has to sit well inside that. At full size its bounding
+  box reaches 203px from centre against a 204.8px safe radius — legal by
+  1.8px, which is not a margin. At 0.82 it reaches 167px.
+
+  Kept as a separate file rather than a wrapper around icon.svg so that
+  rasterising either one never depends on resolving an external reference.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#0c0d0f"/>
+  <g transform="translate(256,256) scale(0.82) translate(-256,-256)">
+    <path d="M 132 264 L 222 354 L 380 158" fill="none" stroke="#f0b323"
+          stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

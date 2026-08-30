@@ -20,6 +20,7 @@
 - Sherpa DNS
 - Temporal
 - Temporal UI
+- Ticker
 - Traefik
 - Vaultwarden
 - Vikunja
