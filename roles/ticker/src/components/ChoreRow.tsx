@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { formatDue } from '../lib/chores';
+import { sanitizeDescription } from '../lib/description';
 import type { Chore, RowStatus } from '../types';
 
 type ChoreRowProps = {
@@ -64,6 +66,11 @@ export function ChoreRow({ chore, status, error, now, onComplete }: ChoreRowProp
     const done = status === 'done';
     const pending = status === 'pending';
 
+    const description = useMemo(
+        () => sanitizeDescription(chore.description),
+        [chore.description],
+    );
+
     return (
         <li className="row" data-status={status} data-priority={chore.priority}>
             <div className="row__text">
@@ -91,6 +98,12 @@ export function ChoreRow({ chore, status, error, now, onComplete }: ChoreRowProp
             >
                 {pending ? <HourglassIcon /> : <CheckIcon />}
             </button>
+            {description ? (
+                <div
+                    className="row__description"
+                    dangerouslySetInnerHTML={{ __html: description }}
+                />
+            ) : null}
         </li>
     );
 }

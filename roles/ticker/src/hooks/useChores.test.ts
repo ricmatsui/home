@@ -16,6 +16,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
         isActive: true,
         priority: 0,
         isPrivate: false,
+        description: '',
         ...overrides,
     };
 }

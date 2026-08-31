@@ -14,6 +14,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
         isActive: true,
         priority: 0,
         isPrivate: false,
+        description: '',
         ...overrides,
     };
 }
@@ -349,6 +350,69 @@ describe('App', () => {
             await user.click(screen.getByRole('button', { name: /public/i }));
 
             expect(screen.queryByText('Plants')).not.toBeInTheDocument();
+        });
+    });
+
+    describe('description', () => {
+        it('shows a chore description under the row', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({
+                    name: 'Finances',
+                    description: '<p>Input numbers</p>',
+                }),
+            ]);
+
+            render(<App />);
+
+            expect(
+                await screen.findByText('Input numbers'),
+            ).toBeInTheDocument();
+        });
+
+        it('keeps the list structure of a description written as a list', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({
+                    name: 'Finances',
+                    description: '<ol><li>Input numbers</li><li>Download statements</li></ol>',
+                }),
+            ]);
+
+            const { container } = render(<App />);
+            await screen.findByText('Input numbers');
+
+            const band = container.querySelector('.row__description') as HTMLElement;
+            expect(within(band).getAllByRole('listitem').map((item) => item.textContent)).toEqual([
+                'Input numbers',
+                'Download statements',
+            ]);
+        });
+
+        it('leaves the row alone when the chore has no description', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ name: 'Trash', description: '' })]);
+
+            const { container } = render(<App />);
+            await screen.findByText('Trash');
+
+            expect(container.querySelector('.row__description')).not.toBeInTheDocument();
+        });
+
+        /*
+         * The row is the app's only dangerouslySetInnerHTML, so this is the
+         * test that says the sanitizer is actually wired to it rather than
+         * merely existing and passing its own suite.
+         */
+        it('never puts a script from a description into the page', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({
+                    name: 'Trash',
+                    description: '<p>Bins</p><script>window.pwned = true</script>',
+                }),
+            ]);
+
+            const { container } = render(<App />);
+            await screen.findByText('Bins');
+
+            expect(container.querySelector('script')).not.toBeInTheDocument();
         });
     });
 });

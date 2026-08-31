@@ -250,16 +250,35 @@ body {
 
 /* ---- List ------------------------------------------------------------ */
 
+/*
+ * The bottom content inset: scrollable space past the last row, so arriving at
+ * the end of the board looks like an ending rather than like a list that
+ * happens to stop where the screen does.
+ *
+ * On the list rather than on .app, whose padding applies to every state. Put it
+ * there and "Nothing due" gets a tall empty scroll of its own — which makes
+ * emptiness mean nothing at exactly the moment it needs to mean "that is all".
+ * Here it exists only when there are rows to reach the end of.
+ */
 .list {
     margin: 0;
-    padding: 0;
+    padding: 0 0 8rem;
     list-style: none;
 }
 
+/*
+ * A grid rather than a flex line, so a description can span the full width of
+ * the row — under the Done button as well as under the name. Rows without one
+ * are a single grid line and lay out exactly as the old flex row did.
+ */
 .row {
-    display: flex;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+        'text action'
+        'description description';
     align-items: center;
-    gap: var(--gap);
+    column-gap: var(--gap);
     min-height: 3.5rem;
     padding: 0.7rem 0.9rem;
     border-bottom: 1px solid var(--rule);
@@ -285,10 +304,12 @@ body {
 }
 
 .row__text {
+    grid-area: text;
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
-    flex: 1;
+    /* Load-bearing in a grid track: without it a long unbroken word in a
+     * description or name would widen the 1fr column past the viewport. */
     min-width: 0;
 }
 
@@ -327,6 +348,107 @@ body {
     letter-spacing: 0.01em;
 }
 
+/* ---- Description ------------------------------------------------------ */
+
+/*
+ * Donetick's own notes on the chore, rendered from its editor's HTML.
+ *
+ * Sentence case and left alone otherwise — everything else on the row is set
+ * in tracked uppercase because it is a label, and this is the one thing on the
+ * board that is prose. Setting it like the rest would make it unreadable at
+ * the length some of these run to.
+ *
+ * --ink-muted, not --ink-soft: this sits on washed rows as often as on paper,
+ * and --ink-soft is only tuned against paper (see the token's own note).
+ */
+.row__description {
+    grid-area: description;
+    margin-top: 0.45rem;
+    color: var(--ink-muted);
+    font-size: clamp(0.8rem, 0.68rem + 0.4vw, 1rem);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    /*
+     * A description can hold a table wider than a phone. Scrolling it inside
+     * its own band is the only option that neither truncates the content nor
+     * lets it widen the whole board — a horizontal scrollbar on the page would
+     * move the Done buttons out from under a waiting thumb.
+     */
+    overflow-x: auto;
+    transition: color 180ms ease;
+}
+
+/*
+ * The editor's own block spacing is far looser than a row can afford. Margins
+ * collapse to a single small gap between blocks and nothing at the edges, so
+ * the band sits tight under the name.
+ */
+.row__description > :first-child {
+    margin-top: 0;
+}
+
+.row__description > :last-child {
+    margin-bottom: 0;
+}
+
+.row__description p,
+.row__description ul,
+.row__description ol,
+.row__description table {
+    margin-block: 0.4rem;
+}
+
+.row__description h1,
+.row__description h2,
+.row__description h3 {
+    margin-block: 0.5rem 0.25rem;
+    font-size: 1em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+/* Inside the row rather than hanging off its left edge, where the markers
+ * would sit on top of the priority band. */
+.row__description ul,
+.row__description ol {
+    padding-inline-start: 1.2rem;
+}
+
+.row__description li {
+    margin-block: 0.15rem;
+}
+
+.row__description blockquote {
+    margin-inline: 0;
+    padding-inline-start: 0.7rem;
+    border-inline-start: 2px solid var(--rule);
+}
+
+/*
+ * Ruled rather than plain, because the tables that turn up here are reference
+ * grids and a cell only means anything next to the one it lines up with.
+ */
+.row__description table {
+    border-collapse: collapse;
+}
+
+.row__description td,
+.row__description th {
+    padding: 0.2rem 0.45rem;
+    border: 1px solid var(--rule);
+    font-variant-numeric: tabular-nums;
+    text-align: start;
+    vertical-align: top;
+    overflow-wrap: normal;
+}
+
+.row__description a {
+    color: inherit;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+}
+
 /*
  * An outline box that fills in when the chore is done: empty reads as "still
  * to do", solid reads as "struck off". 3rem square clears the 44px touch
@@ -334,9 +456,9 @@ body {
  * button it replaces.
  */
 .row__action {
+    grid-area: action;
     display: grid;
     place-items: center;
-    flex: none;
     width: 3rem;
     height: 3rem;
     padding: 0;
@@ -404,8 +526,19 @@ body {
 
 .row[data-status='pending'] .row__due,
 .row[data-status='done'] .row__due,
-.row[data-status='error'] .row__due {
+.row[data-status='error'] .row__due,
+.row[data-status='pending'] .row__description,
+.row[data-status='done'] .row__description,
+.row[data-status='error'] .row__description {
     color: color-mix(in srgb, var(--hue) var(--tint), var(--ink-muted));
+}
+
+/* The table rules take the hue too. Left at --rule they would stay the one
+ * neutral thing on an otherwise washed row, and read as a hole in it. */
+.row[data-status='pending'] .row__description :is(td, th),
+.row[data-status='done'] .row__description :is(td, th),
+.row[data-status='error'] .row__description :is(td, th) {
+    border-color: color-mix(in srgb, var(--hue) var(--wash-rule), var(--rule));
 }
 
 /*

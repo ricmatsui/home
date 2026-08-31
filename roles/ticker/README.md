@@ -12,7 +12,8 @@ that UI is more than you want in your hand while walking around the house.
 ## Scope
 
 In scope: list chores overdue or due within the next 24 hours, mark one done,
-refresh manually, hide the chores Donetick marks private.
+refresh manually, hide the chores Donetick marks private, show a chore's
+description underneath it when it has one.
 
 Out of scope, on purpose: undo, creating/editing chores, anything due further
 out, auto-refresh or polling, per-user identity, offline support,
@@ -77,6 +78,7 @@ roles/ticker/
     api/donetick.ts              fetch wrappers + error classification
     lib/chores.ts                filterDue / filterPublic / sortChores /
                                  formatDue (pure)
+    lib/description.ts           allowlist sanitizer for Donetick's Quill HTML
     lib/errors.ts                SessionExpiredError / NetworkError / ApiError
     lib/queue.ts                 serialises completions, one request at a time
     hooks/useChores.ts           chores, per-row state, loading, errors
@@ -248,6 +250,20 @@ has to be measured over its own wash in *both* schemes; the floor is 4.5:1, and
 everything currently on the board sits between 5.15:1 and 9.32:1. The name has
 the most headroom and can afford the most hue, which is why `--tint` can be as
 high as 35% without costing anything that matters.
+
+**The description band is the one place the app renders HTML it did not
+write.** Donetick stores a chore's description as rich markup from its Quill
+editor — paragraphs, bullet lists, and in at least one case an eight-row table
+— so showing it means `dangerouslySetInnerHTML`, the only one in the app.
+Everything that makes that safe is in `lib/description.ts`: an *allowlist* of
+text-bearing tags, every attribute stripped, `<script>`/`<style>` removed
+outright, anything unrecognised unwrapped to its own text, and `href` allowed
+only when it starts `http://` or `https://`. Never pass `chore.description` to
+that prop directly, and keep the allowlist an allowlist — a denylist would let
+whatever Quill emits next through unexamined. Two of its tests are the
+guardrail: one proves a `<script>` in a description never reaches the page, the
+other proves the band is absent rather than empty when a chore has no
+description.
 
 **Meaning that is only visual is missing meaning.** An icon-only button needs
 the chore name in `aria-label` — a screen reader hitting four identical "Done"
