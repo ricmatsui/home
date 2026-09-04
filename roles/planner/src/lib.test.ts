@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, extractActions, sortSectionItems } from './lib.js';
+import { parseAction, extractActions, sortSectionItems, upsertSection, partitionSections } from './lib.js';
 import { Section } from './types.js';
 
 describe('parseAction', () => {
@@ -700,5 +700,88 @@ describe('sortSectionItems', () => {
                 ],
             },
         ]);
+    });
+});
+
+describe('upsertSection', () => {
+    const weather: Section = {
+        name: 'Weather',
+        items: [{ status: 'note', text: 'Overcast - 74°/58°F', children: [] }],
+    };
+
+    function names(sections: Section[]): string[] {
+        return sections.map(s => s.name);
+    }
+
+    it('inserts the section before the anchor section', () => {
+        const sections: Section[] = [
+            { name: 'Other', items: [] },
+            { name: 'Dates', items: [] },
+            { name: 'Work', items: [] },
+        ];
+
+        assert.deepEqual(names(upsertSection(sections, weather, { before: 'Dates' })),
+            ['Other', 'Weather', 'Dates', 'Work']);
+    });
+
+    it('replaces an existing section of the same name rather than duplicating it', () => {
+        const sections: Section[] = [
+            { name: 'Other', items: [] },
+            { name: 'Weather', items: [{ status: 'note', text: 'Stale', children: [] }] },
+            { name: 'Dates', items: [] },
+        ];
+
+        const result = upsertSection(sections, weather, { before: 'Dates' });
+
+        assert.deepEqual(names(result), ['Other', 'Weather', 'Dates']);
+        assert.deepEqual(result[1].items, weather.items);
+    });
+
+    it('puts the section first when the anchor is absent', () => {
+        const sections: Section[] = [
+            { name: 'Other', items: [] },
+            { name: 'Work', items: [] },
+        ];
+
+        assert.deepEqual(names(upsertSection(sections, weather, { before: 'Dates' })),
+            ['Weather', 'Other', 'Work']);
+    });
+
+    it('does not mutate the input sections', () => {
+        const sections: Section[] = [{ name: 'Dates', items: [] }];
+
+        upsertSection(sections, weather, { before: 'Dates' });
+
+        assert.deepEqual(names(sections), ['Dates']);
+    });
+});
+
+describe('partitionSections', () => {
+    it('carries an unfinished item forward and leaves the finished one behind', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [
+                { status: 'completed', text: 'Done', children: [] },
+                { status: 'incomplete', text: 'Todo', children: [] },
+            ],
+        }];
+
+        const { lastData, nextData } = partitionSections(sections);
+
+        assert.deepEqual(lastData[0].items.map(i => i.text), ['Done']);
+        assert.deepEqual(nextData[0].items.map(i => i.text), ['Todo']);
+    });
+
+    it('leaves the Weather section behind instead of carrying it forward', () => {
+        const sections: Section[] = [
+            { name: 'Weather', items: [{ status: 'note', text: 'Overcast - 74°/58°F', children: [] }] },
+            { name: 'Dates', items: [{ status: 'incomplete', text: '03-15 - Wedding', children: [] }] },
+        ];
+
+        const { lastData, nextData } = partitionSections(sections);
+
+        assert.deepEqual(lastData.map(s => s.name), ['Weather', 'Dates']);
+        assert.deepEqual(lastData[0].items.map(i => i.text), ['Overcast - 74°/58°F']);
+        assert.deepEqual(nextData.map(s => s.name), ['Dates']);
     });
 });

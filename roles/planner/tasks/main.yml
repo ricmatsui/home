@@ -35,6 +35,8 @@
               WIKI_REMOTE: "{{ config.planner.wiki_remote }}"
               DOMAIN: "{{ config.domain }}"
               TZ: America/Los_Angeles
+              WEATHER_LATITUDE: "{{ config.planner.weather.latitude }}"
+              WEATHER_LONGITUDE: "{{ config.planner.weather.longitude }}"
             deploy:
               mode: replicated
               replicas: 1

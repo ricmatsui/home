@@ -4,18 +4,14 @@ import { simpleGit, SimpleGit, PushResult } from 'simple-git';
 import * as chrono from 'chrono-node';
 import { StatsD } from 'hot-shots';
 import { Status, TodoItem, Section, Action } from './types.js';
+import { WEATHER_SECTION } from './weather.js';
+import { requireEnv } from './env.js';
 
 const dogstatsd = new StatsD({
     prefix: 'planner.',
     protocol: 'uds',
     path: '/opt/datadog-agent/run/dogstatsd.sock',
 });
-
-function requireEnv(name: string): string {
-    const value = process.env[name];
-    if (!value) throw new Error(`${name} is not set`);
-    return value;
-}
 
 const env = {
     get WIKI_PATH() { return requireEnv('WIKI_PATH'); },
@@ -24,6 +20,9 @@ const env = {
 };
 
 const ACTION_PREFIX = '-> ';
+
+// Regenerated for each new day, so they stay with the day they describe
+const EPHEMERAL_SECTIONS = [WEATHER_SECTION];
 
 const MONTH_NAMES = [
     'january', 'february', 'march', 'april', 'may', 'june',
@@ -434,6 +433,11 @@ export function partitionSections(sections: Section[]): { lastData: Section[]; n
     const nextData: Section[] = [];
 
     for (const section of sections) {
+        if (EPHEMERAL_SECTIONS.includes(section.name)) {
+            lastData.push(section);
+            continue;
+        }
+
         const lastItems: TodoItem[] = [];
         const nextItems: TodoItem[] = [];
 
@@ -526,4 +530,15 @@ export async function pushWiki(): Promise<void> {
     const commitsPushed = await countCommitsPushed(git, result);
     dogstatsd.increment('wiki.commits_pushed', commitsPushed, ['repo:wiki']);
     console.log('Pushed wiki', { commitsPushed });
+}
+
+export function upsertSection(
+    sections: Section[],
+    section: Section,
+    options: { before: string },
+): Section[] {
+    const others = sections.filter(s => s.name !== section.name);
+    const anchor = others.findIndex(s => s.name === options.before);
+    const index = anchor === -1 ? 0 : anchor;
+    return [...others.slice(0, index), section, ...others.slice(index)];
 }

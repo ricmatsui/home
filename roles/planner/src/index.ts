@@ -2,7 +2,8 @@ import { DBOS, WorkflowQueue } from '@dbos-inc/dbos-sdk';
 import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
-import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems } from './lib.js';
+import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection } from './lib.js';
+import { fetchDailyForecast, formatWeatherSection } from './weather.js';
 
 const { PLANNER_DEBUG } = process.env;
 
@@ -100,9 +101,25 @@ const wikiFunction = async (nextDate: Date) => {
         return { mergedNextData: merged };
     });
 
+    const { nextDataWithWeather } = await DBOS.runStep(async () => {
+        try {
+            const daily = await fetchDailyForecast(formatDateStr(nextDate));
+            return {
+                nextDataWithWeather: upsertSection(
+                    mergedNextData,
+                    formatWeatherSection(daily),
+                    { before: 'Dates' },
+                ),
+            };
+        } catch (error) {
+            // A missing forecast is not worth failing the day's planning over
+            console.warn('Skipping weather section', error);
+            return { nextDataWithWeather: mergedNextData };
+        }
+    });
+
     await DBOS.runStep(async () => {
-        if (!mergedNextData) return;
-        await writeDayFile(nextDayFilePath, sortSectionItems(mergedNextData));
+        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithWeather));
     });
 
     await DBOS.runStep(async () => {
