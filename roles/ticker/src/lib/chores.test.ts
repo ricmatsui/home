@@ -1,8 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { dueChores, filterDue, filterPublic, formatDue, sortChores } from './chores';
+import {
+    dueChores,
+    filterDue,
+    filterPublic,
+    formatDue,
+    isDueTomorrow,
+    sortChores,
+} from './chores';
 import type { Chore } from '../types';
 
 const NOW = new Date('2026-08-15T12:00:00Z');
+
+/*
+ * The test script pins TZ to America/Los_Angeles — the same zone the container
+ * runs in — so a local wall time is a fixed instant here. isDueTomorrow is
+ * about local calendar dates rather than UTC ones, so building its fixtures
+ * from local parts is what makes these cases readable.
+ */
+function local(year: number, month: number, day: number, hour = 0): Date {
+    return new Date(year, month - 1, day, hour);
+}
+
+function localIso(year: number, month: number, day: number, hour = 0): string {
+    return local(year, month, day, hour).toISOString();
+}
 
 function chore(overrides: Partial<Chore> = {}): Chore {
     return {
@@ -55,6 +76,70 @@ describe('filterDue', () => {
 
     it('excludes a chore with an unparseable due date', () => {
         const chores = [chore({ nextDueDate: 'not-a-date' })];
+        expect(filterDue(chores, NOW)).toHaveLength(0);
+    });
+
+    /*
+     * Donetick refuses a completion made before nextDueDate minus
+     * completionWindow hours, so a chore inside the 24-hour window can still
+     * be untappable. Showing it offers a Done button that only returns an
+     * error.
+     */
+    it('excludes a chore whose completion window has not opened yet', () => {
+        const chores = [
+            chore({ nextDueDate: '2026-08-16T06:00:00Z', completionWindow: 6 }),
+        ];
+        expect(filterDue(chores, NOW)).toHaveLength(0);
+    });
+
+    it('keeps a chore whose completion window has already opened', () => {
+        const chores = [
+            chore({ nextDueDate: '2026-08-16T06:00:00Z', completionWindow: 24 }),
+        ];
+        expect(filterDue(chores, NOW)).toHaveLength(1);
+    });
+
+    // Donetick rejects only a completion strictly before the window opens, so
+    // the instant it opens the chore is completable.
+    it('keeps a chore at the exact instant its completion window opens', () => {
+        const chores = [
+            chore({ nextDueDate: '2026-08-16T06:00:00Z', completionWindow: 18 }),
+        ];
+        expect(filterDue(chores, NOW)).toHaveLength(1);
+    });
+
+    // 0 is falsy but meaningful: completable from the due time onward, never
+    // before. A truthiness guard would read it as "no window" and let the
+    // not-yet-due case through.
+    it('excludes a not-yet-due chore whose completion window is zero', () => {
+        const chores = [
+            chore({ nextDueDate: '2026-08-15T18:00:00Z', completionWindow: 0 }),
+        ];
+        expect(filterDue(chores, NOW)).toHaveLength(0);
+    });
+
+    it('keeps an overdue chore whose completion window is zero', () => {
+        const chores = [
+            chore({ nextDueDate: '2026-08-14T12:00:00Z', completionWindow: 0 }),
+        ];
+        expect(filterDue(chores, NOW)).toHaveLength(1);
+    });
+
+    // Donetick omits the field entirely on most chores and sends null on some.
+    it('keeps a chore with no completion window', () => {
+        const chores = [chore({ nextDueDate: '2026-08-16T06:00:00Z' })];
+        expect(filterDue(chores, NOW)).toHaveLength(1);
+    });
+
+    it('treats a null completion window as no window', () => {
+        const chores = [
+            chore({ nextDueDate: '2026-08-16T06:00:00Z', completionWindow: null }),
+        ];
+        expect(filterDue(chores, NOW)).toHaveLength(1);
+    });
+
+    it('excludes a chore with a completion window but no due date', () => {
+        const chores = [chore({ nextDueDate: null, completionWindow: 6 })];
         expect(filterDue(chores, NOW)).toHaveLength(0);
     });
 });
@@ -171,5 +256,66 @@ describe('filterPublic', () => {
             chore({ id: 3, isPrivate: false }),
         ];
         expect(filterPublic(chores).map((kept) => kept.id)).toEqual([1, 3]);
+    });
+});
+
+describe('isDueTomorrow', () => {
+    const now = local(2026, 8, 15, 5);
+
+    it('is true for a chore due tomorrow', () => {
+        expect(isDueTomorrow(localIso(2026, 8, 16, 17), now)).toBe(true);
+    });
+
+    it('is true for a chore due just after midnight tomorrow', () => {
+        expect(isDueTomorrow(localIso(2026, 8, 16, 0), now)).toBe(true);
+    });
+
+    it('is false for a chore due later today', () => {
+        expect(isDueTomorrow(localIso(2026, 8, 15, 22), now)).toBe(false);
+    });
+
+    it('is false for a chore that is already overdue', () => {
+        expect(isDueTomorrow(localIso(2026, 8, 14, 12), now)).toBe(false);
+    });
+
+    it('is false for a chore due the day after tomorrow', () => {
+        expect(isDueTomorrow(localIso(2026, 8, 17, 12), now)).toBe(false);
+    });
+
+    /*
+     * The trap this function exists for. 2026-08-15 22:00 local is
+     * 2026-08-16 in UTC, so anything comparing UTC calendar dates calls a
+     * chore due tonight "tomorrow".
+     */
+    it('is false for tonight even though the due date is tomorrow in UTC', () => {
+        const tonight = '2026-08-16T05:00:00Z';
+        expect(new Date(tonight).getUTCDate()).toBe(16);
+        expect(isDueTomorrow(tonight, now)).toBe(false);
+    });
+
+    it('crosses a month boundary', () => {
+        expect(isDueTomorrow(localIso(2026, 9, 1, 12), local(2026, 8, 31, 5))).toBe(true);
+    });
+
+    it('crosses a year boundary', () => {
+        expect(isDueTomorrow(localIso(2027, 1, 1, 12), local(2026, 12, 31, 5))).toBe(true);
+    });
+
+    /*
+     * 2026-03-08 is 23 hours long in this zone. Adding 24 hours to 23:00 the
+     * night before overshoots into the 9th, so "tomorrow" has to be found by
+     * incrementing the calendar day rather than by adding a day of milliseconds.
+     */
+    it('is true across the short spring-forward day', () => {
+        expect(isDueTomorrow(localIso(2026, 3, 8, 12), local(2026, 3, 7, 23))).toBe(true);
+    });
+
+    // 2026-11-01 is 25 hours long, the mirror of the case above.
+    it('is true across the long autumn day', () => {
+        expect(isDueTomorrow(localIso(2026, 11, 1, 23), local(2026, 10, 31, 1))).toBe(true);
+    });
+
+    it('is false for an unparseable due date', () => {
+        expect(isDueTomorrow('not-a-date', now)).toBe(false);
     });
 });

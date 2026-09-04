@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatDue } from '../lib/chores';
+import { formatDue, isDueTomorrow } from '../lib/chores';
 import { sanitizeDescription } from '../lib/description';
 import type { Chore, RowStatus } from '../types';
 
@@ -76,7 +76,16 @@ export function ChoreRow({ chore, status, error, now, onComplete }: ChoreRowProp
             <div className="row__text">
                 <span className="row__name">{chore.name}</span>
                 <span className="row__due">
-                    {chore.nextDueDate ? formatDue(chore.nextDueDate, now) : ''}
+                    {chore.nextDueDate ? (
+                        <>
+                            {isDueTomorrow(chore.nextDueDate, now) ? (
+                                <>
+                                    <span className="row__badge">Tomorrow</span>{' '}
+                                </>
+                            ) : null}
+                            {formatDue(chore.nextDueDate, now)}
+                        </>
+                    ) : null}
                 </span>
                 {error ? <span className="row__error">{error}</span> : null}
             </div>

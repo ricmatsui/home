@@ -12,8 +12,9 @@ that UI is more than you want in your hand while walking around the house.
 ## Scope
 
 In scope: list chores overdue or due within the next 24 hours, mark one done,
-refresh manually, hide the chores Donetick marks private, show a chore's
-description underneath it when it has one.
+refresh manually, hide the chores Donetick marks private, leave out the chores
+Donetick will not accept a completion for yet, mark the ones falling tomorrow
+rather than today, show a chore's description underneath it when it has one.
 
 Out of scope, on purpose: undo, creating/editing chores, anything due further
 out, auto-refresh or polling, per-user identity, offline support,
@@ -26,8 +27,23 @@ three months late. That is deliberate: the board answers "what should I do
 next", not "what is most overdue". Donetick's priority `0` means *unset*, not
 *urgent*, so it sorts last.
 
-The one other filter is the **Public** toggle in the header, which drops the
-chores Donetick marks `isPrivate`. The board gets read by whoever walks past
+Inside that window a chore can still be untappable. A chore may carry a
+`completionWindow`, and Donetick refuses a completion made earlier than
+`nextDueDate` minus that many hours — so without a filter the board offers a
+Done button that can only come back an error. `filterDue` drops those alongside
+the inactive ones. That is not a second axis of filtering but part of what
+"due" means here: this board exists to be tapped, and a row you cannot tap is
+not an answer to "what should I do next".
+
+That filter is deliberately silent — no hidden count, no greyed-out row. It is
+a property of the chore rather than a choice the reader made, so unlike the
+Public toggle it does not change what an empty list means. The inline error
+stays as the backstop, because the browser's clock and Donetick's can disagree;
+the filter removes the ordinary case, it does not replace the check.
+
+The one filter the reader controls is the **Public** toggle in the header,
+which drops the chores Donetick marks `isPrivate`. The board gets read by
+whoever walks past
 it, and that is the whole reason it exists: hand it to someone or hang it in
 the hall without the private chores on show. It filters what has already been
 fetched, so toggling it costs no round trip, and it never changes what a
@@ -76,8 +92,7 @@ roles/ticker/
   public/                        manifest + icons, copied to dist/ by Vite
   src/
     api/donetick.ts              fetch wrappers + error classification
-    lib/chores.ts                filterDue / filterPublic / sortChores /
-                                 formatDue (pure)
+    lib/chores.ts                helpers for chores
     lib/description.ts           allowlist sanitizer for Donetick's Quill HTML
     lib/errors.ts                SessionExpiredError / NetworkError / ApiError
     lib/queue.ts                 serialises completions, one request at a time
@@ -135,6 +150,13 @@ silently, so nothing looks wrong from the browser console — but the redirect
 loses the auth context and the app reports a bogus "session expired". `POST
 /chores/{id}/do` does not redirect. Check any new endpoint against the running
 server, not the swagger page, and pin the exact path with a test.
+
+**`completionWindow` is in hours, and Donetick's own source says otherwise.**
+The field is commented "Number seconds before the chore is due that it can be
+completed" in `internal/chore/model/model.go`, but the handler that enforces it
+computes `NextDueDate.Add(-time.Hour * time.Duration(*CompletionWindow))`. The
+handler is what actually rejects a completion, so hours it is. Reading the
+comment instead would make the filter about 3600× too narrow to ever fire.
 
 **Every request uses `redirect: 'manual'`.** This is not a style choice.
 `traefik-forward-auth` answers an expired session with `307 →
@@ -265,6 +287,28 @@ guardrail: one proves a `<script>` in a description never reaches the page, the
 other proves the band is absent rather than empty when a chore has no
 description.
 
+**The tomorrow badge is a shape, not a colour.** Everything listed is overdue
+or due inside 24 hours, so "in 20 hours" is the one reading a glance cannot
+resolve — whether it lands tonight or tomorrow depends on the time of day, and
+11pm and 1am are four hours and one date apart. But a chore that turns out to
+be tomorrow's is the *least* urgent thing on the board, so the mark has to read
+as **distinct, not urgent**: a hue would claim priority it does not have, and
+every hue in the palette already means a priority band or a row state anyway.
+An outline is a shape nothing else on the row has, which is enough to catch a
+scanning eye without shouting. It is drawn in `currentColor` inside `.row__due`
+rather than beside it, so the pending/done/error rules that tint the due line
+carry the outline and the letters together — no per-state rule of its own, and
+no contrast to re-measure over each wash.
+
+**A badge changes the height of the line it sits in.** `.row__due` carries an
+explicit `line-height: 1.5` so a row with a badge is exactly as tall as a row
+without; left to the default, a badged row is 4px taller and the due column
+stops being a straight line down the list. The ratio is not free to be tuned by
+eye: the due line's `font-size` is a `clamp()` while the badge's border stays
+1px, so the number has to clear the *smallest* type size, not the largest —
+1.45 is enough at 0.95rem and fails at 0.75rem. Change `.row__badge`'s
+`line-height` or padding and this has to be rechecked at both ends.
+
 **Meaning that is only visual is missing meaning.** An icon-only button needs
 the chore name in `aria-label` — a screen reader hitting four identical "Done"
 buttons has nothing to go on — and a state shown by swapping a glyph needs
@@ -369,7 +413,16 @@ Vitest + React Testing Library, `fetch` stubbed. Written test-first, and worth
 keeping that way — the trailing-slash trap and every loading-state confusion
 above was pinned by a failing test before the fix.
 
-Three tests are guardrails rather than feature coverage, so do not "clean them
+**The test script pins `TZ=America/Los_Angeles`**, matching the container's own
+`TZ`. `isDueTomorrow` turns on a *local* calendar date, so without a pinned zone
+its tests would pass or fail depending on the developer's machine — and the two
+DST cases, which are the whole reason it steps the calendar day instead of
+adding 24 hours, would be vacuous anywhere without DST. Its fixtures are built
+from local parts (`new Date(y, m - 1, d, h)`) rather than UTC strings for the
+same reason. This does not weaken the rule above: `now` is still injected, and
+no test reads the wall clock.
+
+Four tests are guardrails rather than feature coverage, so do not "clean them
 up":
 
 - `useChores > does not fetch on its own after mounting` fails loudly if
@@ -379,6 +432,10 @@ up":
 - `web app manifest > ships every icon it references, at the size it claims`
   reads the PNG headers off disk. Nothing else in the suite touches static
   files, so without it an icon can go missing and every test still passes.
+- `isDueTomorrow > is false for tonight even though the due date is tomorrow in
+  UTC` is the whole point of the function. `2026-08-15 22:00` local is
+  `2026-08-16` in UTC, so any implementation that compares UTC calendar dates
+  badges a chore due tonight as tomorrow's, and passes every other case.
 
 ## Reference
 

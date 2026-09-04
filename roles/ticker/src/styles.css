@@ -334,7 +334,17 @@ body {
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.05em;
     text-transform: uppercase;
+    line-height: 1.5;
     transition: color 180ms ease;
+}
+
+.row__badge {
+    display: inline-block;
+    margin-inline-end: 0.15em;
+    padding: 0.05em 0.5em;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    line-height: 1.2;
 }
 
 /*

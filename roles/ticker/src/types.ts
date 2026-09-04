@@ -10,6 +10,9 @@ export type Chore = {
     // Rich HTML from Donetick's Quill editor, not plain text. Always a string
     // — empty when unset, never null. See lib/description.ts.
     description: string;
+    // Hours before nextDueDate that the chore becomes completable. Donetick
+    // omits the field entirely when unset, so it is absent on most chores.
+    completionWindow?: number | null;
 };
 
 export type RowStatus = 'idle' | 'pending' | 'done' | 'error';

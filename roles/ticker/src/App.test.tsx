@@ -73,6 +73,41 @@ describe('App', () => {
         expect(screen.queryByText('Change Filter')).not.toBeInTheDocument();
     });
 
+    /*
+     * Donetick answers a completion made before the window opens with a 400,
+     * so listing one offers a Done button that can only fail.
+     */
+    it('leaves out a chore whose completion window has not opened yet', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([
+            chore({
+                id: 1,
+                name: 'Weekly Finances',
+                nextDueDate: new Date(Date.now() + 5 * HOUR).toISOString(),
+                completionWindow: 1,
+            }),
+        ]);
+
+        render(<App />);
+
+        expect(await screen.findByText(/nothing due/i)).toBeInTheDocument();
+        expect(screen.queryByText('Weekly Finances')).not.toBeInTheDocument();
+    });
+
+    it('lists a chore whose completion window is already open', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([
+            chore({
+                id: 1,
+                name: 'Weekly Finances',
+                nextDueDate: new Date(Date.now() + 5 * HOUR).toISOString(),
+                completionWindow: 24,
+            }),
+        ]);
+
+        render(<App />);
+
+        expect(await screen.findByText('Weekly Finances')).toBeInTheDocument();
+    });
+
     // The button is a bare checkmark, so its accessible name is the only
     // thing telling a screen reader which of four identical buttons this is.
     it('names the completion button after its chore', async () => {
