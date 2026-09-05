@@ -12,14 +12,31 @@ that UI is more than you want in your hand while walking around the house.
 ## Scope
 
 In scope: list chores overdue or due within the next 24 hours, mark one done,
-credit that completion to a member of the household, refresh manually, hide the
-chores Donetick marks private, leave out the chores Donetick will not accept a
-completion for yet, mark the ones falling tomorrow rather than today, show a
-chore's description underneath it when it has one.
+credit that completion to a member of the household, refresh manually, reload
+once the local date turns over, hide the chores Donetick marks private, leave
+out the chores Donetick will not accept a completion for yet, mark the ones
+falling tomorrow rather than today, show a chore's description underneath it
+when it has one.
 
 Out of scope, on purpose: undo, creating/editing chores, anything due further
-out, auto-refresh or polling, signing in as a person, offline support,
+out, polling for chores, signing in as a person, offline support,
 notifications.
+
+The one automatic refresh is the day rollover, and it is not polling. Every
+time claim on the board — the rolling window, "in 3 hours", the tomorrow badge
+— is measured from the moment of the last fetch, and this app runs on a wall
+tablet nobody reloads, so left alone overnight it keeps rendering yesterday's
+board: chores badged *tomorrow* that are now due today, a window anchored to a
+date that has passed. `useDayRollover` watches the local calendar date on a
+ten-minute tick and reloads the page the first time it changes.
+
+It watches the date rather than scheduling a timer for midnight. A single long
+timer is wrong as soon as the tablet sleeps, the clock steps, or DST makes the
+day 23 or 25 hours long, and it is wrong silently. Comparing dates is
+self-correcting: whatever happened overnight, the first tick that reports a
+different date fires, and a date that has not changed never does. It reloads
+rather than re-fetching because the rollover is also the only chance a tablet
+nobody touches gets to pick up a deployed build.
 
 The 24-hour window is rolling, and it is the whole time filter — no "due soon"
 section, no grouping. Priority is the primary sort key and due time only breaks
@@ -132,6 +149,7 @@ roles/ticker/
     lib/queue.ts                 serialises completions, one request at a time
     hooks/useChores.ts           chores, per-row state, loading, errors
     hooks/usePublicOnly.ts       the Public toggle, persisted to localStorage
+    hooks/useDayRollover.ts      reloads the page when the local date changes
     components/                  ChoreList, ChoreRow, RefreshButton,
                                  PublicFilterButton, ErrorBanner
     App.tsx                      composition only

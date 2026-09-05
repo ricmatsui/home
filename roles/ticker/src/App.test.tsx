@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import * as api from './api/donetick';
 import { ApiError, NetworkError, SessionExpiredError } from './lib/errors';
+import { TICK_MS } from './hooks/useDayRollover';
 import type { Chore, User } from './types';
 
 function chore(overrides: Partial<Chore> = {}): Chore {
@@ -23,10 +24,17 @@ beforeEach(() => {
     localStorage.clear();
     vi.spyOn(api, 'getChores').mockResolvedValue([]);
     vi.spyOn(api, 'completeChore').mockResolvedValue(undefined);
+    // jsdom refuses to navigate, so the real reload only logs a "not
+    // implemented" error. Replacing it makes the call observable instead.
+    Object.defineProperty(window, 'location', {
+        configurable: true,
+        value: { ...window.location, reload: vi.fn() },
+    });
 });
 
 afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
 });
 
 const HOUR = 60 * 60 * 1000;
@@ -486,6 +494,41 @@ describe('App', () => {
             await screen.findByText('Bins');
 
             expect(container.querySelector('script')).not.toBeInTheDocument();
+        });
+    });
+    /*
+     * The board is a wall tablet nobody reloads, so everything it says about
+     * time — the 24-hour window, "in 3 hours", the tomorrow badge — is frozen
+     * at the last fetch. The rollover is what un-freezes it.
+     */
+    describe('day rollover', () => {
+        it('reloads the page when the local date turns over', async () => {
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+            vi.setSystemTime(new Date('2026-09-05T23:55:00'));
+
+            render(<App />);
+            await screen.findByText('Nothing due');
+
+            // Ten minutes from 23:55 lands at 00:05 the next day.
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(TICK_MS);
+            });
+
+            expect(window.location.reload).toHaveBeenCalledTimes(1);
+        });
+
+        it('leaves the page alone while the date holds', async () => {
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+            vi.setSystemTime(new Date('2026-09-05T09:00:00'));
+
+            render(<App />);
+            await screen.findByText('Nothing due');
+
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(TICK_MS * 6);
+            });
+
+            expect(window.location.reload).not.toHaveBeenCalled();
         });
     });
 });

@@ -3,6 +3,7 @@ import { ErrorBanner } from './components/ErrorBanner';
 import { PublicFilterButton } from './components/PublicFilterButton';
 import { RefreshButton } from './components/RefreshButton';
 import { useChores } from './hooks/useChores';
+import { useDayRollover } from './hooks/useDayRollover';
 import { usePublicOnly } from './hooks/usePublicOnly';
 import { filterPublic } from './lib/chores';
 import { USERS } from './lib/users';
@@ -28,6 +29,8 @@ export default function App({ users = USERS }: AppProps = {}) {
         complete,
     } = useChores();
     const { publicOnly, togglePublicOnly } = usePublicOnly();
+
+    useDayRollover(() => window.location.reload());
 
     // Applied here rather than in useChores: the filter changes what is on
     // screen, not what was fetched, so toggling it must not cost a round trip.
