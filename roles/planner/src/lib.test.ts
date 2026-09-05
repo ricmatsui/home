@@ -772,6 +772,19 @@ describe('partitionSections', () => {
         assert.deepEqual(nextData[0].items.map(i => i.text), ['Todo']);
     });
 
+    it('leaves the Journal section behind instead of carrying it forward', () => {
+        const sections: Section[] = [
+            { name: 'Work', items: [{ status: 'incomplete', text: 'Todo', children: [] }] },
+            { name: 'Journal', items: [{ status: 'note', text: 'Highlight: shipped it', children: [] }] },
+        ];
+
+        const { lastData, nextData } = partitionSections(sections);
+
+        assert.deepEqual(lastData.map(s => s.name), ['Work', 'Journal']);
+        assert.deepEqual(lastData[1].items.map(i => i.text), ['Highlight: shipped it']);
+        assert.deepEqual(nextData.map(s => s.name), ['Work']);
+    });
+
     it('leaves the Weather section behind instead of carrying it forward', () => {
         const sections: Section[] = [
             { name: 'Weather', items: [{ status: 'note', text: 'Overcast - 74°/58°F', children: [] }] },

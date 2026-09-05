@@ -4,6 +4,7 @@ import readline from 'readline';
 import { Section, Action } from './types.js';
 import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection } from './lib.js';
 import { fetchDailyForecast, formatWeatherSection } from './weather.js';
+import { seedJournalSection } from './journal.js';
 
 const { PLANNER_DEBUG } = process.env;
 
@@ -118,8 +119,12 @@ const wikiFunction = async (nextDate: Date) => {
         }
     });
 
+    const { nextDataWithJournal } = await DBOS.runStep(async () => {
+        return { nextDataWithJournal: seedJournalSection(nextDataWithWeather) };
+    });
+
     await DBOS.runStep(async () => {
-        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithWeather));
+        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithJournal));
     });
 
     await DBOS.runStep(async () => {

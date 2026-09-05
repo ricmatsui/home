@@ -5,6 +5,7 @@ import * as chrono from 'chrono-node';
 import { StatsD } from 'hot-shots';
 import { Status, TodoItem, Section, Action } from './types.js';
 import { WEATHER_SECTION } from './weather.js';
+import { JOURNAL_SECTION } from './journal.js';
 import { requireEnv } from './env.js';
 
 const dogstatsd = new StatsD({
@@ -22,7 +23,7 @@ const env = {
 const ACTION_PREFIX = '-> ';
 
 // Regenerated for each new day, so they stay with the day they describe
-const EPHEMERAL_SECTIONS = [WEATHER_SECTION];
+const EPHEMERAL_SECTIONS = [WEATHER_SECTION, JOURNAL_SECTION];
 
 const MONTH_NAMES = [
     'january', 'february', 'march', 'april', 'may', 'june',
