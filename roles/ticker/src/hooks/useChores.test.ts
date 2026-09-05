@@ -55,7 +55,58 @@ describe('useChores', () => {
         });
 
         expect(result.current.rowStatus[5]).toBe('done');
-        expect(api.completeChore).toHaveBeenCalledWith(5);
+        expect(api.completeChore).toHaveBeenCalledWith({ id: 5, completedBy: undefined });
+    });
+
+    it('holds the row open for a choice before anything is sent', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 5 })]);
+
+        const { result } = renderHook(() => useChores(clock));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+            result.current.beginComplete(5);
+        });
+
+        expect(result.current.rowStatus[5]).toBe('picking');
+        expect(api.completeChore).not.toHaveBeenCalled();
+    });
+
+    it('credits the completion to the person it was told about', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 5 })]);
+
+        const { result } = renderHook(() => useChores(clock));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => {
+            await result.current.complete(5, { name: 'John', id: 2 });
+        });
+
+        expect(api.completeChore).toHaveBeenCalledWith({ id: 5, completedBy: 2 });
+    });
+
+    /*
+     * There is no undo and no cancel, so the finished row is the only chance
+     * to see that the right person was credited. Recorded only once the API
+     * has said yes — a name against a completion that failed would be a
+     * confirmation of something that did not happen.
+     */
+    it('remembers who completed a row, but not before the API agrees', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 5 })]);
+        vi.mocked(api.completeChore).mockRejectedValueOnce(new ApiError(400, 'Nope'));
+
+        const { result } = renderHook(() => useChores(clock));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => {
+            await result.current.complete(5, { name: 'John', id: 2 });
+        });
+        expect(result.current.rowCompletedBy[5]).toBeUndefined();
+
+        await act(async () => {
+            await result.current.complete(5, { name: 'John', id: 2 });
+        });
+        expect(result.current.rowCompletedBy[5]).toEqual({ name: 'John', id: 2 });
     });
 
     it('keeps the completed chore in the list', async () => {
@@ -129,6 +180,7 @@ describe('useChores', () => {
         });
 
         expect(result.current.rowStatus).toEqual({});
+        expect(result.current.rowCompletedBy).toEqual({});
         expect(result.current.chores.map((c) => c.id)).toEqual([9]);
     });
 

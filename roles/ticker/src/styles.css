@@ -497,6 +497,74 @@ body {
 }
 
 /*
+ * Hidden but still occupying its grid cell, which is the whole point: the row
+ * keeps the height its name and due line give it, so opening the picker moves
+ * nothing below it. display:none or unmounting the text would shrink the row.
+ */
+.row__text[aria-hidden='true'] {
+    visibility: hidden;
+}
+
+/*
+ * The picker takes the whole first row of the grid — both the text column and
+ * the button column — for as long as the row is asking who did it. Two people
+ * crammed into the 3rem the Done button occupies would be a pair of targets
+ * too small to hit at arm's length, which is the only distance this board is
+ * ever read from.
+ *
+ * 3rem tall because that is exactly what .row__action is: the button is what
+ * sets the height of an ordinary row, so a picker the same height leaves the
+ * row the same size and nothing below it moves while a thumb is travelling
+ * towards the second tap.
+ */
+.row__picker {
+    grid-row: 1;
+    grid-column: 1 / -1;
+    display: flex;
+    gap: var(--gap);
+}
+
+/*
+ * The only state on the board with no hue of its own, and the only one that
+ * carries words. Every colour here already means something — four priority
+ * bands, amber working, green done, red failed — so a fifth would have to be
+ * read against all of them, and the buttons say "Jane" and "John" in
+ * plain letters anyway. Outline is the same "available" that .control uses in
+ * the header, in --ink for the same reason: it is the one mark on this board
+ * that claims nothing.
+ */
+.row__person {
+    flex: 1;
+    min-height: 3rem;
+    padding-inline: 0.5rem;
+    border: 2px solid var(--ink);
+    border-radius: var(--radius);
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: clamp(0.8rem, 0.65rem + 0.45vw, 1rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    /* A long name shortens rather than widening its button past the row. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: transform 90ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.row__person:hover,
+.row__person:focus-visible {
+    background-color: var(--ink);
+    color: var(--paper);
+}
+
+.row__person:active {
+    transform: scale(0.98);
+}
+
+/*
  * Pending, done, and error wash the whole row in the same hue as their button,
  * so the state is legible from across the room rather than only from the 3rem
  * glyph at the end of it. The button is the control; the wash is the
@@ -515,6 +583,12 @@ body {
 .row[data-status='error'] {
     --hue: var(--danger);
 }
+
+/*
+ * 'picking' is deliberately absent from the list above. It is the one state
+ * whose control is labelled, so it needs no colour to say what it is — see
+ * .row__person.
+ */
 
 .row[data-status='pending'],
 .row[data-status='done'],

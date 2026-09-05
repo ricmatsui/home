@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import * as api from './api/donetick';
 import { ApiError, NetworkError, SessionExpiredError } from './lib/errors';
-import type { Chore } from './types';
+import type { Chore, User } from './types';
 
 function chore(overrides: Partial<Chore> = {}): Chore {
     return {
@@ -30,6 +30,9 @@ afterEach(() => {
 });
 
 const HOUR = 60 * 60 * 1000;
+
+const JANE: User = { name: 'Jane', id: 1 };
+const JOHN: User = { name: 'John', id: 2 };
 
 describe('App', () => {
     it('lists overdue chores with how late they are', async () => {
@@ -130,7 +133,7 @@ describe('App', () => {
         await user.click(within(item).getByRole('button', { name: /done/i }));
 
         await waitFor(() => expect(item).toHaveAttribute('data-status', 'done'));
-        expect(api.completeChore).toHaveBeenCalledWith(42);
+        expect(api.completeChore).toHaveBeenCalledWith({ id: 42, completedBy: undefined });
     });
 
     it('does not cross the row off until the API resolves', async () => {
@@ -198,6 +201,41 @@ describe('App', () => {
             await within(item).findByText('Chore is out of completion window'),
         ).toBeInTheDocument();
         expect(within(item).getByRole('button', { name: /done/i })).toBeEnabled();
+    });
+
+    describe('crediting a person', () => {
+        it('asks who did it, and sends nothing until it is told', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App users={[JANE, JOHN]} />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+
+            expect(screen.getByRole('button', { name: 'Mark Trash done as John' })).toBeInTheDocument();
+            expect(api.completeChore).not.toHaveBeenCalled();
+        });
+
+        it('completes as the person tapped and says so on the finished row', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App users={[JANE, JOHN]} />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+            await userEvent.click(
+                screen.getByRole('button', { name: 'Mark Trash done as John' }),
+            );
+
+            // 2 is John's Donetick userId, which is what completedBy takes.
+            await waitFor(() => expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: 2 }));
+            expect(await screen.findByText('Done · John')).toBeInTheDocument();
+        });
+
+        it('leaves the board a single tap when nobody is configured', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+
+            await waitFor(() => expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: undefined }));
+        });
     });
 
     it('shows a session-expired banner with a reload action', async () => {

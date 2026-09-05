@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { completeChore, getChores } from '../api/donetick';
 import { dueChores } from '../lib/chores';
 import { SessionExpiredError } from '../lib/errors';
-import type { Chore, RowStatus } from '../types';
+import type { Chore, RowStatus, User } from '../types';
 
 const defaultClock = () => new Date();
 
@@ -10,6 +10,10 @@ export function useChores(now: () => Date = defaultClock) {
     const [chores, setChores] = useState<Chore[]>([]);
     const [rowStatus, setRowStatus] = useState<Record<number, RowStatus>>({});
     const [rowError, setRowError] = useState<Record<number, string>>({});
+    // Who each finished row was credited to. Separate from rowStatus, which
+    // says 'done' either way — this is the only record of which person the
+    // completion actually went to.
+    const [rowCompletedBy, setRowCompletedBy] = useState<Record<number, User>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<Error | null>(null);
 
@@ -25,6 +29,7 @@ export function useChores(now: () => Date = defaultClock) {
             // still on screen.
             setRowStatus({});
             setRowError({});
+            setRowCompletedBy({});
         } catch (caught) {
             setError(caught as Error);
         } finally {
@@ -37,7 +42,22 @@ export function useChores(now: () => Date = defaultClock) {
         // Deliberately no focus listener and no interval: refresh is manual only.
     }, [refresh]);
 
-    const complete = useCallback(async (id: number) => {
+    /*
+     * Tapping Done on a board with people configured does not complete
+     * anything — it opens the row for a choice. The state lives here rather
+     * than in the row so that a refresh clears it along with everything else;
+     * kept in the component it would survive the list being replaced.
+     */
+    const beginComplete = useCallback((id: number) => {
+        setRowStatus((current) => ({ ...current, [id]: 'picking' }));
+        setRowError((current) => {
+            const next = { ...current };
+            delete next[id];
+            return next;
+        });
+    }, []);
+
+    const complete = useCallback(async (id: number, user?: User) => {
         setRowStatus((current) => ({ ...current, [id]: 'pending' }));
         setRowError((current) => {
             const next = { ...current };
@@ -46,8 +66,11 @@ export function useChores(now: () => Date = defaultClock) {
         });
 
         try {
-            await completeChore(id);
+            await completeChore({ id, completedBy: user?.id });
             setRowStatus((current) => ({ ...current, [id]: 'done' }));
+            if (user) {
+                setRowCompletedBy((current) => ({ ...current, [id]: user }));
+            }
         } catch (caught) {
             // A lapsed session is not a problem with this row — it blocks
             // everything, so it belongs in the global banner.
@@ -61,5 +84,15 @@ export function useChores(now: () => Date = defaultClock) {
         }
     }, []);
 
-    return { chores, rowStatus, rowError, loading, error, refresh, complete };
+    return {
+        chores,
+        rowStatus,
+        rowError,
+        rowCompletedBy,
+        loading,
+        error,
+        refresh,
+        beginComplete,
+        complete,
+    };
 }

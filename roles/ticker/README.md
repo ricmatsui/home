@@ -12,12 +12,13 @@ that UI is more than you want in your hand while walking around the house.
 ## Scope
 
 In scope: list chores overdue or due within the next 24 hours, mark one done,
-refresh manually, hide the chores Donetick marks private, leave out the chores
-Donetick will not accept a completion for yet, mark the ones falling tomorrow
-rather than today, show a chore's description underneath it when it has one.
+credit that completion to a member of the household, refresh manually, hide the
+chores Donetick marks private, leave out the chores Donetick will not accept a
+completion for yet, mark the ones falling tomorrow rather than today, show a
+chore's description underneath it when it has one.
 
 Out of scope, on purpose: undo, creating/editing chores, anything due further
-out, auto-refresh or polling, per-user identity, offline support,
+out, auto-refresh or polling, signing in as a person, offline support,
 notifications.
 
 The 24-hour window is rolling, and it is the whole time filter — no "due soon"
@@ -56,6 +57,36 @@ The empty list has to say which filter emptied it: "Nothing due" and "Nothing
 public due" are different facts, and only the second one is true when a private
 chore is sitting hidden behind the toggle.
 
+## Who did it
+
+Done is two taps when there is more than one person configured. The first
+replaces the row's name and due line with a button per person; the second sends
+the completion with `completedBy`, so Donetick credits it to them instead of to
+the user the API key belongs to. The finished row then reads `Done · John` in
+place of its due time — with no undo and no cancel, that line is the only
+chance to notice a completion went to the wrong person.
+
+There is no cancel by choice. A mis-tap leaves the row asking until someone
+answers it, and Refresh clears it along with every other row's state. Nothing
+has been sent to Donetick at that point.
+
+The roster is `VITE_TICKER_USERS`, JSON, read at build time:
+
+```json
+[{"name": "Jane", "id": 1}, {"name": "John", "id": 2}]
+```
+
+Each `id` is that person's Donetick `userId`. Fewer than two people
+means no picker at all — Done stays a single tap and the completion goes out
+unattributed, exactly as the board behaved before any of this existed. That is
+also the fallback for a variable that is missing or malformed, which is why
+`parseUsers` drops what it cannot read instead of throwing: a typo in a deploy
+should cost the attribution, not the board.
+
+This works only because the API key belongs to a circle **admin or manager**.
+Donetick rejects `completedBy` from anyone else with a 403, and it accepts only
+people inside the key owner's own circle.
+
 ## How it fits together
 
 ```
@@ -77,8 +108,10 @@ through Traefik. That skips TLS termination and the `traefik-internal` IP
 allowlist for internal traffic.
 
 Auth is `traefik-forward-auth` (Google OIDC) plus `traefik-internal` (VPN/LAN
-IP allowlist). There is no per-user mapping — one shared API key, so every
-completion is attributed to that key's Donetick user.
+IP allowlist). There is still no per-user login: one shared API key, and the
+board *asks* who finished a chore rather than knowing. Which is why that key's
+user has to be an admin or manager of the circle — that is the permission
+`completedBy` is checked against.
 
 ## File map
 
@@ -94,6 +127,7 @@ roles/ticker/
     api/donetick.ts              fetch wrappers + error classification
     lib/chores.ts                helpers for chores
     lib/description.ts           allowlist sanitizer for Donetick's Quill HTML
+    lib/users.ts                 the roster, parsed from VITE_TICKER_USERS
     lib/errors.ts                SessionExpiredError / NetworkError / ApiError
     lib/queue.ts                 serialises completions, one request at a time
     hooks/useChores.ts           chores, per-row state, loading, errors
@@ -136,6 +170,13 @@ server: {
 },
 ```
 
+The picker is absent in dev unless the roster is set, because it comes from the
+build environment rather than from Donetick:
+
+```bash
+VITE_TICKER_USERS='[{"name":"Jane","id":1},{"name":"John","id":2}]' yarn dev
+```
+
 Pass the key by environment variable and never commit it. Both
 `http://localhost:5173` and `http://localhost:7926` are already in Donetick's
 `cors_allow_origins` (see `roles/donetick/tasks/main.yml`), though this proxy
@@ -150,6 +191,14 @@ silently, so nothing looks wrong from the browser console — but the redirect
 loses the auth context and the app reports a bogus "session expired". `POST
 /chores/{id}/do` does not redirect. Check any new endpoint against the running
 server, not the swagger page, and pin the exact path with a test.
+
+**`completedBy` takes Donetick's `userId`, not the membership `id`.**
+`/api/v1/circles/members` returns both on every row: an `id` identifying the
+membership and a `userId` identifying the person. They are equal for the first
+member of a circle and diverge for everyone added later — so reading the wrong
+field credits the founder correctly and silently miscredits everybody else,
+which is the kind of bug that gets noticed months later in the history. The
+roster in `VITE_TICKER_USERS` holds `userId`, and `users.test.ts` says so.
 
 **`completionWindow` is in hours, and Donetick's own source says otherwise.**
 The field is commented "Number seconds before the chore is due that it can be
@@ -309,6 +358,22 @@ eye: the due line's `font-size` is a `clamp()` while the badge's border stays
 1.45 is enough at 0.95rem and fails at 0.75rem. Change `.row__badge`'s
 `line-height` or padding and this has to be rechecked at both ends.
 
+**The picker is the one state with no colour, because it is the one state with
+words.** Every hue on this board already means something — four priority bands,
+amber working, green done, red failed — so a fifth would have to be read
+against all of them, and the buttons are in plain letters regardless. 
+They are drawn as `--ink` outlines, the same "available" mark `.control`
+uses in the header.
+
+**Opening the picker must not resize the row.** The height of an ordinary row
+comes from its name and due line, which together stand taller than the 3rem
+Done button beside them — so a picker that *replaced* the text made the row 8px
+shorter and hopped every row below it upward, exactly while a thumb was on its
+way to the second tap. The text therefore stays in the grid and only stops
+being visible: `aria-hidden` on `.row__text` plus `visibility: hidden`, with
+the picker laid over the same grid line. `display: none` or unmounting it
+brings the bug straight back.
+
 **Meaning that is only visual is missing meaning.** An icon-only button needs
 the chore name in `aria-label` — a screen reader hitting four identical "Done"
 buttons has nothing to go on — and a state shown by swapping a glyph needs
@@ -368,6 +433,13 @@ task deploy --tags ticker
 
 That sets the Cloudflare DNS record, builds and pushes a multi-arch image to
 the Gitea registry, and deploys the Swarm stack by digest.
+
+The roster is a *build* argument rather than one of these, so changing it takes
+a redeploy and not merely a restart — `task deploy --tags ticker` rebuilds the
+image every time anyway. It is `config.ticker.users` in sops, a list of `name`
+and `id` pairs, and `tasks/main.yml` hands it to the build as JSON via
+`to_json`. Unset, it defaults to `[]` and the board keeps its single
+unattributed Done button rather than failing the deploy.
 
 The container takes three environment variables, all set in `tasks/main.yml`:
 
@@ -432,6 +504,10 @@ up":
 - `web app manifest > ships every icon it references, at the size it claims`
   reads the PNG headers off disk. Nothing else in the suite touches static
   files, so without it an icon can go missing and every test still passes.
+- `ChoreRow > keeps its text in the layout, hidden, so the row does not resize`
+  is the guardrail for the reflow described above. It asserts something that
+  looks like an implementation detail because in jsdom there is no layout to
+  measure — the hidden text *is* the mechanism.
 - `isDueTomorrow > is false for tonight even though the due date is tomorrow in
   UTC` is the whole point of the function. `2026-08-15 22:00` local is
   `2026-08-16` in UTC, so any implementation that compares UTC calendar dates

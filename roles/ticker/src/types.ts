@@ -15,4 +15,18 @@ export type Chore = {
     completionWindow?: number | null;
 };
 
-export type RowStatus = 'idle' | 'pending' | 'done' | 'error';
+/*
+ * 'picking' is the moment between tapping Done and naming who did it. Nothing
+ * has been sent to Donetick yet.
+ */
+export type RowStatus = 'idle' | 'picking' | 'pending' | 'done' | 'error';
+
+/*
+ * Somebody a completion can be credited to. `id` is Donetick's `userId` — the
+ * value its API takes as `completedBy` — not the membership `id` that
+ * /circles/members returns alongside it.
+ */
+export type User = {
+    name: string;
+    id: number;
+};

@@ -1,14 +1,19 @@
 import { useMemo } from 'react';
 import { formatDue, isDueTomorrow } from '../lib/chores';
 import { sanitizeDescription } from '../lib/description';
-import type { Chore, RowStatus } from '../types';
+import type { Chore, RowStatus, User } from '../types';
 
 type ChoreRowProps = {
     chore: Chore;
     status: RowStatus;
+    // Who a completion can be credited to. Empty on a board with no
+    // VITE_TICKER_USERS, which is what keeps the old one-tap behaviour.
+    users: User[];
+    completedBy?: User;
     error?: string;
     now: Date;
-    onComplete: (id: number) => void;
+    onBeginComplete: (id: number) => void;
+    onComplete: (id: number, user?: User) => void;
 };
 
 /*
@@ -62,9 +67,25 @@ function HourglassIcon() {
     );
 }
 
-export function ChoreRow({ chore, status, error, now, onComplete }: ChoreRowProps) {
+export function ChoreRow({
+    chore,
+    status,
+    users,
+    completedBy,
+    error,
+    now,
+    onBeginComplete,
+    onComplete,
+}: ChoreRowProps) {
     const done = status === 'done';
     const pending = status === 'pending';
+    const picking = status === 'picking';
+    /*
+     * One person configured is the same as none: there is nothing to choose
+     * between, so Done stays a single tap and the completion goes out
+     * unattributed, exactly as it did before any of this existed.
+     */
+    const asksWhoDidIt = users.length > 1;
 
     const description = useMemo(
         () => sanitizeDescription(chore.description),
@@ -73,10 +94,23 @@ export function ChoreRow({ chore, status, error, now, onComplete }: ChoreRowProp
 
     return (
         <li className="row" data-status={status} data-priority={chore.priority}>
-            <div className="row__text">
+            {/*
+              * The text stays in the grid while the picker is open and merely
+              * stops being visible. It is what gives an ordinary row its
+              * height — the name and due line together stand taller than the
+              * 3rem button beside them — so removing it would shrink the row
+              * by those few pixels and hop the whole list up while a thumb is
+              * on its way to the second tap.
+              */}
+            <div className="row__text" aria-hidden={picking || undefined}>
                 <span className="row__name">{chore.name}</span>
                 <span className="row__due">
-                    {chore.nextDueDate ? (
+                    {done && completedBy ? (
+                        // The due time is spent once the chore is done; who it
+                        // was credited to is the fact worth having in its place,
+                        // and there is no undo to correct a wrong one.
+                        `Done · ${completedBy.name}`
+                    ) : chore.nextDueDate ? (
                         <>
                             {isDueTomorrow(chore.nextDueDate, now) ? (
                                 <>
@@ -90,23 +124,51 @@ export function ChoreRow({ chore, status, error, now, onComplete }: ChoreRowProp
                 {error ? <span className="row__error">{error}</span> : null}
             </div>
             {/*
-              * The button carries no text, so the chore name has to live in
-              * the accessible name — otherwise every row offers an
-              * identically-labelled "Done".
+              * Laid over the whole first grid line — the text column as well
+              * as the button's. Two people crammed into the 3rem the Done
+              * button occupies would be a pair of targets too small to hit at
+              * arm's length, which is the only distance this board is read
+              * from.
               */}
-            <button
-                type="button"
-                className="row__action"
-                aria-label={`Mark ${chore.name} done`}
-                aria-pressed={done}
-                // The glyph change is invisible to a screen reader, so the
-                // in-flight state has to be stated rather than drawn.
-                aria-busy={pending}
-                disabled={pending || done}
-                onClick={() => onComplete(chore.id)}
-            >
-                {pending ? <HourglassIcon /> : <CheckIcon />}
-            </button>
+            {picking ? (
+                <div className="row__picker">
+                    {users.map((user) => (
+                        <button
+                            key={user.id}
+                            type="button"
+                            className="row__person"
+                            // The visible label is the bare name — the chore's
+                            // own name is hidden while the picker is open, so
+                            // a screen reader needs it said here.
+                            aria-label={`Mark ${chore.name} done as ${user.name}`}
+                            onClick={() => onComplete(chore.id, user)}
+                        >
+                            {user.name}
+                        </button>
+                    ))}
+                </div>
+            ) : (
+                /*
+                 * The button carries no text, so the chore name has to live in
+                 * the accessible name — otherwise every row offers an
+                 * identically-labelled "Done".
+                 */
+                <button
+                    type="button"
+                    className="row__action"
+                    aria-label={`Mark ${chore.name} done`}
+                    aria-pressed={done}
+                    // The glyph change is invisible to a screen reader, so the
+                    // in-flight state has to be stated rather than drawn.
+                    aria-busy={pending}
+                    disabled={pending || done}
+                    onClick={() =>
+                        asksWhoDidIt ? onBeginComplete(chore.id) : onComplete(chore.id)
+                    }
+                >
+                    {pending ? <HourglassIcon /> : <CheckIcon />}
+                </button>
+            )}
             {description ? (
                 <div
                     className="row__description"

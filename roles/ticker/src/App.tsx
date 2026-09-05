@@ -5,9 +5,28 @@ import { RefreshButton } from './components/RefreshButton';
 import { useChores } from './hooks/useChores';
 import { usePublicOnly } from './hooks/usePublicOnly';
 import { filterPublic } from './lib/chores';
+import { USERS } from './lib/users';
+import type { User } from './types';
 
-export default function App() {
-    const { chores, rowStatus, rowError, loading, error, refresh, complete } = useChores();
+type AppProps = {
+    // Injected the same way the clock is, so the tests can hand the board a
+    // roster without going through the build-time variable it normally
+    // comes from.
+    users?: User[];
+};
+
+export default function App({ users = USERS }: AppProps = {}) {
+    const {
+        chores,
+        rowStatus,
+        rowError,
+        rowCompletedBy,
+        loading,
+        error,
+        refresh,
+        beginComplete,
+        complete,
+    } = useChores();
     const { publicOnly, togglePublicOnly } = usePublicOnly();
 
     // Applied here rather than in useChores: the filter changes what is on
@@ -44,11 +63,14 @@ export default function App() {
                     chores={visible}
                     rowStatus={rowStatus}
                     rowError={rowError}
+                    rowCompletedBy={rowCompletedBy}
+                    users={users}
                     now={new Date()}
                     // A chore the filter removed is still due, so the empty
                     // list has to say which of the two things it means.
                     emptyMessage={publicOnly ? 'Nothing public due' : 'Nothing due'}
-                    onComplete={(id) => void complete(id)}
+                    onBeginComplete={beginComplete}
+                    onComplete={(id, user) => void complete(id, user)}
                 />
             )}
         </main>

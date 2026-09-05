@@ -77,6 +77,18 @@ export async function getChores(): Promise<Chore[]> {
  */
 const completions = createQueue();
 
-export async function completeChore(id: number): Promise<void> {
-    await completions(() => request(`/chores/${id}/do`, { method: 'POST', body: '{}' }));
+/*
+ * `completedBy` credits the completion to someone other than the user the API
+ * key belongs to. Donetick only honours it when that key's user is an admin or
+ * manager of the circle, and only for a user inside the same circle; anything
+ * else comes back 403. Omitted, the completion is the key owner's own.
+ */
+export interface CompleteChoreOptions {
+    id: number;
+    completedBy?: number;
+}
+
+export async function completeChore({ id, completedBy }: CompleteChoreOptions): Promise<void> {
+    const body = JSON.stringify(completedBy === undefined ? {} : { completedBy });
+    await completions(() => request(`/chores/${id}/do`, { method: 'POST', body }));
 }

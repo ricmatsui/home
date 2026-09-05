@@ -117,7 +117,7 @@ describe('completeChore', () => {
     it('posts to the do endpoint with an empty JSON body', async () => {
         vi.mocked(fetch).mockResolvedValue(jsonResponse({ res: {} }));
 
-        await completeChore(42);
+        await completeChore({ id: 42 });
 
         expect(fetch).toHaveBeenCalledWith(
             '/api/v1/chores/42/do',
@@ -129,12 +129,28 @@ describe('completeChore', () => {
         );
     });
 
+    /*
+     * Donetick credits the completion to the API key's own user unless the
+     * body names someone else. The key belongs to a circle admin, which is
+     * what makes completedBy allowed at all.
+     */
+    it('posts the person the completion is credited to', async () => {
+        vi.mocked(fetch).mockResolvedValue(jsonResponse({ res: {} }));
+
+        await completeChore({ id: 42, completedBy: 3 });
+
+        expect(fetch).toHaveBeenCalledWith(
+            '/api/v1/chores/42/do',
+            expect.objectContaining({ body: '{"completedBy":3}' }),
+        );
+    });
+
     it('surfaces the completion-window rejection as an ApiError', async () => {
         vi.mocked(fetch).mockResolvedValue(
             jsonResponse({ error: 'Chore is out of completion window' }, 400),
         );
 
-        await expect(completeChore(42)).rejects.toMatchObject({
+        await expect(completeChore({ id: 42 })).rejects.toMatchObject({
             status: 400,
             message: 'Chore is out of completion window',
         });
@@ -147,7 +163,7 @@ describe('completeChore', () => {
             ok: false,
         } as Response);
 
-        await expect(completeChore(42)).rejects.toBeInstanceOf(SessionExpiredError);
+        await expect(completeChore({ id: 42 })).rejects.toBeInstanceOf(SessionExpiredError);
     });
 
     it('sends one completion at a time', async () => {
@@ -156,8 +172,8 @@ describe('completeChore', () => {
             .mockReturnValueOnce(first.promise)
             .mockResolvedValue(jsonResponse({ res: {} }));
 
-        const firstCall = completeChore(1);
-        const secondCall = completeChore(2);
+        const firstCall = completeChore({ id: 1 });
+        const secondCall = completeChore({ id: 2 });
 
         await settle();
         expect(fetch).toHaveBeenCalledTimes(1);
@@ -175,8 +191,8 @@ describe('completeChore', () => {
             .mockResolvedValueOnce(jsonResponse({ error: 'Chore is out of completion window' }, 400))
             .mockResolvedValue(jsonResponse({ res: {} }));
 
-        const failing = completeChore(1);
-        const following = completeChore(2);
+        const failing = completeChore({ id: 1 });
+        const following = completeChore({ id: 2 });
 
         await expect(failing).rejects.toBeInstanceOf(ApiError);
         await expect(following).resolves.toBeUndefined();
@@ -190,8 +206,8 @@ describe('completeChore', () => {
         vi.useFakeTimers();
         vi.stubGlobal('fetch', hangingFetch());
 
-        const firstCall = completeChore(1);
-        const secondCall = completeChore(2);
+        const firstCall = completeChore({ id: 1 });
+        const secondCall = completeChore({ id: 2 });
         const assertions = Promise.all([
             expect(firstCall).rejects.toBeInstanceOf(NetworkError),
             expect(secondCall).rejects.toBeInstanceOf(NetworkError),
