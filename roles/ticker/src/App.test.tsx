@@ -212,7 +212,19 @@ describe('App', () => {
     });
 
     describe('crediting a person', () => {
+        /*
+         * The choice is only offered on the public board. Asking who did it is
+         * a question about the household, and the unfiltered board is the
+         * owner's own view of their own chores — there is nobody else on it to
+         * credit. Stored rather than clicked so the picker tests start with the
+         * filter already on, as the wall tablet does.
+         */
+        function onThePublicBoard() {
+            localStorage.setItem('ticker.public-only', 'true');
+        }
+
         it('asks who did it, and sends nothing until it is told', async () => {
+            onThePublicBoard();
             vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
 
             render(<App users={[JANE, JOHN]} />);
@@ -222,7 +234,58 @@ describe('App', () => {
             expect(api.completeChore).not.toHaveBeenCalled();
         });
 
+        it('completes on a single unattributed tap while the filter is off', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App users={[JANE, JOHN]} />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+
+            await waitFor(() =>
+                expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: undefined }),
+            );
+            expect(
+                screen.queryByRole('button', { name: 'Mark Trash done as John' }),
+            ).not.toBeInTheDocument();
+        });
+
+        /*
+         * One person configured is the same as none: there is nothing to
+         * choose between, so the filter being on buys the reader a second tap
+         * and no decision.
+         */
+        it('stays a single tap on the public board when only one person is configured', async () => {
+            onThePublicBoard();
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App users={[JANE]} />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+
+            await waitFor(() =>
+                expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: undefined }),
+            );
+        });
+
+        it('puts the row back and sends nothing when the choice is cancelled', async () => {
+            onThePublicBoard();
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App users={[JANE, JOHN]} />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+            await userEvent.click(
+                screen.getByRole('button', { name: 'Cancel marking Trash done' }),
+            );
+
+            expect(
+                screen.getByRole('button', { name: 'Mark Trash done' }),
+            ).toBeInTheDocument();
+            expect(
+                screen.queryByRole('button', { name: 'Mark Trash done as John' }),
+            ).not.toBeInTheDocument();
+            expect(api.completeChore).not.toHaveBeenCalled();
+        });
+
         it('completes as the person tapped and says so on the finished row', async () => {
+            onThePublicBoard();
             vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
 
             render(<App users={[JANE, JOHN]} />);

@@ -26,6 +26,7 @@ export default function App({ users = USERS }: AppProps = {}) {
         error,
         refresh,
         beginComplete,
+        cancelComplete,
         complete,
     } = useChores();
     const { publicOnly, togglePublicOnly } = usePublicOnly();
@@ -35,6 +36,23 @@ export default function App({ users = USERS }: AppProps = {}) {
     // Applied here rather than in useChores: the filter changes what is on
     // screen, not what was fetched, so toggling it must not cost a round trip.
     const visible = publicOnly ? filterPublic(chores) : chores;
+
+    /*
+     * Whether Done opens a choice, decided here because this is the only place
+     * that can see both halves of it.
+     *
+     * The filter is the half that is not obvious. Crediting a completion is a
+     * question about the household, and the public board — the wall tablet —
+     * is where the household answers it. The unfiltered board is somebody
+     * looking at their own chores, private ones included, where the second tap
+     * would only ever name the person already holding the device.
+     *
+     * The roster is the older half: one person configured is the same as none,
+     * so there is nothing to choose between and Done stays a single tap.
+     * Either way an unasked completion goes out unattributed, which is what
+     * the board did before any of this existed.
+     */
+    const asksWhoDidIt = publicOnly && users.length > 1;
 
     return (
         <main className="app">
@@ -68,11 +86,13 @@ export default function App({ users = USERS }: AppProps = {}) {
                     rowError={rowError}
                     rowCompletedBy={rowCompletedBy}
                     users={users}
+                    asksWhoDidIt={asksWhoDidIt}
                     now={new Date()}
                     // A chore the filter removed is still due, so the empty
                     // list has to say which of the two things it means.
                     emptyMessage={publicOnly ? 'Nothing public due' : 'Nothing due'}
                     onBeginComplete={beginComplete}
+                    onCancelComplete={cancelComplete}
                     onComplete={(id, user) => void complete(id, user)}
                 />
             )}

@@ -464,9 +464,13 @@ body {
  * to do", solid reads as "struck off". 3rem square clears the 44px touch
  * minimum in every direction, so it is a larger target than the wide, short
  * button it replaces.
+ *
+ * Shared with .row__cancel, which stands in exactly this place while the
+ * picker is open. That the two are the same size is load-bearing rather than
+ * incidental, so they take it from one declaration and cannot drift apart.
  */
-.row__action {
-    grid-area: action;
+.row__action,
+.row__cancel {
     display: grid;
     place-items: center;
     width: 3rem;
@@ -487,12 +491,17 @@ body {
         color 140ms ease, border-color 140ms ease;
 }
 
+.row__action {
+    grid-area: action;
+}
+
 .row__icon {
     width: 1.5rem;
     height: 1.5rem;
 }
 
-.row__action:active:not(:disabled) {
+.row__action:active:not(:disabled),
+.row__cancel:active {
     transform: scale(0.94);
 }
 
@@ -507,10 +516,11 @@ body {
 
 /*
  * The picker takes the whole first row of the grid — both the text column and
- * the button column — for as long as the row is asking who did it. Two people
- * crammed into the 3rem the Done button occupies would be a pair of targets
- * too small to hit at arm's length, which is the only distance this board is
- * ever read from.
+ * the button column — for as long as the row is asking who did it. The people
+ * spread across the text column, and cancel takes the button column. Two
+ * people crammed into the 3rem the Done button occupies would be a pair of
+ * targets too small to hit at arm's length, which is the only distance this
+ * board is ever read from.
  *
  * 3rem tall because that is exactly what .row__action is: the button is what
  * sets the height of an ordinary row, so a picker the same height leaves the
@@ -562,6 +572,37 @@ body {
 
 .row__person:active {
     transform: scale(0.98);
+}
+
+/*
+ * Backing out. Last in the picker and 3rem square, which — because the picker
+ * spans the whole grid line and is laid out on the same gap the grid is —
+ * lands it exactly where the Done button that opened the picker was: same
+ * size, same edge, same place on the row.
+ *
+ * That coincidence is the whole reason it exists. Done and the person buttons
+ * are two taps in quick succession, made at arm's length, and the second
+ * often arrives before the eye has re-read the row. Without this, a thumb
+ * going twice to the same spot would credit whichever name had opened
+ * underneath it — silently, and with no undo. Now the same two taps cancel.
+ *
+ * Shaped like Done rather than like the names beside it, for the same reason:
+ * what returns to that square has to read as the thing that was there before,
+ * not as a third person to choose from.
+ *
+ * flex rather than width alone — the people are flex: 1 and would otherwise
+ * squeeze this one as the names grow.
+ */
+.row__cancel {
+    flex: 0 0 3rem;
+}
+
+/* The picker's two kinds of control invert alike on hover, whatever their
+ * shape. */
+.row__cancel:hover,
+.row__cancel:focus-visible {
+    background-color: var(--ink);
+    color: var(--paper);
 }
 
 /*

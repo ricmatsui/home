@@ -6,13 +6,17 @@ import type { Chore, RowStatus, User } from '../types';
 type ChoreRowProps = {
     chore: Chore;
     status: RowStatus;
-    // Who a completion can be credited to. Empty on a board with no
-    // VITE_TICKER_USERS, which is what keeps the old one-tap behaviour.
+    // Who a completion can be credited to, once the row is open for a choice.
     users: User[];
+    // Whether tapping Done opens that choice at all. Not the row's decision:
+    // it turns on the roster and on the public filter, and the row can see
+    // neither. False means one tap, sent unattributed.
+    asksWhoDidIt: boolean;
     completedBy?: User;
     error?: string;
     now: Date;
     onBeginComplete: (id: number) => void;
+    onCancelComplete: (id: number) => void;
     onComplete: (id: number, user?: User) => void;
 };
 
@@ -67,25 +71,43 @@ function HourglassIcon() {
     );
 }
 
+/*
+ * Drawn for the same reason the tick is, and to the same measurements: it
+ * sits in a button the exact size and place of the Done button, so the two
+ * glyphs have to be the same weight or the swap reads as a size change.
+ */
+function CloseIcon() {
+    return (
+        <svg
+            className="row__icon"
+            data-icon="close"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+        >
+            <g fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="square">
+                <path d="M6 6 L18 18" />
+                <path d="M18 6 L6 18" />
+            </g>
+        </svg>
+    );
+}
+
 export function ChoreRow({
     chore,
     status,
     users,
+    asksWhoDidIt,
     completedBy,
     error,
     now,
     onBeginComplete,
+    onCancelComplete,
     onComplete,
 }: ChoreRowProps) {
     const done = status === 'done';
     const pending = status === 'pending';
     const picking = status === 'picking';
-    /*
-     * One person configured is the same as none: there is nothing to choose
-     * between, so Done stays a single tap and the completion goes out
-     * unattributed, exactly as it did before any of this existed.
-     */
-    const asksWhoDidIt = users.length > 1;
 
     const description = useMemo(
         () => sanitizeDescription(chore.description),
@@ -125,10 +147,11 @@ export function ChoreRow({
             </div>
             {/*
               * Laid over the whole first grid line — the text column as well
-              * as the button's. Two people crammed into the 3rem the Done
-              * button occupies would be a pair of targets too small to hit at
-              * arm's length, which is the only distance this board is read
-              * from.
+              * as the button's. The people spread across the text column;
+              * cancel keeps the button column, standing where Done stood. Two
+              * people crammed into the 3rem the Done button occupies would be
+              * a pair of targets too small to hit at arm's length, which is
+              * the only distance this board is read from.
               */}
             {picking ? (
                 <div className="row__picker">
@@ -146,6 +169,22 @@ export function ChoreRow({
                             {user.name}
                         </button>
                     ))}
+                    {/*
+                      * Last, and sized to land exactly on the Done button it
+                      * replaced: the picker spans the whole grid line, so a
+                      * 3rem square at its end sits in the same place as the
+                      * 3rem square in the action column. A second tap where
+                      * the first one landed backs out rather than crediting
+                      * whoever's name opened under the thumb.
+                      */}
+                    <button
+                        type="button"
+                        className="row__cancel"
+                        aria-label={`Cancel marking ${chore.name} done`}
+                        onClick={() => onCancelComplete(chore.id)}
+                    >
+                        <CloseIcon />
+                    </button>
                 </div>
             ) : (
                 /*

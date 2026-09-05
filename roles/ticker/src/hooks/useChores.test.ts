@@ -72,6 +72,23 @@ describe('useChores', () => {
         expect(api.completeChore).not.toHaveBeenCalled();
     });
 
+    it('closes the row again when the choice is cancelled', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 5 })]);
+
+        const { result } = renderHook(() => useChores(clock));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+            result.current.beginComplete(5);
+        });
+        act(() => {
+            result.current.cancelComplete(5);
+        });
+
+        expect(result.current.rowStatus[5]).toBe('idle');
+        expect(api.completeChore).not.toHaveBeenCalled();
+    });
+
     it('credits the completion to the person it was told about', async () => {
         vi.mocked(api.getChores).mockResolvedValue([chore({ id: 5 })]);
 

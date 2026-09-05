@@ -7,11 +7,15 @@ type ChoreListProps = {
     rowError: Record<number, string>;
     rowCompletedBy: Record<number, User>;
     users: User[];
+    // Passed straight through: the list has no more view of the filter than
+    // the row does. See ChoreRow.
+    asksWhoDidIt: boolean;
     now: Date;
     // What an empty list means depends on what was filtered out of it, and
     // only the caller knows that.
     emptyMessage: string;
     onBeginComplete: (id: number) => void;
+    onCancelComplete: (id: number) => void;
     onComplete: (id: number, user?: User) => void;
 };
 
@@ -21,9 +25,11 @@ export function ChoreList({
     rowError,
     rowCompletedBy,
     users,
+    asksWhoDidIt,
     now,
     emptyMessage,
     onBeginComplete,
+    onCancelComplete,
     onComplete,
 }: ChoreListProps) {
     if (chores.length === 0) {
@@ -40,8 +46,10 @@ export function ChoreList({
                     error={rowError[chore.id]}
                     completedBy={rowCompletedBy[chore.id]}
                     users={users}
+                    asksWhoDidIt={asksWhoDidIt}
                     now={now}
                     onBeginComplete={onBeginComplete}
+                    onCancelComplete={onCancelComplete}
                     onComplete={onComplete}
                 />
             ))}

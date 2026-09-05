@@ -57,6 +57,16 @@ export function useChores(now: () => Date = defaultClock) {
         });
     }, []);
 
+    /*
+     * Backing out of the choice. The row returns to 'idle' rather than having
+     * its entry deleted so that this reads the same as every other status
+     * move — the two are equivalent to the list, which defaults a missing row
+     * to 'idle' anyway.
+     */
+    const cancelComplete = useCallback((id: number) => {
+        setRowStatus((current) => ({ ...current, [id]: 'idle' }));
+    }, []);
+
     const complete = useCallback(async (id: number, user?: User) => {
         setRowStatus((current) => ({ ...current, [id]: 'pending' }));
         setRowError((current) => {
@@ -93,6 +103,7 @@ export function useChores(now: () => Date = defaultClock) {
         error,
         refresh,
         beginComplete,
+        cancelComplete,
         complete,
     };
 }

@@ -34,8 +34,10 @@ const JOHN: User = { name: 'John', id: 2 };
 type RowOptions = {
     status?: RowStatus;
     users?: User[];
+    asksWhoDidIt?: boolean;
     completedBy?: User;
     onBeginComplete?: (id: number) => void;
+    onCancelComplete?: (id: number) => void;
     onComplete?: (id: number, user?: User) => void;
 };
 
@@ -43,8 +45,10 @@ function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
     const {
         status = 'idle',
         users = [],
+        asksWhoDidIt = false,
         completedBy,
         onBeginComplete = () => {},
+        onCancelComplete = () => {},
         onComplete = () => {},
     } = options;
 
@@ -54,9 +58,11 @@ function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
                 chore={chore(overrides)}
                 status={status}
                 users={users}
+                asksWhoDidIt={asksWhoDidIt}
                 completedBy={completedBy}
                 now={NOW}
                 onBeginComplete={onBeginComplete}
+                onCancelComplete={onCancelComplete}
                 onComplete={onComplete}
             />
         </ul>,
@@ -93,10 +99,13 @@ describe('ChoreRow', () => {
     });
 
     describe('crediting a person', () => {
-        it('asks who did it instead of completing, when there are people to choose from', async () => {
+        it('asks who did it instead of completing, when it is told to', async () => {
             const onBeginComplete = vi.fn();
             const onComplete = vi.fn();
-            renderRow({}, { users: [JANE, JOHN], onBeginComplete, onComplete });
+            renderRow(
+                {},
+                { users: [JANE, JOHN], asksWhoDidIt: true, onBeginComplete, onComplete },
+            );
 
             await userEvent.click(screen.getByRole('button', { name: 'Mark Trash done' }));
 
@@ -116,12 +125,40 @@ describe('ChoreRow', () => {
         });
 
         it('keeps the people in the order they were configured', () => {
-            renderRow({}, { status: 'picking', users: [JANE, JOHN] });
+            const { container } = renderRow({}, { status: 'picking', users: [JANE, JOHN] });
 
-            expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
-                'Jane',
-                'John',
-            ]);
+            expect(
+                [...container.querySelectorAll('.row__person')].map((button) => button.textContent),
+            ).toEqual(['Jane', 'John']);
+        });
+
+        /*
+         * The whole point of the cancel button, and the reason it is last: it
+         * occupies the same 3rem square the Done button just did, so a second
+         * tap at the position of the first backs out instead of landing on
+         * whichever person's button happens to have opened underneath it.
+         */
+        it('ends the picker with the cancel button, where Done was', () => {
+            const { container } = renderRow({}, { status: 'picking', users: [JANE, JOHN] });
+
+            const picker = container.querySelector('.row__picker');
+            const buttons = [...picker!.querySelectorAll('button')];
+
+            expect(buttons.at(-1)).toHaveClass('row__cancel');
+            expect(buttons.at(-1)).toHaveAccessibleName('Cancel marking Trash done');
+        });
+
+        it('backs out of the choice when cancel is tapped', async () => {
+            const onCancelComplete = vi.fn();
+            const onComplete = vi.fn();
+            renderRow({}, { status: 'picking', users: [JANE, JOHN], onCancelComplete, onComplete });
+
+            await userEvent.click(
+                screen.getByRole('button', { name: 'Cancel marking Trash done' }),
+            );
+
+            expect(onCancelComplete).toHaveBeenCalledWith(1);
+            expect(onComplete).not.toHaveBeenCalled();
         });
 
         /*
@@ -150,15 +187,18 @@ describe('ChoreRow', () => {
         });
 
         /*
-         * The board with no VITE_TICKER_USERS behaves exactly as it did before
-         * any of this existed: one tap, credited to whoever the API key
-         * belongs to. A single configured person is the same case — there is
-         * no choice to make, so making the reader tap twice buys nothing.
+         * Whether to ask is not the row's decision — it depends on the roster
+         * and on the public filter, neither of which the row can see. Told not
+         * to ask, it completes on the first tap and the completion goes out
+         * unattributed, exactly as it did before any of this existed.
          */
-        it('completes on the first tap when there is nobody to choose between', async () => {
+        it('completes on the first tap when it is told not to ask', async () => {
             const onBeginComplete = vi.fn();
             const onComplete = vi.fn();
-            renderRow({}, { users: [JANE], onBeginComplete, onComplete });
+            renderRow(
+                {},
+                { users: [JANE, JOHN], asksWhoDidIt: false, onBeginComplete, onComplete },
+            );
 
             await userEvent.click(screen.getByRole('button', { name: 'Mark Trash done' }));
 
