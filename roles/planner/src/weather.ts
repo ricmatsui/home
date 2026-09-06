@@ -79,13 +79,18 @@ function compassPoint(degrees: number): string {
 }
 
 export function formatWeatherSection(daily: DailyForecast): Section {
-    const text = [
+    const parts = [
         `${describeCode(daily.weather_code[0])} ${Math.round(daily.temperature_2m_max[0])}°/${Math.round(daily.temperature_2m_min[0])}°F`,
-        `rain ${daily.precipitation_probability_max[0]}% (${daily.precipitation_sum[0].toFixed(2)} in)`,
-        `wind ${compassPoint(daily.wind_direction_10m_dominant[0])} ${Math.round(daily.wind_speed_10m_max[0])} mph (gusts ${Math.round(daily.wind_gusts_10m_max[0])})`,
-        `UV ${Math.round(daily.uv_index_max[0])}`,
-        `sun ${(daily.sunshine_duration[0] / 3600).toFixed(1)}h (${clockTime(daily.sunrise[0])} to ${clockTime(daily.sunset[0])})`,
-    ].join(' - ');
+        `${compassPoint(daily.wind_direction_10m_dominant[0])} ${Math.round(daily.wind_speed_10m_max[0])}/${Math.round(daily.wind_gusts_10m_max[0])} mph`,
+        `${clockTime(daily.sunrise[0])} - ${clockTime(daily.sunset[0])} (${Math.round(daily.sunshine_duration[0] / 3600)}h) UV ${Math.round(daily.uv_index_max[0])}`,
+    ];
+
+    // Dry days say nothing worth a segment
+    if (daily.precipitation_probability_max[0] > 0 || daily.precipitation_sum[0] > 0) {
+        parts.push(`rain ${daily.precipitation_probability_max[0]}% ${daily.precipitation_sum[0].toFixed(2)} in`);
+    }
+
+    const text = parts.join(', ');
 
     return {
         name: WEATHER_SECTION,

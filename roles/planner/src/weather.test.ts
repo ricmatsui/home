@@ -25,16 +25,31 @@ describe('formatWeatherSection', () => {
             name: 'Weather',
             items: [{
                 status: 'note',
-                text: 'Overcast 74°/58°F - rain 16% (0.00 in) - wind N 14 mph (gusts 21) - UV 7 - sun 12.0h (6:46am to 7:38pm)',
+                text: 'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm (12h) UV 7, rain 16% 0.00 in',
                 children: [],
             }],
         });
+    });
+
+    it('drops the rain segment when none is expected', () => {
+        const dry = { ...daily, precipitation_probability_max: [0], precipitation_sum: [0] };
+
+        assert.equal(
+            formatWeatherSection(dry).items[0].text,
+            'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm (12h) UV 7',
+        );
+    });
+
+    it('keeps the rain segment when only the amount is zero', () => {
+        const chance = { ...daily, precipitation_probability_max: [20], precipitation_sum: [0] };
+
+        assert.match(formatWeatherSection(chance).items[0].text, /, rain 20% 0\.00 in$/);
     });
 });
 
 describe('formatWeatherSection conditions', () => {
     function conditionFor(code: number): string {
-        return formatWeatherSection({ ...daily, weather_code: [code] }).items[0].text.split(' - ')[0];
+        return formatWeatherSection({ ...daily, weather_code: [code] }).items[0].text.split(', ')[0];
     }
 
     it('names every WMO code Open-Meteo reports', () => {
@@ -63,29 +78,29 @@ describe('formatWeatherSection conditions', () => {
 
 describe('formatWeatherSection sun times', () => {
     function sunFor(sunrise: string, sunset: string): string {
-        return formatWeatherSection({ ...daily, sunrise: [sunrise], sunset: [sunset] }).items[0].text.split(' - ')[4];
+        return formatWeatherSection({ ...daily, sunrise: [sunrise], sunset: [sunset] }).items[0].text.split(', ')[2];
     }
 
     it('reads the times as the location reports them, without a timezone round-trip', () => {
-        assert.equal(sunFor('2026-12-21T07:21', '2026-12-21T16:53'), 'sun 12.0h (7:21am to 4:53pm)');
+        assert.equal(sunFor('2026-12-21T07:21', '2026-12-21T16:53'), '7:21am - 4:53pm (12h) UV 7');
     });
 
     it('renders midnight and noon as 12', () => {
-        assert.equal(sunFor('2026-09-04T00:00', '2026-09-04T12:00'), 'sun 12.0h (12:00am to 12:00pm)');
+        assert.equal(sunFor('2026-09-04T00:00', '2026-09-04T12:00'), '12:00am - 12:00pm (12h) UV 7');
     });
 });
 
 describe('formatWeatherSection wind', () => {
     function windFor(degrees: number): string {
-        return formatWeatherSection({ ...daily, wind_direction_10m_dominant: [degrees] }).items[0].text.split(' - ')[2];
+        return formatWeatherSection({ ...daily, wind_direction_10m_dominant: [degrees] }).items[0].text.split(', ')[1];
     }
 
     it('maps dominant direction to a 16-point compass', () => {
-        assert.equal(windFor(0), 'wind N 14 mph (gusts 21)');
-        assert.equal(windFor(90), 'wind E 14 mph (gusts 21)');
-        assert.equal(windFor(180), 'wind S 14 mph (gusts 21)');
-        assert.equal(windFor(247), 'wind WSW 14 mph (gusts 21)');
-        assert.equal(windFor(359), 'wind N 14 mph (gusts 21)');
+        assert.equal(windFor(0), 'N 14/21 mph');
+        assert.equal(windFor(90), 'E 14/21 mph');
+        assert.equal(windFor(180), 'S 14/21 mph');
+        assert.equal(windFor(247), 'WSW 14/21 mph');
+        assert.equal(windFor(359), 'N 14/21 mph');
     });
 });
 
