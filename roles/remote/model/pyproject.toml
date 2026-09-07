@@ -1,0 +1,29 @@
+[tool.poetry]
+name = "remote-gesture"
+version = "0.1.0"
+description = "Gesture model training and publishing"
+authors = ["Ricardo Matsui"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.9"
+tensorflow = "2.17.0"
+tensorflowjs = "^4.22.0"
+numpy = "^1.23.5"
+pillow = ">=10.0,<11"
+setuptools = "69.5.1"
+datasets = "^3.0.0"
+huggingface-hub = "^0.25.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+
+[tool.pytest.ini_options]
+# model/ is a second, separate poetry project with its own interpreter and its
+# own tests package. Without this, a bare pytest here collects those too and
+# fails on imports that only exist in that environment.
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

@@ -1,0 +1,34 @@
+<!doctype html>
+<html style='height: 100%'>
+    <head>
+        <meta charset='utf-8'>
+        <meta name='viewport' content='width=device-width, initial-scale=1'>
+        <title>Remote</title>
+        <link rel='icon' href='favicon.png'>
+        <meta name='theme-color' content='#000000' />
+        <link rel='manifest' href='manifest.json' />
+        <link rel='stylesheet' href="{{ url_for('static', filename='styles.css') }}">
+    </head>
+    <body>
+        <div style='position: absolute; top: 0; left: 20%; bottom: 0; border-left: 1px solid white'></div>
+        <div style='position: absolute; top: 0; left: 80%; bottom: 0; border-left: 1px solid white'></div>
+        <div style='position: absolute; left: 0; bottom: 0; right: 0; background: black; height: 5%; border-top: 1px solid white'></div>
+        <div style='position: absolute; top: 10; left: 10; right: 10'>
+            <button class='help-button'>Help</button>
+            <button class='delete-button'>Delete</button>
+            <label>
+                <input type='checkbox' class='record'> Record
+            </label>
+            <label>
+                <input type='checkbox' class='test'> Test
+            </label>
+            <pre class='record-instructions'></pre>
+            <pre class='gesture-debug'></pre>
+        </div>
+        <div class='page' style='display: flex; align-items: center; justify-content: center'>
+            <canvas class='debug-canvas' style='border: 1px solid white' width='200' height='200'>
+        </div>
+        <script src='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'></script>
+        <script type='module' src="{{ url_for('static', filename='app.js') }}"></script>
+    </body>
+</html>

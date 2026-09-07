@@ -1,0 +1,12 @@
+[
+  { "name": "up", "action": "up", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "down", "action": "down", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "left", "action": "left", "allowMirrorVertical": true, "allowSlanted": true },
+  { "name": "right", "action": "right", "allowMirrorVertical": true, "allowSlanted": true },
+  { "name": "circle", "action": "powerOn", "allowRotation": true },
+  { "name": "counterCircle", "action": "powerOff", "allowRotation": true },
+  { "name": "n", "action": "netflix", "allowSlanted": true },
+  { "name": "p", "action": "peacock", "allowSlanted": true },
+  { "name": "v", "action": "back", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "^", "action": "home", "allowMirrorHorizontal": true, "allowSlanted": true }
+]

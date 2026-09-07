@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "remote"
+version = "0.1.0"
+description = "Remote"
+authors = ["Ricardo Matsui"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.13"
+flask = "^3.1.0"
+gunicorn = "^23.0.0"
+websockets = "^13.1"
+janus = "^1.1.0"
+wakeonlan = "^3.1.0"
+ifaddr = "^0.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.0"
+
+[tool.pytest.ini_options]
+# model/ is a second, separate poetry project with its own interpreter and its
+# own tests package. Without this, a bare pytest here collects those too and
+# fails on imports that only exist in that environment.
+testpaths = ["tests"]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

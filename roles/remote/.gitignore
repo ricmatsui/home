@@ -1,0 +1,6 @@
+/model/logs
+/model/out
+/model/recordings.jsonl
+/static/model
+__pycache__
+.pytest_cache

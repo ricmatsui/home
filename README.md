@@ -15,6 +15,7 @@
 - Let's Encrypt
 - Light Control
 - PaperMC
+- Remote
 - Resilio Sync
 - Selenium
 - Sherpa DNS

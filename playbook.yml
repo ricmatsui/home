@@ -223,3 +223,6 @@
 
     - role: impression
       tags: impression
+
+    - role: remote
+      tags: remote

@@ -1,0 +1,143 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "remote.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: /mnt/gluster/remote/data
+    owner: pi
+    group: pi
+    state: directory
+
+- name: resolve model revision
+  ansible.builtin.uri:
+    url: "https://huggingface.co/api/models/{{ remote_model_repo }}/revision/{{ remote_model_ref }}"
+  delegate_to: localhost
+  register: remote_model_info
+
+- name: create model staging directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: remote-model
+  delegate_to: localhost
+  register: remote_model_staging
+
+- name: create model directory in staging
+  ansible.builtin.file:
+    path: "{{ remote_model_staging.path }}/model"
+    state: directory
+    mode: '0755'
+  delegate_to: localhost
+
+- name: download model files
+  ansible.builtin.get_url:
+    url: "https://huggingface.co/{{ remote_model_repo }}/resolve/{{ remote_model_info.json.sha }}/{{ item }}"
+    dest: "{{ remote_model_staging.path }}/model/{{ item | basename }}"
+    mode: '0644'
+  loop: "{{ remote_model_info.json.siblings | map(attribute='rfilename')
+            | select('match', '^(tfjs/|gestures\\.json$)') | list }}"
+  delegate_to: localhost
+
+- name: sync model files into the build context
+  ansible.builtin.command:
+    argv:
+      - rsync
+      - --archive
+      - --checksum
+      - --delete
+      - --itemize-changes
+      - "{{ remote_model_staging.path }}/model/"
+      - "{{ role_path }}/static/model/"
+  delegate_to: localhost
+
+- name: remove model staging directory
+  ansible.builtin.file:
+    path: "{{ remote_model_staging.path }}"
+    state: absent
+  delegate_to: localhost
+
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/remote"
+    tag: latest
+    path: "{{ role_path }}"
+    rebuild: always
+    labels:
+      home.remote.model_revision: "{{ remote_model_info.json.sha }}"
+    platform:
+      - linux/amd64
+      - linux/arm64/v8
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: remote
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          remote:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            networks:
+              traefik_traefik:
+              ipvlan:
+            environment:
+              REMOTE_TV_IP: "{{ config.remote.tv_ip }}"
+              REMOTE_TV_MAC: "{{ config.remote.tv_mac }}"
+              REMOTE_TV_TOKEN: "{{ config.remote.tv_token }}"
+              REMOTE_LAN_CIDR: "{{ config.remote.lan_cidr }}"
+              RECORDINGS_PATH: /data/recordings.jsonl
+              TZ: America/Los_Angeles
+            volumes:
+              - /mnt/gluster/remote/data:/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=30"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.remote.rule=Host(`remote.{{ config.domain }}`)"
+                - "traefik.http.routers.remote.middlewares=traefik-internal"
+                - "traefik.http.routers.remote.entrypoints=websecure"
+                - "traefik.http.routers.remote.tls.certresolver=letsencrypt"
+                - "traefik.http.services.remote.loadbalancer.server.port=5002"
+              resources:
+                limits:
+                  cpus: '0.25'
+                  memory: 128M
+              restart_policy:
+                delay: 30s
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true
+          ipvlan:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/remote.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy /mnt/gluster/remote \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/remote
