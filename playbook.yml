@@ -218,6 +218,12 @@
     - role: home_assistant
       tags: home_assistant
 
+    - role: go2rtc
+      tags: go2rtc
+
+    - role: frigate
+      tags: frigate
+
     - role: vpn_ui
       tags: vpn_ui
 

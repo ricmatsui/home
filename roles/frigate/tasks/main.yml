@@ -1,0 +1,116 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "frigate.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: pi
+    group: pi
+    state: directory
+  loop:
+    - /mnt/gluster/frigate/config
+    - /mnt/gluster/frigate/media
+    - /mnt/gluster/frigate/backups
+
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: frigate_image
+    name: frigate
+    # https://github.com/blakeblackshear/frigate/pkgs/container/frigate/982004562?tag=0.17.2
+    source: ghcr.io/blakeblackshear/frigate:0.17.2
+    image_id: sha256:d4351369984d4a9e2a49ac59736f6490856a7ea11f7790040746d21496967010
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: frigate
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          frigate:
+            image: "{{ frigate_image }}"
+            networks:
+              traefik_traefik:
+              mosquitto_mosquitto:
+              go2rtc_go2rtc:
+            environment:
+              TZ: America/Los_Angeles
+            volumes:
+              - /mnt/gluster/frigate/config:/config
+              - /mnt/gluster/frigate/media:/media/frigate
+              # swarm ignores shm_size and the short tmpfs key, so mount them long form
+              - type: tmpfs
+                target: /dev/shm
+                tmpfs:
+                  size: 268435456
+              - type: tmpfs
+                target: /tmp/cache
+                tmpfs:
+                  size: 536870912
+            healthcheck:
+              start_period: 3m
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=60"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.frigate.rule=Host(`frigate.{{ config.domain }}`)"
+                - "traefik.http.routers.frigate.middlewares=traefik-internal"
+                - "traefik.http.routers.frigate.entrypoints=websecure"
+                - "traefik.http.routers.frigate.tls.certresolver=letsencrypt"
+                - "traefik.http.services.frigate.loadbalancer.server.port=8971"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
+              resources:
+                limits:
+                  cpus: '3.00'
+                  memory: 3000M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          traefik_traefik:
+            external: true
+          mosquitto_mosquitto:
+            external: true
+          go2rtc_go2rtc:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/frigate.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      backup_sqlite /mnt/gluster/frigate/config/frigate.db \
+        /mnt/gluster/frigate/backups/db-$BACKUP_DATE.sqlite3
+
+      rclone copy --immutable /mnt/gluster/frigate/backups \
+        :s3:/$ARCHIVE_PATH/frigate/backups
+
+      rclone copy --immutable /mnt/gluster/frigate/media/recordings \
+        :s3:/$ARCHIVE_PATH/frigate/media/recordings \
+        --min-age 1d
+
+      rclone copy /mnt/gluster/frigate/config/config.yml \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/frigate/config

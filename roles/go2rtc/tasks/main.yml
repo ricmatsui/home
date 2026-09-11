@@ -1,0 +1,95 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "go2rtc.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: /mnt/gluster/go2rtc/config
+    owner: pi
+    group: pi
+    state: directory
+
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/go2rtc"
+    tag: latest
+    path: "{{ role_path }}/files"
+    rebuild: always
+    platform:
+      - linux/amd64
+      - linux/arm64/v8
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: go2rtc
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          go2rtc:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            networks:
+              - go2rtc
+              - traefik_traefik
+              - ipvlan
+            environment:
+              TZ: America/Los_Angeles
+            volumes:
+              - /mnt/gluster/go2rtc/config:/config
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.go2rtc.rule=Host(`go2rtc.{{ config.domain }}`)"
+                - "traefik.http.routers.go2rtc.middlewares=traefik-internal"
+                - "traefik.http.routers.go2rtc.entrypoints=websecure"
+                - "traefik.http.routers.go2rtc.tls.certresolver=letsencrypt"
+                - "traefik.http.services.go2rtc.loadbalancer.server.port=1984"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+                  - 'node.labels.home.instance_size == large'
+              resources:
+                limits:
+                  cpus: '1.00'
+                  memory: 300M
+              restart_policy:
+                delay: 1m
+              update_config:
+                order: stop-first
+        networks:
+          go2rtc: {}
+          traefik_traefik:
+            external: true
+          ipvlan:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/go2rtc.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy /mnt/gluster/go2rtc/config/go2rtc.yaml \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/go2rtc/config

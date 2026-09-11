@@ -7,8 +7,10 @@
 - Datadog
 - Docker Swarm
 - External USB Drive
+- Frigate
 - Gitea
 - GlusterFS
+- go2rtc
 - Home Assistant
 - Homepage
 - Jellyfin
