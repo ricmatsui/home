@@ -16,3 +16,10 @@
     name: docker-prune.timer
     state: restarted
   listen: docker_prune_restart
+
+- name: restart docker network recover timer
+  ansible.builtin.systemd:
+    daemon_reload: true
+    name: docker-network-recover.timer
+    state: restarted
+  listen: docker_network_recover_reload

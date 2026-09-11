@@ -109,3 +109,50 @@
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
   tags: docker_ipvlan
+
+- name: create docker network recover script
+  ansible.builtin.copy:
+    dest: /opt/docker-network-recover.sh
+    src: docker-network-recover.sh
+    owner: root
+    group: root
+    mode: u=rwx,g=rx,o=rx
+  notify: docker_network_recover_reload
+  tags: docker_network_recover
+
+- name: configure docker network recover service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker-network-recover.service
+    content: |
+      [Unit]
+      Description=Docker Network Recovery
+
+      [Service]
+      Type=oneshot
+      TimeoutStartSec=120
+      ExecStart=/opt/docker-network-recover.sh
+  notify: docker_network_recover_reload
+  tags: docker_network_recover
+
+- name: configure docker network recover timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/docker-network-recover.timer
+    content: |
+      [Unit]
+      Description=Docker Network Recovery
+
+      [Timer]
+      OnCalendar=*:0/2
+      RandomizedDelaySec=30s
+
+      [Install]
+      WantedBy=timers.target
+  notify: docker_network_recover_reload
+  tags: docker_network_recover
+
+- name: enable docker network recover timer
+  ansible.builtin.systemd:
+    name: docker-network-recover.timer
+    enabled: true
+    state: started
+  tags: docker_network_recover
