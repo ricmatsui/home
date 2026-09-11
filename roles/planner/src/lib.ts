@@ -543,3 +543,37 @@ export function upsertSection(
     const index = anchor === -1 ? 0 : anchor;
     return [...others.slice(0, index), section, ...others.slice(index)];
 }
+
+const TODAY_LINK_PATTERN = /^\[\d{4}-\d{2}-\d{2}\]\([^)]+\)$/;
+
+// Anchored to the line above [TODO] so an unrelated date link elsewhere in the
+// index is never rewritten, and the first run installs the line by itself
+export function upsertTodayLink(
+    indexContent: string,
+    dateStr: string,
+    fileId: string,
+): string {
+    const lines = indexContent.split('\n');
+    const todoIndex = lines.findIndex(line => /\[TODO\]\([^)]+\)/.test(line));
+    if (todoIndex === -1) {
+        throw new Error('TODO link not found in index.md');
+    }
+
+    const link = `[${dateStr}](${fileId})`;
+    const previous = todoIndex > 0 ? lines[todoIndex - 1] : null;
+
+    if (previous !== null && TODAY_LINK_PATTERN.test(previous)) {
+        lines[todoIndex - 1] = link;
+    } else {
+        lines.splice(todoIndex, 0, link);
+    }
+
+    return lines.join('\n');
+}
+
+export async function updateTodayLink(dateStr: string, dayFilePath: string): Promise<void> {
+    const fileId = path.basename(dayFilePath, '.md');
+    const indexPath = path.resolve(env.WIKI_PATH, 'index.md');
+    const content = await fs.promises.readFile(indexPath, 'utf-8');
+    await fs.promises.writeFile(indexPath, upsertTodayLink(content, dateStr, fileId), 'utf-8');
+}

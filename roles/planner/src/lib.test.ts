@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, extractActions, sortSectionItems, upsertSection, partitionSections } from './lib.js';
+import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, partitionSections } from './lib.js';
 import { Section } from './types.js';
 
 describe('parseAction', () => {
@@ -796,5 +796,67 @@ describe('partitionSections', () => {
         assert.deepEqual(lastData.map(s => s.name), ['Weather', 'Dates']);
         assert.deepEqual(lastData[0].items.map(i => i.text), ['Overcast - 74°/58°F']);
         assert.deepEqual(nextData.map(s => s.name), ['Dates']);
+    });
+});
+
+describe('upsertTodayLink', () => {
+    const index = [
+        '---',
+        'title: Index',
+        'tags: :zettel:',
+        'date: 2022-03-06 06:20',
+        '---',
+        '',
+        '[TODO](220306-0621)',
+        '[Projects](221224-0019)',
+        '[Processes](250102-1639)',
+        '[Inbox](220306-0955)',
+        '',
+        '---',
+        '',
+    ].join('\n');
+
+    it('inserts the link above TODO when absent', () => {
+        const result = upsertTodayLink(index, '2026-09-08', '260908-0000');
+
+        assert.equal(
+            result,
+            index.replace('[TODO]', '[2026-09-08](260908-0000)\n[TODO]'),
+        );
+    });
+
+    it('replaces an existing link rather than stacking a second one', () => {
+        const once = upsertTodayLink(index, '2026-09-08', '260908-0000');
+        const twice = upsertTodayLink(once, '2026-09-09', '260909-0000');
+
+        assert.equal(
+            twice,
+            index.replace('[TODO]', '[2026-09-09](260909-0000)\n[TODO]'),
+        );
+    });
+
+    it('keeps a file id carrying a collision suffix intact', () => {
+        const result = upsertTodayLink(index, '2026-02-27', '260227-0919a');
+
+        assert.match(result, /^\[2026-02-27\]\(260227-0919a\)$/m);
+    });
+
+    it('leaves a date link that is not adjacent to TODO alone', () => {
+        const withDistantLink = index.replace(
+            '[Inbox](220306-0955)',
+            '[Inbox](220306-0955)\n[2020-01-01](200101-0000)',
+        );
+
+        const result = upsertTodayLink(withDistantLink, '2026-09-08', '260908-0000');
+
+        assert.match(result, /^\[2020-01-01\]\(200101-0000\)$/m);
+        assert.match(result, /^\[2026-09-08\]\(260908-0000\)\n\[TODO\]/m);
+    });
+
+    it('throws when the index has no TODO link', () => {
+        assert.throws(
+            () => upsertTodayLink('[Inbox](220306-0955)\n', '2026-09-08', '260908-0000'),
+            /TODO link not found/,
+        );
     });
 });

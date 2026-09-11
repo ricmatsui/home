@@ -2,7 +2,7 @@ import { DBOS, WorkflowQueue } from '@dbos-inc/dbos-sdk';
 import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
-import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection } from './lib.js';
+import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink } from './lib.js';
 import { fetchDailyForecast, formatWeatherSection } from './weather.js';
 import { seedJournalSection } from './journal.js';
 
@@ -163,6 +163,10 @@ const wikiFunction = async (nextDate: Date) => {
             await writeDayFile(targetPath, sortSectionItems(targetSections));
         });
     }
+
+    await DBOS.runStep(async () => {
+        await updateTodayLink(formatDateStr(nextDate), nextDayFilePath);
+    });
 
     await DBOS.runStep(async () => {
         await commitWiki(`${formatDateStr(new Date())} Planning`);
