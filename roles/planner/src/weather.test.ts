@@ -13,7 +13,6 @@ const daily: DailyForecast = {
     wind_direction_10m_dominant: [355],
     wind_gusts_10m_max: [20.6],
     uv_index_max: [7.15],
-    sunshine_duration: [43200],
     precipitation_sum: [0],
     sunrise: ['2026-09-04T06:46'],
     sunset: ['2026-09-04T19:38'],
@@ -25,7 +24,7 @@ describe('formatWeatherSection', () => {
             name: 'Weather',
             items: [{
                 status: 'note',
-                text: 'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm (12h) UV 7, rain 16% 0.00 in',
+                text: 'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm UV 7, rain 16% 0.00 in',
                 children: [],
             }],
         });
@@ -36,7 +35,7 @@ describe('formatWeatherSection', () => {
 
         assert.equal(
             formatWeatherSection(dry).items[0].text,
-            'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm (12h) UV 7',
+            'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm UV 7',
         );
     });
 
@@ -82,11 +81,11 @@ describe('formatWeatherSection sun times', () => {
     }
 
     it('reads the times as the location reports them, without a timezone round-trip', () => {
-        assert.equal(sunFor('2026-12-21T07:21', '2026-12-21T16:53'), '7:21am - 4:53pm (12h) UV 7');
+        assert.equal(sunFor('2026-12-21T07:21', '2026-12-21T16:53'), '7:21am - 4:53pm UV 7');
     });
 
     it('renders midnight and noon as 12', () => {
-        assert.equal(sunFor('2026-09-04T00:00', '2026-09-04T12:00'), '12:00am - 12:00pm (12h) UV 7');
+        assert.equal(sunFor('2026-09-04T00:00', '2026-09-04T12:00'), '12:00am - 12:00pm UV 7');
     });
 });
 

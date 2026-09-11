@@ -20,7 +20,6 @@ const DAILY_FIELDS = [
     'wind_direction_10m_dominant',
     'wind_gusts_10m_max',
     'uv_index_max',
-    'sunshine_duration',
     'precipitation_sum',
     'sunrise',
     'sunset',
@@ -82,7 +81,7 @@ export function formatWeatherSection(daily: DailyForecast): Section {
     const parts = [
         `${describeCode(daily.weather_code[0])} ${Math.round(daily.temperature_2m_max[0])}°/${Math.round(daily.temperature_2m_min[0])}°F`,
         `${compassPoint(daily.wind_direction_10m_dominant[0])} ${Math.round(daily.wind_speed_10m_max[0])}/${Math.round(daily.wind_gusts_10m_max[0])} mph`,
-        `${clockTime(daily.sunrise[0])} - ${clockTime(daily.sunset[0])} (${Math.round(daily.sunshine_duration[0] / 3600)}h) UV ${Math.round(daily.uv_index_max[0])}`,
+        `${clockTime(daily.sunrise[0])} - ${clockTime(daily.sunset[0])} UV ${Math.round(daily.uv_index_max[0])}`,
     ];
 
     // Dry days say nothing worth a segment

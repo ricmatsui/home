@@ -30,7 +30,6 @@ export interface DailyForecast {
     wind_direction_10m_dominant: number[];
     wind_gusts_10m_max: number[];
     uv_index_max: number[];
-    sunshine_duration: number[];
     precipitation_sum: number[];
     sunrise: string[];
     sunset: string[];
