@@ -76,6 +76,12 @@
               - /mnt/gluster/paperless/media:/usr/src/paperless/media
               - /mnt/gluster/paperless/export:/usr/src/paperless/export
               - /mnt/gluster/paperless/consume:/usr/src/paperless/consume
+            healthcheck:
+              test: ['CMD-SHELL', 'curl -fs -S -L --max-time 30 http://localhost:8000']
+              interval: 60s
+              timeout: 35s
+              retries: 5
+              start_period: 3m
             deploy:
               mode: replicated
               replicas: 1
