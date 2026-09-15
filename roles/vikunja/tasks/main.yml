@@ -69,7 +69,9 @@
               VIKUNJA_SERVICE_SECRET: "{{ config.vikunja.service_secret }}"
               VIKUNJA_SERVICE_TIMEZONE: America/Los_Angeles
               VIKUNJA_SERVICE_ENABLEREGISTRATION: "false"
-              VIKUNJA_SERVICE_JWTTTL: "2592000"
+              VIKUNJA_SERVICE_JWTTTL: "31536000"
+              VIKUNJA_SERVICE_JWTTTLLONG: "31536000"
+              VIKUNJA_SERVICE_JWTTTLSHORT: "31536000"
               VIKUNJA_AUTH_LOCAL_ENABLED: "false"
               VIKUNJA_AUTH_OPENID_ENABLED: "true"
               VIKUNJA_AUTH_OPENID_PROVIDERS_GOOGLE_NAME: Google
