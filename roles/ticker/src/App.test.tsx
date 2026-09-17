@@ -141,7 +141,9 @@ describe('App', () => {
         await user.click(within(item).getByRole('button', { name: /done/i }));
 
         await waitFor(() => expect(item).toHaveAttribute('data-status', 'done'));
-        expect(api.completeChore).toHaveBeenCalledWith({ id: 42, completedBy: undefined });
+        expect(api.completeChore).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 42, completedBy: undefined }),
+        );
     });
 
     it('does not cross the row off until the API resolves', async () => {
@@ -241,7 +243,9 @@ describe('App', () => {
             await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
 
             await waitFor(() =>
-                expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: undefined }),
+                expect(api.completeChore).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: 1, completedBy: undefined }),
+                ),
             );
             expect(
                 screen.queryByRole('button', { name: 'Mark Trash done as John' }),
@@ -261,7 +265,9 @@ describe('App', () => {
             await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
 
             await waitFor(() =>
-                expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: undefined }),
+                expect(api.completeChore).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: 1, completedBy: undefined }),
+                ),
             );
         });
 
@@ -295,7 +301,11 @@ describe('App', () => {
             );
 
             // 2 is John's Donetick userId, which is what completedBy takes.
-            await waitFor(() => expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: 2 }));
+            await waitFor(() =>
+                expect(api.completeChore).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: 1, completedBy: 2 }),
+                ),
+            );
             expect(await screen.findByText('Done · John')).toBeInTheDocument();
         });
 
@@ -305,7 +315,11 @@ describe('App', () => {
             render(<App />);
             await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
 
-            await waitFor(() => expect(api.completeChore).toHaveBeenCalledWith({ id: 1, completedBy: undefined }));
+            await waitFor(() =>
+                expect(api.completeChore).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: 1, completedBy: undefined }),
+                ),
+            );
         });
     });
 

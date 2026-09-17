@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChores } from './useChores';
 import * as api from '../api/donetick';
-import { ApiError, SessionExpiredError } from '../lib/errors';
+import { ApiError, ChoreChangedError, SessionExpiredError } from '../lib/errors';
 import type { Chore } from '../types';
 
 const NOW = new Date('2026-08-15T12:00:00Z');
@@ -55,7 +55,11 @@ describe('useChores', () => {
         });
 
         expect(result.current.rowStatus[5]).toBe('done');
-        expect(api.completeChore).toHaveBeenCalledWith({ id: 5, completedBy: undefined });
+        expect(api.completeChore).toHaveBeenCalledWith({
+            id: 5,
+            dueDate: '2026-08-10T12:00:00Z',
+            completedBy: undefined,
+        });
     });
 
     it('holds the row open for a choice before anything is sent', async () => {
@@ -99,7 +103,11 @@ describe('useChores', () => {
             await result.current.complete(5, { name: 'John', id: 2 });
         });
 
-        expect(api.completeChore).toHaveBeenCalledWith({ id: 5, completedBy: 2 });
+        expect(api.completeChore).toHaveBeenCalledWith({
+            id: 5,
+            dueDate: '2026-08-10T12:00:00Z',
+            completedBy: 2,
+        });
     });
 
     /*
@@ -154,6 +162,49 @@ describe('useChores', () => {
 
         expect(result.current.rowStatus[5]).toBe('error');
         expect(result.current.rowError[5]).toBe('Chore is out of completion window');
+        expect(result.current.error).toBeNull();
+    });
+
+    /*
+     * The staleness guard lives in the API client, but it can only compare
+     * against a due date somebody hands it — and the only honest value is the
+     * one the row was rendered from. Reading it back out of the hook's own
+     * state is what ties the check to what the tapper actually saw.
+     */
+    it('sends the due date the board is showing along with the completion', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([
+            chore({ id: 5, nextDueDate: '2026-08-11T09:00:00Z' }),
+        ]);
+
+        const { result } = renderHook(() => useChores(clock));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => {
+            await result.current.complete(5);
+        });
+
+        expect(api.completeChore).toHaveBeenCalledWith({
+            id: 5,
+            dueDate: '2026-08-11T09:00:00Z',
+            completedBy: undefined,
+        });
+    });
+
+    // A chore that moved on is a fact about that row, not about the board, so
+    // it belongs inline rather than in the banner that blocks everything.
+    it('reports a refused stale completion on the row', async () => {
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 5 })]);
+        vi.mocked(api.completeChore).mockRejectedValue(new ChoreChangedError());
+
+        const { result } = renderHook(() => useChores(clock));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        await act(async () => {
+            await result.current.complete(5);
+        });
+
+        expect(result.current.rowStatus[5]).toBe('error');
+        expect(result.current.rowError[5]).toBe('Due date changed — refresh.');
         expect(result.current.error).toBeNull();
     });
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { completeChore, getChores, REQUEST_TIMEOUT_MS } from './donetick';
-import { ApiError, NetworkError, SessionExpiredError } from '../lib/errors';
+import { completeChore, getChore, getChores, REQUEST_TIMEOUT_MS } from './donetick';
+import { ApiError, ChoreChangedError, NetworkError, SessionExpiredError } from '../lib/errors';
 
 function jsonResponse(body: unknown, status = 200): Response {
     return new Response(JSON.stringify(body), {
@@ -105,7 +105,55 @@ describe('getChores', () => {
     });
 });
 
+describe('getChore', () => {
+    beforeEach(() => {
+        vi.stubGlobal('fetch', vi.fn());
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    // The exact inverse of the list route, and confirmed against the running
+    // server rather than the swagger page: /chores/{id} answers 200 and
+    // /chores/{id}/ answers a 301 back to it. Under redirect:'manual' that
+    // redirect is an opaque response, which this client reads as an expired
+    // session — so a trailing slash here would make every completion claim
+    // the session had lapsed.
+    it('requests a single chore without a trailing slash', async () => {
+        vi.mocked(fetch).mockResolvedValue(jsonResponse({ res: { id: 42 } }));
+
+        await getChore(42);
+
+        expect(fetch).toHaveBeenCalledWith(
+            '/api/v1/chores/42',
+            expect.objectContaining({ redirect: 'manual' }),
+        );
+    });
+
+    it('unwraps the res envelope into a single chore', async () => {
+        const chore = { id: 42, name: 'Trash', nextDueDate: '2026-08-15T12:00:00Z' };
+        vi.mocked(fetch).mockResolvedValue(jsonResponse({ res: chore }));
+
+        await expect(getChore(42)).resolves.toEqual(chore);
+    });
+});
+
 describe('completeChore', () => {
+    const DUE = '2026-08-15T12:00:00Z';
+
+    // Answers the freshness check with the due date given, and anything else
+    // with an empty success — the POST's response body is never read.
+    function serveChore(nextDueDate: string | null = DUE) {
+        vi.mocked(fetch).mockImplementation((url) =>
+            Promise.resolve(
+                String(url).endsWith('/do')
+                    ? jsonResponse({ res: {} })
+                    : jsonResponse({ res: { id: 42, nextDueDate } }),
+            ),
+        );
+    }
+
     beforeEach(() => {
         vi.stubGlobal('fetch', vi.fn());
     });
@@ -115,9 +163,9 @@ describe('completeChore', () => {
     });
 
     it('posts to the do endpoint with an empty JSON body', async () => {
-        vi.mocked(fetch).mockResolvedValue(jsonResponse({ res: {} }));
+        serveChore();
 
-        await completeChore({ id: 42 });
+        await completeChore({ id: 42, dueDate: DUE });
 
         expect(fetch).toHaveBeenCalledWith(
             '/api/v1/chores/42/do',
@@ -135,9 +183,9 @@ describe('completeChore', () => {
      * what makes completedBy allowed at all.
      */
     it('posts the person the completion is credited to', async () => {
-        vi.mocked(fetch).mockResolvedValue(jsonResponse({ res: {} }));
+        serveChore();
 
-        await completeChore({ id: 42, completedBy: 3 });
+        await completeChore({ id: 42, dueDate: DUE, completedBy: 3 });
 
         expect(fetch).toHaveBeenCalledWith(
             '/api/v1/chores/42/do',
@@ -145,12 +193,75 @@ describe('completeChore', () => {
         );
     });
 
+    it('reads the chore back before posting the completion', async () => {
+        serveChore();
+
+        await completeChore({ id: 42, dueDate: DUE });
+
+        expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+            '/api/v1/chores/42',
+            '/api/v1/chores/42/do',
+        ]);
+    });
+
+    /*
+     * The board this tap came from may have been rendered hours ago. A due
+     * date that has moved since means somebody already completed the chore
+     * and Donetick rolled it forward, so completing again would tick off the
+     * next cycle rather than the one on screen.
+     */
+    it('refuses the completion when the due date has moved', async () => {
+        serveChore('2026-08-22T12:00:00Z');
+
+        await expect(completeChore({ id: 42, dueDate: DUE })).rejects.toBeInstanceOf(
+            ChoreChangedError,
+        );
+    });
+
+    it('does not post anything once it has refused', async () => {
+        serveChore('2026-08-22T12:00:00Z');
+
+        await expect(completeChore({ id: 42, dueDate: DUE })).rejects.toThrow();
+
+        expect(fetch).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/chores/42');
+    });
+
+    it('refuses the completion when the chore no longer has a due date', async () => {
+        serveChore(null);
+
+        await expect(completeChore({ id: 42, dueDate: DUE })).rejects.toBeInstanceOf(
+            ChoreChangedError,
+        );
+    });
+
+    it('refuses the completion when the chore only now has a due date', async () => {
+        serveChore(DUE);
+
+        await expect(completeChore({ id: 42, dueDate: null })).rejects.toBeInstanceOf(
+            ChoreChangedError,
+        );
+    });
+
+    // The guard is about the instant, not the spelling of it. Comparing the
+    // raw strings would refuse a completion merely because Donetick wrote the
+    // very same moment with milliseconds this time.
+    it('completes when the same instant is written differently', async () => {
+        serveChore('2026-08-15T12:00:00.000Z');
+
+        await expect(completeChore({ id: 42, dueDate: DUE })).resolves.toBeUndefined();
+    });
+
     it('surfaces the completion-window rejection as an ApiError', async () => {
-        vi.mocked(fetch).mockResolvedValue(
-            jsonResponse({ error: 'Chore is out of completion window' }, 400),
+        vi.mocked(fetch).mockImplementation((url) =>
+            Promise.resolve(
+                String(url).endsWith('/do')
+                    ? jsonResponse({ error: 'Chore is out of completion window' }, 400)
+                    : jsonResponse({ res: { id: 42, nextDueDate: DUE } }),
+            ),
         );
 
-        await expect(completeChore({ id: 42 })).rejects.toMatchObject({
+        await expect(completeChore({ id: 42, dueDate: DUE })).rejects.toMatchObject({
             status: 400,
             message: 'Chore is out of completion window',
         });
@@ -163,40 +274,96 @@ describe('completeChore', () => {
             ok: false,
         } as Response);
 
-        await expect(completeChore({ id: 42 })).rejects.toBeInstanceOf(SessionExpiredError);
+        await expect(completeChore({ id: 42, dueDate: DUE })).rejects.toBeInstanceOf(
+            SessionExpiredError,
+        );
     });
 
     it('sends one completion at a time', async () => {
-        const first = deferred<Response>();
+        const firstCheck = deferred<Response>();
+        // A fresh Response per call: a body can only be read once, and each
+        // completion now makes two requests.
         vi.mocked(fetch)
-            .mockReturnValueOnce(first.promise)
-            .mockResolvedValue(jsonResponse({ res: {} }));
+            .mockReturnValueOnce(firstCheck.promise)
+            .mockImplementation(() => Promise.resolve(jsonResponse({ res: { nextDueDate: DUE } })));
 
-        const firstCall = completeChore({ id: 1 });
-        const secondCall = completeChore({ id: 2 });
+        const firstCall = completeChore({ id: 1, dueDate: DUE });
+        const secondCall = completeChore({ id: 2, dueDate: DUE });
 
         await settle();
         expect(fetch).toHaveBeenCalledTimes(1);
-        expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/chores/1/do');
+        expect(vi.mocked(fetch).mock.calls[0][0]).toBe('/api/v1/chores/1');
 
-        first.resolve(jsonResponse({ res: {} }));
+        firstCheck.resolve(jsonResponse({ res: { nextDueDate: DUE } }));
         await Promise.all([firstCall, secondCall]);
 
-        expect(fetch).toHaveBeenCalledTimes(2);
-        expect(vi.mocked(fetch).mock.calls[1][0]).toBe('/api/v1/chores/2/do');
+        // The check and the completion it guards are one slot in the queue,
+        // never interleaved with another tap's pair.
+        expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+            '/api/v1/chores/1',
+            '/api/v1/chores/1/do',
+            '/api/v1/chores/2',
+            '/api/v1/chores/2/do',
+        ]);
+    });
+
+    /*
+     * The whole reason the check sits inside the queue slot rather than at the
+     * call: a tap can wait behind a slow completion for as long as that one
+     * takes, and a check made when the tap arrived would have aged by exactly
+     * that much before the POST it guards went out.
+     */
+    it('checks the chore when its turn comes, not when the tap was made', async () => {
+        const firstCheck = deferred<Response>();
+        let served = DUE;
+
+        vi.mocked(fetch).mockImplementation((url) => {
+            if (url === '/api/v1/chores/1') {
+                return firstCheck.promise;
+            }
+            if (url === '/api/v1/chores/2') {
+                return Promise.resolve(jsonResponse({ res: { nextDueDate: served } }));
+            }
+            return Promise.resolve(jsonResponse({ res: {} }));
+        });
+
+        const firstCall = completeChore({ id: 1, dueDate: DUE });
+        const secondCall = completeChore({ id: 2, dueDate: DUE });
+
+        await settle();
+        // Somebody else clears chore 2 while chore 1 is still in flight.
+        served = '2026-08-22T12:00:00Z';
+        firstCheck.resolve(jsonResponse({ res: { nextDueDate: DUE } }));
+
+        await expect(firstCall).resolves.toBeUndefined();
+        await expect(secondCall).rejects.toBeInstanceOf(ChoreChangedError);
     });
 
     it('sends the next completion even when the one before it failed', async () => {
         vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ res: { nextDueDate: DUE } }))
             .mockResolvedValueOnce(jsonResponse({ error: 'Chore is out of completion window' }, 400))
-            .mockResolvedValue(jsonResponse({ res: {} }));
+            .mockImplementation(() => Promise.resolve(jsonResponse({ res: { nextDueDate: DUE } })));
 
-        const failing = completeChore({ id: 1 });
-        const following = completeChore({ id: 2 });
+        const failing = completeChore({ id: 1, dueDate: DUE });
+        const following = completeChore({ id: 2, dueDate: DUE });
 
         await expect(failing).rejects.toBeInstanceOf(ApiError);
         await expect(following).resolves.toBeUndefined();
-        expect(fetch).toHaveBeenCalledTimes(2);
+    });
+
+    // A refused completion is still a finished slot. The queue must not wedge
+    // on one, or a single stale row would take the rest of the board with it.
+    it('sends the next completion even when the one before it was refused', async () => {
+        vi.mocked(fetch)
+            .mockResolvedValueOnce(jsonResponse({ res: { nextDueDate: '2026-08-22T12:00:00Z' } }))
+            .mockImplementation(() => Promise.resolve(jsonResponse({ res: { nextDueDate: DUE } })));
+
+        const refused = completeChore({ id: 1, dueDate: DUE });
+        const following = completeChore({ id: 2, dueDate: DUE });
+
+        await expect(refused).rejects.toBeInstanceOf(ChoreChangedError);
+        await expect(following).resolves.toBeUndefined();
     });
 
     // The clock starts when the request goes out, not when the tap arrives —
@@ -206,8 +373,8 @@ describe('completeChore', () => {
         vi.useFakeTimers();
         vi.stubGlobal('fetch', hangingFetch());
 
-        const firstCall = completeChore({ id: 1 });
-        const secondCall = completeChore({ id: 2 });
+        const firstCall = completeChore({ id: 1, dueDate: DUE });
+        const secondCall = completeChore({ id: 2, dueDate: DUE });
         const assertions = Promise.all([
             expect(firstCall).rejects.toBeInstanceOf(NetworkError),
             expect(secondCall).rejects.toBeInstanceOf(NetworkError),

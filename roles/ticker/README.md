@@ -16,7 +16,8 @@ credit that completion to a member of the household, refresh manually, reload
 once the local date turns over, hide the chores Donetick marks private, leave
 out the chores Donetick will not accept a completion for yet, mark the ones
 falling tomorrow rather than today, show a chore's description underneath it
-when it has one.
+when it has one, refuse a completion whose chore has moved on since the board
+was drawn.
 
 Out of scope, on purpose: undo, creating/editing chores, anything due further
 out, polling for chores, signing in as a person, offline support,
@@ -104,6 +105,44 @@ This works only because the API key belongs to a circle **admin or manager**.
 Donetick rejects `completedBy` from anyone else with a 403, and it accepts only
 people inside the key owner's own circle.
 
+## Completing from a board that has gone stale
+
+This app runs on a wall tablet nobody reloads, and the only automatic refresh
+is the day rollover. So the board on screen can be hours old, and in that time
+somebody else — in Donetick, or on a phone looking at this same app — may have
+already cleared a chore. Donetick then rolls the chore forward to its next
+occurrence, and a tap on the stale row completes *that* one: the chore is
+ticked off twice and the next cycle is silently consumed. Nothing on the board
+shows it happened.
+
+So a completion states the due date it believes the chore has, and
+`completeChore` reads the chore back and refuses if that has changed. It
+compares instants rather than strings, because Donetick may serialise the same
+moment differently between two reads and a due date that only *looks* different
+is not a chore that changed. A due date that appeared or vanished counts as
+changed too.
+
+**The check sits inside the queue slot, not at the call.** Completions are
+serialised, so a tap can wait behind a slow one for up to the full 60s timeout
+— and a check made when the tap arrived would have aged by exactly that much
+before the POST it guards went out. Read and POST are one slot, never
+interleaved with another tap's pair. This is the one read that is queued;
+`getChores` stays outside it, because a refresh has no reason to sit behind a
+completion.
+
+**It narrows the window; it does not close it.** Donetick has no conditional
+completion — no ETag, no compare-and-set — so a chore can still change in the
+gap between the read and the POST that follows it. What this removes is the
+hours-wide window, which is the one that actually happens. Do not describe it
+as making double completion impossible.
+
+A refusal is one row's problem, so it lands inline on that row through the
+existing error path — not in the banner, which blocks the whole board. The rest
+of the list stays tappable, and the queue does not wedge on a refused slot.
+There is deliberately no auto-refresh and no retry: refreshing would clear
+every other row's state along with the error, and retrying is the thing this
+guard exists to prevent.
+
 ## How it fits together
 
 ```
@@ -145,7 +184,8 @@ roles/ticker/
     lib/chores.ts                helpers for chores
     lib/description.ts           allowlist sanitizer for Donetick's Quill HTML
     lib/users.ts                 the roster, parsed from VITE_TICKER_USERS
-    lib/errors.ts                SessionExpiredError / NetworkError / ApiError
+    lib/errors.ts                SessionExpiredError / NetworkError /
+                                 ChoreChangedError / ApiError
     lib/queue.ts                 serialises completions, one request at a time
     hooks/useChores.ts           chores, per-row state, loading, errors
     hooks/usePublicOnly.ts       the Public toggle, persisted to localStorage
@@ -209,6 +249,17 @@ silently, so nothing looks wrong from the browser console — but the redirect
 loses the auth context and the app reports a bogus "session expired". `POST
 /chores/{id}/do` does not redirect. Check any new endpoint against the running
 server, not the swagger page, and pin the exact path with a test.
+
+**And the slash rule is per-route, not a convention.** `GET
+/api/v1/chores/{id}` is the exact *inverse* of the list above: it takes no
+trailing slash, and `/chores/{id}/` answers a `301` back to it — the same
+bogus "session expired" from the opposite mistake. There is nothing to
+memorise and nothing to generalise; each route is what the running server says
+it is. That route also answers a missing id with **500**, not 404, so a chore
+deleted out from under the board surfaces as an ordinary `ApiError` carrying
+Donetick's `Failed to retrieve chore`. That is deliberate: a 500 is also what a
+genuinely broken server returns, and reading it as "this chore is gone" would
+collapse two failure classes that need to stay apart.
 
 **`completedBy` takes Donetick's `userId`, not the membership `id`.**
 `/api/v1/circles/members` returns both on every row: an `id` identifying the
@@ -278,7 +329,10 @@ only the proxy converts the 502 into a 504 and fixes nothing.
 
 **Do not retry a failed completion automatically.** The failure above happens
 *after* Donetick has begun the work, so a retry can double-complete a chore.
-The Done button is deliberately the only thing that re-sends one.
+The Done button is deliberately the only thing that re-sends one. The staleness
+guard does not make retrying safe — a 502 is exactly the case where Donetick
+finishes the work it never answered for, and the guard's read races that same
+unanswered write.
 
 **Never state what you have not confirmed.** An empty list mid-load is not the
 same fact as "nothing is due", and neither is an empty list after a failed
@@ -512,13 +566,22 @@ from local parts (`new Date(y, m - 1, d, h)`) rather than UTC strings for the
 same reason. This does not weaken the rule above: `now` is still injected, and
 no test reads the wall clock.
 
-Four tests are guardrails rather than feature coverage, so do not "clean them
+These tests are guardrails rather than feature coverage, so do not "clean them
 up":
 
 - `useChores > does not fetch on its own after mounting` fails loudly if
   anyone adds a focus listener or an interval. Refresh is manual only.
 - `donetick > requests the chores endpoint with a trailing slash` is the
   regression test for the 301 described above.
+- `getChore > requests a single chore without a trailing slash` is the same
+  regression test for the opposite route, where the opposite mistake produces
+  the identical bogus "session expired".
+- `completeChore > checks the chore when its turn comes, not when the tap was
+  made` is what stops the staleness check being lifted out of the queue slot to
+  somewhere that reads better. Hoisted, it would go stale by however long the
+  tap waited its turn, which is the whole thing it is there to prevent.
+- `completeChore > sends the next completion even when the one before it was
+  refused` proves one stale row does not wedge the queue behind it.
 - `web app manifest > ships every icon it references, at the size it claims`
   reads the PNG headers off disk. Nothing else in the suite touches static
   files, so without it an icon can go missing and every test still passes.

@@ -67,32 +67,45 @@ export function useChores(now: () => Date = defaultClock) {
         setRowStatus((current) => ({ ...current, [id]: 'idle' }));
     }, []);
 
-    const complete = useCallback(async (id: number, user?: User) => {
-        setRowStatus((current) => ({ ...current, [id]: 'pending' }));
-        setRowError((current) => {
-            const next = { ...current };
-            delete next[id];
-            return next;
-        });
+    /*
+     * The due date goes out with the completion so the API client can refuse
+     * one whose chore has moved on since the board was drawn. It is read from
+     * this hook's own `chores` — the same array the row rendered from — rather
+     * than passed in by the row, so what gets checked is by construction what
+     * the person tapping was looking at.
+     */
+    const complete = useCallback(
+        async (id: number, user?: User) => {
+            setRowStatus((current) => ({ ...current, [id]: 'pending' }));
+            setRowError((current) => {
+                const next = { ...current };
+                delete next[id];
+                return next;
+            });
 
-        try {
-            await completeChore({ id, completedBy: user?.id });
-            setRowStatus((current) => ({ ...current, [id]: 'done' }));
-            if (user) {
-                setRowCompletedBy((current) => ({ ...current, [id]: user }));
+            try {
+                const dueDate = chores.find((chore) => chore.id === id)?.nextDueDate ?? null;
+                await completeChore({ id, dueDate, completedBy: user?.id });
+                setRowStatus((current) => ({ ...current, [id]: 'done' }));
+                if (user) {
+                    setRowCompletedBy((current) => ({ ...current, [id]: user }));
+                }
+            } catch (caught) {
+                // A lapsed session is not a problem with this row — it blocks
+                // everything, so it belongs in the global banner. A chore that
+                // moved on deliberately does not go here: it is one row's
+                // problem, and the rest of the board is still tappable.
+                if (caught instanceof SessionExpiredError) {
+                    setError(caught);
+                    setRowStatus((current) => ({ ...current, [id]: 'idle' }));
+                    return;
+                }
+                setRowStatus((current) => ({ ...current, [id]: 'error' }));
+                setRowError((current) => ({ ...current, [id]: (caught as Error).message }));
             }
-        } catch (caught) {
-            // A lapsed session is not a problem with this row — it blocks
-            // everything, so it belongs in the global banner.
-            if (caught instanceof SessionExpiredError) {
-                setError(caught);
-                setRowStatus((current) => ({ ...current, [id]: 'idle' }));
-                return;
-            }
-            setRowStatus((current) => ({ ...current, [id]: 'error' }));
-            setRowError((current) => ({ ...current, [id]: (caught as Error).message }));
-        }
-    }, []);
+        },
+        [chores],
+    );
 
     return {
         chores,

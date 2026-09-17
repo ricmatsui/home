@@ -16,6 +16,20 @@ export class NetworkError extends Error {
     }
 }
 
+/*
+ * The chore's due date is no longer the one the board showed, so this tap came
+ * from a page rendered before somebody else cleared the chore. Completing now
+ * would tick off the cycle Donetick has already rolled forward to rather than
+ * the one on screen. Not retryable by itself: the answer is to refresh and
+ * look at the board again.
+ */
+export class ChoreChangedError extends Error {
+    constructor() {
+        super('Due date changed — refresh.');
+        this.name = 'ChoreChangedError';
+    }
+}
+
 // Donetick answered with a non-2xx status and (usually) a message.
 export class ApiError extends Error {
     status: number;

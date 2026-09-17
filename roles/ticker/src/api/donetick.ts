@@ -1,4 +1,4 @@
-import { ApiError, NetworkError, SessionExpiredError } from '../lib/errors';
+import { ApiError, ChoreChangedError, NetworkError, SessionExpiredError } from '../lib/errors';
 import { createQueue } from '../lib/queue';
 import type { Chore } from '../types';
 
@@ -73,6 +73,18 @@ export async function getChores(): Promise<Chore[]> {
 }
 
 /*
+ * The single-chore route takes no trailing slash, which is the exact inverse
+ * of the list above — /chores/{id}/ answers a 301 back to /chores/{id}, and
+ * under redirect:'manual' that arrives as an opaque redirect this client
+ * cannot tell from forward-auth bouncing us. Confirmed against the running
+ * server, not the swagger page. A missing id comes back 500, not 404.
+ */
+export async function getChore(id: number): Promise<Chore> {
+    const body = await request<{ res: Chore }>(`/chores/${id}`);
+    return body.res;
+}
+
+/*
  * Completions are serialised.
  */
 const completions = createQueue();
@@ -82,13 +94,54 @@ const completions = createQueue();
  * key belongs to. Donetick only honours it when that key's user is an admin or
  * manager of the circle, and only for a user inside the same circle; anything
  * else comes back 403. Omitted, the completion is the key owner's own.
+ *
+ * `dueDate` is the due date the caller believes the chore has — the one the
+ * board it was tapped from is showing. It is required rather than optional on
+ * purpose: an omitted one would skip the staleness check silently, and a
+ * completion sent without knowing what it is completing is the bug this
+ * argument exists to prevent.
  */
 export interface CompleteChoreOptions {
     id: number;
+    dueDate: string | null;
     completedBy?: number;
 }
 
-export async function completeChore({ id, completedBy }: CompleteChoreOptions): Promise<void> {
+// Date rather than string equality: Donetick may serialise the same instant
+// differently between two reads, and a due date that only looks different is
+// not a chore that changed.
+function sameInstant(a: string | null, b: string | null): boolean {
+    if (a === null || b === null) {
+        return a === b;
+    }
+    return new Date(a).getTime() === new Date(b).getTime();
+}
+
+/*
+ * The read and the completion it guards are one slot in the queue, so the
+ * chore is checked the instant before the POST goes out rather than when the
+ * tap arrived — a tap can wait behind a slow completion for a minute, which is
+ * exactly long enough for the answer to stop being true. This is the one read
+ * that is queued; `getChores` stays outside it, because a refresh has no
+ * reason to sit behind a completion.
+ *
+ * It narrows the window rather than closing it. Donetick has no conditional
+ * completion, so a chore can still change in the gap between this read and the
+ * POST. What it removes is the hours-wide one: a wall tablet showing a board
+ * nobody has refreshed since morning.
+ */
+export async function completeChore({
+    id,
+    dueDate,
+    completedBy,
+}: CompleteChoreOptions): Promise<void> {
     const body = JSON.stringify(completedBy === undefined ? {} : { completedBy });
-    await completions(() => request(`/chores/${id}/do`, { method: 'POST', body }));
+
+    await completions(async () => {
+        const current = await getChore(id);
+        if (!sameInstant(current.nextDueDate, dueDate)) {
+            throw new ChoreChangedError();
+        }
+        return request(`/chores/${id}/do`, { method: 'POST', body });
+    });
 }
