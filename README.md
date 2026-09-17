@@ -16,6 +16,7 @@
 - Jellyfin
 - Let's Encrypt
 - Light Control
+- MQTT Explorer
 - PaperMC
 - Remote
 - Resilio Sync

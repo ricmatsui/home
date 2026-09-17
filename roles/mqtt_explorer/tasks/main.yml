@@ -1,0 +1,87 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "mqtt-explorer.{{ config.domain }}"
+    type: A
+    value: "{{ config.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: create directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: 1001
+    group: 1001
+    state: directory
+  loop:
+    - /mnt/gluster/mqtt-explorer/data
+
+- name: mirror image
+  include_tasks: tasks/docker_mirror_image.yml
+  vars:
+    fact: mqtt_explorer_image
+    name: mqtt-explorer
+    source: ghcr.io/thomasnordquist/mqtt-explorer:master-35f3197
+    image_id: sha256:39a86744a7ba1a07aeadbd059c26c036dfd0e95e112ba967a21f55cd42803a5a
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: mqtt-explorer
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          mqtt-explorer:
+            image: "{{ mqtt_explorer_image }}"
+            networks:
+              - mosquitto_mosquitto
+              - traefik_traefik
+            environment:
+              ALLOWED_ORIGINS: "https://mqtt-explorer.{{ config.domain }}"
+              MQTT_EXPLORER_SKIP_AUTH: "true"
+              NODE_ENV: production
+              UPGRADE_INSECURE_REQUESTS: "true"
+            volumes:
+              - /mnt/gluster/mqtt-explorer/data:/app/data
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.mqtt-explorer.rule=Host(`mqtt-explorer.{{ config.domain }}`)"
+                - "traefik.http.routers.mqtt-explorer.middlewares=traefik-internal,traefik-forward-auth"
+                - "traefik.http.routers.mqtt-explorer.entrypoints=websecure"
+                - "traefik.http.routers.mqtt-explorer.tls.certresolver=letsencrypt"
+                - "traefik.http.services.mqtt-explorer.loadbalancer.server.port=3000"
+              resources:
+                limits:
+                  cpus: '0.25'
+                  memory: 200M
+              restart_policy:
+                delay: 10m
+              update_config:
+                order: stop-first
+        networks:
+          mosquitto_mosquitto:
+            external: true
+          traefik_traefik:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/mqtt-explorer.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone sync /mnt/gluster/mqtt-explorer \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/mqtt-explorer

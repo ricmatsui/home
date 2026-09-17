@@ -215,6 +215,9 @@
     - role: mosquitto
       tags: mosquitto
 
+    - role: mqtt_explorer
+      tags: mqtt_explorer
+
     - role: home_assistant
       tags: home_assistant
 
