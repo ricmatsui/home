@@ -456,10 +456,69 @@ export function partitionSections(sections: Section[]): { lastData: Section[]; n
     return { lastData, nextData };
 }
 
-export async function createDayFile(todoFile: TodoFileInfo, dateStr: string): Promise<string> {
-    if (!todoFile.todoContent.includes(dateStr)) {
-        throw new Error(`Date ${dateStr} not found in TODO file`);
+const DAILY_DATE_PATTERN = /^- \[[ xX.]\] (?:\[)?(\d{4}-\d{2}-\d{2})/;
+
+// A misparsed action ("-> 2087") would otherwise prepend tens of thousands of
+// lines, so an implausible target fails loudly instead
+const MAX_EXTEND_YEARS = 5;
+
+// Local, so the weekday matches the day the date names. Parsing "2026-09-20"
+// as UTC lands on the Saturday evening before it west of Greenwich.
+function parseDateStr(dateStr: string): Date {
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
+// The list reads newest-first, so a week runs Sat down to Sun and the break
+// belongs below the Sunday that closes it
+export function renderDailyDates(dates: Date[]): string[] {
+    const lines: string[] = [];
+
+    for (const date of dates) {
+        lines.push(`- [ ] ${formatDateStr(date)}`);
+        if (date.getDay() === 0) lines.push('');
     }
+
+    return lines;
+}
+
+export function extendDailyList(todoContent: string, targetDateStr: string): string {
+    const lines = todoContent.split('\n');
+    const headIndex = lines.findIndex(line => DAILY_DATE_PATTERN.test(line));
+    if (headIndex === -1) {
+        throw new Error('Daily list not found in TODO file');
+    }
+
+    const head = parseDateStr(lines[headIndex].match(DAILY_DATE_PATTERN)![1]);
+    const target = parseDateStr(targetDateStr);
+
+    if (target <= head) {
+        if (!lines.some(line => DAILY_DATE_PATTERN.exec(line)?.[1] === targetDateStr)) {
+            throw new Error(`Date ${targetDateStr} not found in TODO file`);
+        }
+        return todoContent;
+    }
+
+    const limit = new Date();
+    limit.setFullYear(limit.getFullYear() + MAX_EXTEND_YEARS);
+    if (target > limit) {
+        throw new Error(`Date ${targetDateStr} is more than ${MAX_EXTEND_YEARS} years out`);
+    }
+
+    const dates: Date[] = [];
+    for (const date = new Date(target); date > head; date.setDate(date.getDate() - 1)) {
+        dates.push(new Date(date));
+    }
+
+    return [
+        ...lines.slice(0, headIndex),
+        ...renderDailyDates(dates),
+        ...lines.slice(headIndex),
+    ].join('\n');
+}
+
+export async function createDayFile(todoFile: TodoFileInfo, dateStr: string): Promise<string> {
+    const todoContent = extendDailyList(todoFile.todoContent, dateStr);
 
     const now = new Date();
     const yy = String(now.getFullYear()).slice(2);
@@ -492,7 +551,7 @@ export async function createDayFile(todoFile: TodoFileInfo, dateStr: string): Pr
 
     await fs.promises.writeFile(filePath, content, 'utf-8');
 
-    const updatedTodo = todoFile.todoContent.replace(
+    const updatedTodo = todoContent.replace(
         new RegExp(`(- \\[[ xX.]\\] )${dateStr}(.*)$`, 'm'),
         `$1[${dateStr}](${fileId})$2`,
     );

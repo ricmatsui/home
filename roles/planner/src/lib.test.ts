@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, partitionSections } from './lib.js';
+import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
 import { Section } from './types.js';
 
 describe('parseAction', () => {
@@ -913,5 +913,97 @@ describe('upsertTodayLink', () => {
             () => upsertTodayLink('[Inbox](220306-0955)\n', '2026-09-08', '260908-0000'),
             /TODO link not found/,
         );
+    });
+});
+
+describe('extendDailyList', () => {
+    // 2026-09-20 and 2026-09-27 are Sundays. These fixtures only read as
+    // correct when date strings are parsed in local time - parsing them as UTC
+    // shifts every weekday back a day under TZ=America/Los_Angeles.
+    const todo = (...dates: string[]) => [
+        '---',
+        'title: TODO',
+        '---',
+        '',
+        '# Daily',
+        '',
+        '[Template](241020-2052)',
+        '',
+        ...dates,
+    ].join('\n');
+
+    it('leaves the file alone when the date is already listed', () => {
+        const content = todo('- [ ] 2026-09-23', '- [ ] 2026-09-22');
+        assert.equal(extendDailyList(content, '2026-09-22'), content);
+    });
+
+    it('leaves the file alone when the date is already listed and linked', () => {
+        const content = todo('- [ ] 2026-09-23', '- [X] [2026-09-22](260922-0000)');
+        assert.equal(extendDailyList(content, '2026-09-22'), content);
+    });
+
+    it('prepends the missing dates above the head of the list', () => {
+        const content = todo('- [ ] 2026-09-23', '- [ ] 2026-09-22');
+        assert.equal(extendDailyList(content, '2026-09-28'), todo(
+            '- [ ] 2026-09-28',
+            '- [ ] 2026-09-27',
+            '',
+            '- [ ] 2026-09-26',
+            '- [ ] 2026-09-25',
+            '- [ ] 2026-09-24',
+            '- [ ] 2026-09-23',
+            '- [ ] 2026-09-22',
+        ));
+    });
+
+    it('puts the week break below a new date that lands on the head of the list', () => {
+        const content = todo('- [ ] 2026-09-26', '- [ ] 2026-09-25');
+        assert.equal(extendDailyList(content, '2026-09-29'), todo(
+            '- [ ] 2026-09-29',
+            '- [ ] 2026-09-28',
+            '- [ ] 2026-09-27',
+            '',
+            '- [ ] 2026-09-26',
+            '- [ ] 2026-09-25',
+        ));
+    });
+
+    it('does not disturb a week break already below the head of the list', () => {
+        const content = todo('- [ ] 2026-09-20', '', '- [ ] 2026-09-19');
+        assert.equal(extendDailyList(content, '2026-09-21'), todo(
+            '- [ ] 2026-09-21',
+            '- [ ] 2026-09-20',
+            '',
+            '- [ ] 2026-09-19',
+        ));
+    });
+
+    it('refuses a date more than five years out', () => {
+        const far = new Date();
+        far.setFullYear(far.getFullYear() + 6);
+        assert.throws(
+            () => extendDailyList(todo('- [ ] 2026-09-23'), formatDateStr(far)),
+            /more than 5 years/,
+        );
+    });
+
+    it('accepts a date inside the five year horizon', () => {
+        const near = new Date();
+        near.setFullYear(near.getFullYear() + 1);
+        assert.match(
+            extendDailyList(todo('- [ ] 2026-09-23'), formatDateStr(near)),
+            new RegExp(`- \\[ \\] ${formatDateStr(near)}$`, 'm'),
+        );
+    });
+
+    it('refuses a date older than the list', () => {
+        assert.throws(
+            () => extendDailyList(todo('- [ ] 2026-09-23', '- [ ] 2026-09-22'), '2026-09-01'),
+            /not found in TODO file/,
+        );
+    });
+
+    it('refuses a file with no daily list', () => {
+        assert.throws(() => extendDailyList('---\ntitle: TODO\n---\n', '2026-09-23'), /Daily list/);
     });
 });

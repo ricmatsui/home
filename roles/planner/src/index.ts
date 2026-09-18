@@ -7,7 +7,7 @@ import { fetchDailyForecast, formatWeatherSection, WEATHER_SECTION } from './wea
 import { fetchChoreHistory, countCompletedOn, formatDonetickSection } from './donetick.js';
 import { seedJournalSection } from './journal.js';
 
-const { PLANNER_DEBUG } = process.env;
+const { PLANNER_DEBUG, PLANNER_RUN_DATE } = process.env;
 
 const wikiQueue = new WorkflowQueue('wiki', { concurrency: 1 });
 
@@ -246,6 +246,20 @@ async function main() {
                 schedule: '0 0 * * *',
             }
         ]);
+    }
+
+    if (PLANNER_RUN_DATE) {
+        // Anything trailing the date is ignored here but still varies the
+        // workflow ID below, which is what makes a deliberate rerun possible
+        const [year, month, day] = PLANNER_RUN_DATE.slice(0, 10).split('-').map(Number);
+
+        // Local midnight, so a manual run lands on the same instant the daily
+        // schedule would have produced for that date, DST included
+        await DBOS.startWorkflow(enqueueWikiWorkflowIfNeeded, {
+            // Deterministic, so redeploys and restart backoff cannot re-run it.
+            // To force a rerun, suffix the date: PLANNER_RUN_DATE=2026-09-18-retry
+            workflowID: `manual-${PLANNER_RUN_DATE}`,
+        })(new Date(year, month - 1, day));
     }
 
     const input = readline.createInterface({ input: process.stdin });
