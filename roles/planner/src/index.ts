@@ -3,7 +3,8 @@ import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
 import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink } from './lib.js';
-import { fetchDailyForecast, formatWeatherSection } from './weather.js';
+import { fetchDailyForecast, formatWeatherSection, WEATHER_SECTION } from './weather.js';
+import { fetchChoreHistory, countCompletedOn, formatDonetickSection } from './donetick.js';
 import { seedJournalSection } from './journal.js';
 
 const { PLANNER_DEBUG } = process.env;
@@ -127,9 +128,30 @@ const wikiFunction = async (nextDate: Date) => {
         await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithJournal));
     });
 
+    const { lastDataWithDonetick } = await DBOS.runStep(async () => {
+        if (!lastData) {
+            return { lastDataWithDonetick: null as Section[] | null };
+        }
+
+        try {
+            const history = await fetchChoreHistory();
+            return {
+                lastDataWithDonetick: upsertSection(
+                    lastData,
+                    formatDonetickSection(countCompletedOn(history, date)),
+                    { after: WEATHER_SECTION },
+                ),
+            };
+        } catch (error) {
+            // A count that cannot be fetched is not worth failing the day over
+            console.warn('Skipping Donetick section', error);
+            return { lastDataWithDonetick: lastData };
+        }
+    });
+
     await DBOS.runStep(async () => {
-        if (!lastData || !dayFilePath) return;
-        await writeDayFile(dayFilePath, sortSectionItems(lastData));
+        if (!lastDataWithDonetick || !dayFilePath) return;
+        await writeDayFile(dayFilePath, sortSectionItems(lastDataWithDonetick));
     });
 
     await DBOS.runStep(async () => {

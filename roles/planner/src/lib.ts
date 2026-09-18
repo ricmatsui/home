@@ -6,6 +6,7 @@ import { StatsD } from 'hot-shots';
 import { Status, TodoItem, Section, Action } from './types.js';
 import { WEATHER_SECTION } from './weather.js';
 import { JOURNAL_SECTION } from './journal.js';
+import { DONETICK_SECTION } from './donetick.js';
 import { requireEnv } from './env.js';
 
 const dogstatsd = new StatsD({
@@ -23,7 +24,7 @@ const env = {
 const ACTION_PREFIX = '-> ';
 
 // Regenerated for each new day, so they stay with the day they describe
-const EPHEMERAL_SECTIONS = [WEATHER_SECTION, JOURNAL_SECTION];
+const EPHEMERAL_SECTIONS = [WEATHER_SECTION, DONETICK_SECTION, JOURNAL_SECTION];
 
 const MONTH_NAMES = [
     'january', 'february', 'march', 'april', 'may', 'june',
@@ -533,14 +534,16 @@ export async function pushWiki(): Promise<void> {
     console.log('Pushed wiki', { commitsPushed });
 }
 
+// A missing anchor puts the section first either way, so a day file that never
+// got the section it was meant to sit against still reads top-down in order
 export function upsertSection(
     sections: Section[],
     section: Section,
-    options: { before: string },
+    options: { before: string } | { after: string },
 ): Section[] {
     const others = sections.filter(s => s.name !== section.name);
-    const anchor = others.findIndex(s => s.name === options.before);
-    const index = anchor === -1 ? 0 : anchor;
+    const anchor = others.findIndex(s => s.name === ('before' in options ? options.before : options.after));
+    const index = anchor === -1 ? 0 : 'before' in options ? anchor : anchor + 1;
     return [...others.slice(0, index), section, ...others.slice(index)];
 }
 

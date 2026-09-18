@@ -26,6 +26,7 @@
             image: "{{ build_result.image.RepoDigests[0] }}"
             networks:
               - dbos_dbos
+              - traefik_traefik
             volumes:
               - /mnt/gluster/resilio-sync/sync/Wiki:/wiki
               - /opt/datadog-agent/run:/opt/datadog-agent/run
@@ -37,6 +38,9 @@
               TZ: America/Los_Angeles
               WEATHER_LATITUDE: "{{ config.planner.weather.latitude }}"
               WEATHER_LONGITUDE: "{{ config.planner.weather.longitude }}"
+              DONETICK_URL: http://donetick_donetick:2021
+              DONETICK_API_KEY: "{{ config.planner.donetick_api_key }}"
+              DONETICK_USER_ID: "{{ config.planner.donetick_user_id }}"
             deploy:
               mode: replicated
               replicas: 1
@@ -57,6 +61,8 @@
 
         networks:
           dbos_dbos:
+            external: true
+          traefik_traefik:
             external: true
 
   vars:

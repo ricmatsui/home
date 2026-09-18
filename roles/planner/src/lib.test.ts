@@ -754,6 +754,46 @@ describe('upsertSection', () => {
 
         assert.deepEqual(names(sections), ['Dates']);
     });
+
+    it('inserts the section after the anchor section', () => {
+        const donetick: Section = { name: 'Donetick', items: [] };
+        const sections: Section[] = [
+            { name: 'Other', items: [] },
+            { name: 'Weather', items: [] },
+            { name: 'Dates', items: [] },
+        ];
+
+        assert.deepEqual(names(upsertSection(sections, donetick, { after: 'Weather' })),
+            ['Other', 'Weather', 'Donetick', 'Dates']);
+    });
+
+    it('moves an existing section to sit after the anchor rather than duplicating it', () => {
+        const donetick: Section = {
+            name: 'Donetick',
+            items: [{ status: 'note', text: '7 completed', children: [] }],
+        };
+        const sections: Section[] = [
+            { name: 'Donetick', items: [{ status: 'note', text: 'Stale', children: [] }] },
+            { name: 'Weather', items: [] },
+            { name: 'Dates', items: [] },
+        ];
+
+        const result = upsertSection(sections, donetick, { after: 'Weather' });
+
+        assert.deepEqual(names(result), ['Weather', 'Donetick', 'Dates']);
+        assert.deepEqual(result[1].items, donetick.items);
+    });
+
+    it('puts the section first when the anchor to follow is absent', () => {
+        const donetick: Section = { name: 'Donetick', items: [] };
+        const sections: Section[] = [
+            { name: 'Other', items: [] },
+            { name: 'Dates', items: [] },
+        ];
+
+        assert.deepEqual(names(upsertSection(sections, donetick, { after: 'Weather' })),
+            ['Donetick', 'Other', 'Dates']);
+    });
 });
 
 describe('partitionSections', () => {
@@ -796,6 +836,21 @@ describe('partitionSections', () => {
         assert.deepEqual(lastData.map(s => s.name), ['Weather', 'Dates']);
         assert.deepEqual(lastData[0].items.map(i => i.text), ['Overcast - 74°/58°F']);
         assert.deepEqual(nextData.map(s => s.name), ['Dates']);
+    });
+
+    // A re-run parses the count back off the day file it was written to; it
+    // describes that day and must not follow the unfinished work forward
+    it('leaves the Donetick section behind instead of carrying it forward', () => {
+        const sections: Section[] = [
+            { name: 'Donetick', items: [{ status: 'note', text: '7 completed', children: [] }] },
+            { name: 'Work', items: [{ status: 'incomplete', text: 'Todo', children: [] }] },
+        ];
+
+        const { lastData, nextData } = partitionSections(sections);
+
+        assert.deepEqual(lastData.map(s => s.name), ['Donetick', 'Work']);
+        assert.deepEqual(lastData[0].items.map(i => i.text), ['7 completed']);
+        assert.deepEqual(nextData.map(s => s.name), ['Work']);
     });
 });
 

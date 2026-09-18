@@ -34,3 +34,10 @@ export interface DailyForecast {
     sunrise: string[];
     sunset: string[];
 }
+
+export interface ChoreHistory {
+    choreId: number;
+    status: number;
+    completedBy: number;
+    performedAt: string | null;
+}
