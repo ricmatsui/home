@@ -26,6 +26,7 @@ def create_app(control=None, recordings=None, static=None):
         control = TvControl(
             ip=os.environ['REMOTE_TV_IP'],
             mac=os.environ['REMOTE_TV_MAC'],
+            client_name=os.environ['REMOTE_TV_CLIENT_NAME'],
             token=os.environ['REMOTE_TV_TOKEN'],
             lan_cidr=os.environ['REMOTE_LAN_CIDR'],
         )

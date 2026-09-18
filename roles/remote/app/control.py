@@ -14,13 +14,12 @@ from app.network import local_addresses, select_lan_interface
 
 logger = logging.getLogger(__name__)
 
-CLIENT_NAME = 'Home Remote'
-
 
 class TvControl:
-    def __init__(self, ip, mac, token, lan_cidr):
+    def __init__(self, ip, mac, client_name, token, lan_cidr):
         self.ip = ip
         self.mac = mac
+        self.client_name = client_name
         self.token = token
         self.lan = select_lan_interface(local_addresses(), lan_cidr)
         self.message_queue = None
@@ -54,7 +53,7 @@ class TvControl:
         logger.debug('-> wol')
 
     def _url(self):
-        name = base64.b64encode(CLIENT_NAME.encode('utf-8')).decode('utf-8')
+        name = base64.b64encode(self.client_name.encode('utf-8')).decode('utf-8')
         return (
             f'wss://{self.ip}:8002/api/v2/channels/samsung.remote.control'
             f'?name={name}&token={self.token}'
