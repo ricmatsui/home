@@ -35,6 +35,18 @@ export interface DailyForecast {
     sunset: string[];
 }
 
+export interface Chore {
+    id: number;
+    isActive: boolean;
+    assignedTo: number | null;
+    nextDueDate: string | null;
+}
+
+export interface DueCounts {
+    overdue: number;
+    dueToday: number;
+}
+
 export interface ChoreHistory {
     choreId: number;
     status: number;

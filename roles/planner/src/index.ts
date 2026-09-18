@@ -4,7 +4,7 @@ import readline from 'readline';
 import { Section, Action } from './types.js';
 import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink } from './lib.js';
 import { fetchDailyForecast, formatWeatherSection, WEATHER_SECTION } from './weather.js';
-import { fetchChoreHistory, countCompletedOn, formatDonetickSection } from './donetick.js';
+import { DONETICK_SECTION, fetchChoreHistory, fetchChores, countCompletedOn, countDueOn, formatDonetickSection, withCompletedCount } from './donetick.js';
 import { seedJournalSection } from './journal.js';
 
 const { PLANNER_DEBUG, PLANNER_RUN_DATE } = process.env;
@@ -124,8 +124,25 @@ const wikiFunction = async (nextDate: Date) => {
         return { nextDataWithJournal: seedJournalSection(nextDataWithWeather) };
     });
 
+    const { nextDataWithDonetick } = await DBOS.runStep(async () => {
+        try {
+            const chores = await fetchChores();
+            return {
+                nextDataWithDonetick: upsertSection(
+                    nextDataWithJournal,
+                    formatDonetickSection(countDueOn(chores, nextDate)),
+                    { after: WEATHER_SECTION },
+                ),
+            };
+        } catch (error) {
+            // Counts that cannot be fetched are not worth failing the day over
+            console.warn('Skipping Donetick section', error);
+            return { nextDataWithDonetick: nextDataWithJournal };
+        }
+    });
+
     await DBOS.runStep(async () => {
-        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithJournal));
+        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithDonetick));
     });
 
     const { lastDataWithDonetick } = await DBOS.runStep(async () => {
@@ -135,10 +152,15 @@ const wikiFunction = async (nextDate: Date) => {
 
         try {
             const history = await fetchChoreHistory();
+
+            // Recorded onto the section the day was opened with, so its overdue
+            // and due counts stay alongside what came of them
+            const opened = lastData.find(section => section.name === DONETICK_SECTION);
+
             return {
                 lastDataWithDonetick: upsertSection(
                     lastData,
-                    formatDonetickSection(countCompletedOn(history, date)),
+                    withCompletedCount(opened, countCompletedOn(history, date)),
                     { after: WEATHER_SECTION },
                 ),
             };

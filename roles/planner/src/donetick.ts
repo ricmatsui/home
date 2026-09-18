@@ -1,4 +1,4 @@
-import { Section, ChoreHistory } from './types.js';
+import { Section, Chore, ChoreHistory, DueCounts } from './types.js';
 import { requireEnv } from './env.js';
 
 export const DONETICK_SECTION = 'Donetick';
@@ -18,8 +18,9 @@ const DONETICK = {
     get url() { return requireEnv('DONETICK_URL'); },
     get apiKey() { return requireEnv('DONETICK_API_KEY'); },
 
-    // Integer rather than merely numeric: completedBy is a user id, and a 3.5
-    // or a stray word is a misconfiguration that would quietly count nothing
+    // Integer rather than merely numeric: completedBy and assignedTo are user
+    // ids, and a 3.5 or a stray word is a misconfiguration that would quietly
+    // count nothing
     get userId() {
         const raw = requireEnv('DONETICK_USER_ID');
         const id = Number(raw);
@@ -57,11 +58,94 @@ export function countCompletedOn(history: ChoreHistory[], day: Date): number {
     }).length;
 }
 
-export function formatDonetickSection(count: number): Section {
+function startOfLocalDay(day: Date): Date {
+    return new Date(day.getFullYear(), day.getMonth(), day.getDate());
+}
+
+/*
+ * Narrowed the same way a completion is: what the day carries is what is
+ * assigned to DONETICK_USER_ID, plus what nobody has been given yet. The chore
+ * list answers with the whole circle and offers no member filter, so the
+ * narrowing happens here rather than in the request.
+ *
+ * Due dates come back as instants, so they are bucketed against the wall clock
+ * the day file is written for rather than a UTC day boundary. A chore due later
+ * than the day counts as neither.
+ */
+export function countDueOn(chores: Chore[], day: Date): DueCounts {
+    const userId = DONETICK.userId;
+    const dayStart = startOfLocalDay(day);
+
+    const counts = { overdue: 0, dueToday: 0 };
+
+    for (const chore of chores) {
+        if (!chore.isActive) continue;
+        if (chore.assignedTo != null && chore.assignedTo !== userId) continue;
+        if (!chore.nextDueDate) continue;
+
+        const due = new Date(chore.nextDueDate);
+        if (Number.isNaN(due.getTime())) continue;
+
+        if (isSameLocalDay(due, day)) {
+            counts.dueToday++;
+        } else if (due < dayStart) {
+            counts.overdue++;
+        }
+    }
+
+    return counts;
+}
+
+// Written when the day is opened, a midnight snapshot of what it starts out
+// carrying. The completed count joins it when the day is closed.
+export function formatDonetickSection(counts: DueCounts): Section {
     return {
         name: DONETICK_SECTION,
-        items: [{ status: 'note', text: `${count} completed`, children: [] }],
+        items: [
+            { status: 'note', text: `${counts.overdue} overdue`, children: [] },
+            { status: 'note', text: `${counts.dueToday} due today`, children: [] },
+        ],
     };
+}
+
+const COMPLETED_PATTERN = /^\d+ completed$/;
+
+/*
+ * The other half of the day: recorded onto the section already in the file
+ * rather than over it, so the counts the day was opened with survive alongside
+ * what came of them. Closing the same day twice replaces the completed count
+ * instead of leaving a second one behind.
+ */
+export function withCompletedCount(section: Section | undefined, count: number): Section {
+    const opened = (section?.items ?? []).filter(item => !COMPLETED_PATTERN.test(item.text));
+
+    return {
+        name: DONETICK_SECTION,
+        items: [...opened, { status: 'note', text: `${count} completed`, children: [] }],
+    };
+}
+
+/*
+ * The whole circle's chores, with archived ones left out by default. The list
+ * route offers no member filter, so narrowing to one person is countDueOn's
+ * job. The trailing slash is the route as Donetick registers it; without it the
+ * request is answered with a redirect.
+ */
+export async function fetchChores(): Promise<Chore[]> {
+    const url = new URL(`${BASE_PATH}/chores/`, DONETICK.url);
+
+    const response = await fetch(url, {
+        headers: { secretkey: DONETICK.apiKey },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Chore list request failed (${response.status})`);
+    }
+
+    const body = await response.json() as { res?: Chore[] | null };
+
+    return body.res ?? [];
 }
 
 /*
