@@ -1,5 +1,6 @@
 import { Section, DailyForecast } from './types.js';
 import { requireEnv } from './env.js';
+import { describeError } from './errors.js';
 
 export const WEATHER_SECTION = 'Weather';
 
@@ -94,6 +95,16 @@ export function formatWeatherSection(daily: DailyForecast): Section {
     return {
         name: WEATHER_SECTION,
         items: [{ status: 'note', text, children: [] }],
+    };
+}
+
+// Written in the forecast's place rather than left out, so a day with no
+// weather line says why, instead of reading as a day the forecast was never
+// asked for
+export function formatWeatherUnavailable(error: unknown): Section {
+    return {
+        name: WEATHER_SECTION,
+        items: [{ status: 'note', text: `Unavailable: ${describeError(error)}`, children: [] }],
     };
 }
 

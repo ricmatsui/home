@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { countCompletedOn, countDueOn, fetchChoreHistory, fetchChores, formatDonetickSection, withCompletedCount } from './donetick.js';
+import { countCompletedOn, countDueOn, fetchChoreHistory, fetchChores, formatDonetickSection, formatDonetickUnavailable, withCompletedCount, withCompletedUnavailable } from './donetick.js';
 import { parseDayFile, serializeSections } from './lib.js';
 import { Chore, ChoreHistory, Section } from './types.js';
 
@@ -97,6 +97,26 @@ describe('withCompletedCount', () => {
         });
     });
 
+    // A rerun after a failed close leaves the count, not both
+    it('replaces a failure an earlier close recorded in the count\'s place', () => {
+        const failed = withCompletedUnavailable(opened, new Error('fetch failed'));
+
+        assert.deepEqual(withCompletedCount(failed, 9).items, [
+            note('3 overdue'),
+            note('5 due today'),
+            note('9 completed'),
+        ]);
+    });
+
+    it('keeps the note left by a day that never read its due counts', () => {
+        const neverOpened = formatDonetickUnavailable(new Error('Chore list request failed (500)'));
+
+        assert.deepEqual(withCompletedCount(neverOpened, 9).items, [
+            note('Due counts unavailable: Chore list request failed (500)'),
+            note('9 completed'),
+        ]);
+    });
+
     it('records the count on a day that was never opened with a section', () => {
         assert.deepEqual(withCompletedCount(undefined, 7), {
             name: 'Donetick',
@@ -114,6 +134,83 @@ describe('withCompletedCount', () => {
         const section = withCompletedCount(opened, 7);
 
         assert.deepEqual(parseDayFile(serializeSections([section])), [section]);
+    });
+});
+
+describe('formatDonetickUnavailable', () => {
+    it('records the failure where the day\'s counts would have gone', () => {
+        assert.deepEqual(formatDonetickUnavailable(new Error('Chore list request failed (500)')), {
+            name: 'Donetick',
+            items: [note('Due counts unavailable: Chore list request failed (500)')],
+        });
+    });
+
+    it('survives a round trip through the day file format', () => {
+        const section = formatDonetickUnavailable(new Error('Chore list request failed (500)'));
+
+        assert.deepEqual(parseDayFile(serializeSections([section])), [section]);
+    });
+});
+
+describe('withCompletedUnavailable', () => {
+    const opened: Section = {
+        name: 'Donetick',
+        items: [note('3 overdue'), note('5 due today')],
+    };
+
+    it('records the failure below the counts the day opened with', () => {
+        assert.deepEqual(withCompletedUnavailable(opened, new Error('Chore history request failed (500)')), {
+            name: 'Donetick',
+            items: [
+                note('3 overdue'),
+                note('5 due today'),
+                note('Completed count unavailable: Chore history request failed (500)'),
+            ],
+        });
+    });
+
+    // A day whose due counts were never read still says so after it closes:
+    // the two failures are separate facts about the same day
+    it('keeps the note left by a day that never read its due counts', () => {
+        const neverOpened = formatDonetickUnavailable(new Error('Chore list request failed (500)'));
+
+        assert.deepEqual(withCompletedUnavailable(neverOpened, new Error('Chore history request failed (500)')).items, [
+            note('Due counts unavailable: Chore list request failed (500)'),
+            note('Completed count unavailable: Chore history request failed (500)'),
+        ]);
+    });
+
+    it('replaces a failure an earlier close already recorded', () => {
+        const closed = withCompletedUnavailable(opened, new Error('Chore history request failed (500)'));
+
+        assert.deepEqual(withCompletedUnavailable(closed, new Error('fetch failed')).items, [
+            note('3 overdue'),
+            note('5 due today'),
+            note('Completed count unavailable: fetch failed'),
+        ]);
+    });
+
+    it('replaces a completed count an earlier close already recorded', () => {
+        const closed = withCompletedCount(opened, 7);
+
+        assert.deepEqual(withCompletedUnavailable(closed, new Error('fetch failed')).items, [
+            note('3 overdue'),
+            note('5 due today'),
+            note('Completed count unavailable: fetch failed'),
+        ]);
+    });
+
+    it('records the failure on a day that was never opened with a section', () => {
+        assert.deepEqual(withCompletedUnavailable(undefined, new Error('fetch failed')), {
+            name: 'Donetick',
+            items: [note('Completed count unavailable: fetch failed')],
+        });
+    });
+
+    it('leaves the day it was given untouched', () => {
+        withCompletedUnavailable(opened, new Error('fetch failed'));
+
+        assert.deepEqual(opened.items, [note('3 overdue'), note('5 due today')]);
     });
 });
 

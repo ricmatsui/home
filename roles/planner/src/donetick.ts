@@ -1,5 +1,6 @@
-import { Section, Chore, ChoreHistory, DueCounts } from './types.js';
+import { Section, TodoItem, Chore, ChoreHistory, DueCounts } from './types.js';
 import { requireEnv } from './env.js';
+import { describeError } from './errors.js';
 
 export const DONETICK_SECTION = 'Donetick';
 
@@ -108,7 +109,29 @@ export function formatDonetickSection(counts: DueCounts): Section {
     };
 }
 
+// Written in the counts' place rather than left out, so a day that opened
+// without them says why instead of reading as a day with nothing due
+export function formatDonetickUnavailable(error: unknown): Section {
+    return {
+        name: DONETICK_SECTION,
+        items: [{
+            status: 'note',
+            text: `Due counts unavailable: ${describeError(error)}`,
+            children: [],
+        }],
+    };
+}
+
 const COMPLETED_PATTERN = /^\d+ completed$/;
+const COMPLETED_UNAVAILABLE_PREFIX = 'Completed count unavailable: ';
+
+// What the day was opened with: whatever an earlier close left behind is
+// dropped, so closing the same day twice replaces that line rather than
+// stacking a second one under it
+function openedItems(section: Section | undefined): TodoItem[] {
+    return (section?.items ?? []).filter(item =>
+        !COMPLETED_PATTERN.test(item.text) && !item.text.startsWith(COMPLETED_UNAVAILABLE_PREFIX));
+}
 
 /*
  * The other half of the day: recorded onto the section already in the file
@@ -117,11 +140,29 @@ const COMPLETED_PATTERN = /^\d+ completed$/;
  * instead of leaving a second one behind.
  */
 export function withCompletedCount(section: Section | undefined, count: number): Section {
-    const opened = (section?.items ?? []).filter(item => !COMPLETED_PATTERN.test(item.text));
+    const opened = openedItems(section);
 
     return {
         name: DONETICK_SECTION,
         items: [...opened, { status: 'note', text: `${count} completed`, children: [] }],
+    };
+}
+
+/*
+ * The same half of the day, when the history could not be read. The due counts
+ * the day opened with are kept — and so is a note saying they were never read,
+ * which is a different fact about the day than this one.
+ */
+export function withCompletedUnavailable(section: Section | undefined, error: unknown): Section {
+    const opened = openedItems(section);
+
+    return {
+        name: DONETICK_SECTION,
+        items: [...opened, {
+            status: 'note',
+            text: `${COMPLETED_UNAVAILABLE_PREFIX}${describeError(error)}`,
+            children: [],
+        }],
     };
 }
 

@@ -3,8 +3,8 @@ import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
 import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink } from './lib.js';
-import { fetchDailyForecast, formatWeatherSection, WEATHER_SECTION } from './weather.js';
-import { DONETICK_SECTION, fetchChoreHistory, fetchChores, countCompletedOn, countDueOn, formatDonetickSection, withCompletedCount } from './donetick.js';
+import { fetchDailyForecast, formatWeatherSection, formatWeatherUnavailable, WEATHER_SECTION } from './weather.js';
+import { DONETICK_SECTION, fetchChoreHistory, fetchChores, countCompletedOn, countDueOn, formatDonetickSection, formatDonetickUnavailable, withCompletedCount, withCompletedUnavailable } from './donetick.js';
 import { seedJournalSection } from './journal.js';
 
 const { PLANNER_DEBUG, PLANNER_RUN_DATE } = process.env;
@@ -114,9 +114,16 @@ const wikiFunction = async (nextDate: Date) => {
                 ),
             };
         } catch (error) {
-            // A missing forecast is not worth failing the day's planning over
-            console.warn('Skipping weather section', error);
-            return { nextDataWithWeather: mergedNextData };
+            // A missing forecast is not worth failing the day's planning over,
+            // but the day is opened saying so rather than silently short a section
+            console.warn('Recording weather as unavailable', error);
+            return {
+                nextDataWithWeather: upsertSection(
+                    mergedNextData,
+                    formatWeatherUnavailable(error),
+                    { before: 'Dates' },
+                ),
+            };
         }
     });
 
@@ -136,8 +143,14 @@ const wikiFunction = async (nextDate: Date) => {
             };
         } catch (error) {
             // Counts that cannot be fetched are not worth failing the day over
-            console.warn('Skipping Donetick section', error);
-            return { nextDataWithDonetick: nextDataWithJournal };
+            console.warn('Recording Donetick due counts as unavailable', error);
+            return {
+                nextDataWithDonetick: upsertSection(
+                    nextDataWithJournal,
+                    formatDonetickUnavailable(error),
+                    { after: WEATHER_SECTION },
+                ),
+            };
         }
     });
 
@@ -150,12 +163,12 @@ const wikiFunction = async (nextDate: Date) => {
             return { lastDataWithDonetick: null as Section[] | null };
         }
 
+        // Recorded onto the section the day was opened with, so its overdue and
+        // due counts stay alongside what came of them
+        const opened = lastData.find(section => section.name === DONETICK_SECTION);
+
         try {
             const history = await fetchChoreHistory();
-
-            // Recorded onto the section the day was opened with, so its overdue
-            // and due counts stay alongside what came of them
-            const opened = lastData.find(section => section.name === DONETICK_SECTION);
 
             return {
                 lastDataWithDonetick: upsertSection(
@@ -166,8 +179,14 @@ const wikiFunction = async (nextDate: Date) => {
             };
         } catch (error) {
             // A count that cannot be fetched is not worth failing the day over
-            console.warn('Skipping Donetick section', error);
-            return { lastDataWithDonetick: lastData };
+            console.warn('Recording Donetick completions as unavailable', error);
+            return {
+                lastDataWithDonetick: upsertSection(
+                    lastData,
+                    withCompletedUnavailable(opened, error),
+                    { after: WEATHER_SECTION },
+                ),
+            };
         }
     });
 

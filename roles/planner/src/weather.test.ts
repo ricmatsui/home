@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatWeatherSection, fetchDailyForecast } from './weather.js';
+import { formatWeatherSection, formatWeatherUnavailable, fetchDailyForecast } from './weather.js';
 import { DailyForecast } from './types.js';
 
 const daily: DailyForecast = {
@@ -43,6 +43,26 @@ describe('formatWeatherSection', () => {
         const chance = { ...daily, precipitation_probability_max: [20], precipitation_sum: [0] };
 
         assert.match(formatWeatherSection(chance).items[0].text, /, rain 20% 0\.00 in$/);
+    });
+});
+
+describe('formatWeatherUnavailable', () => {
+    it('records the failure where the forecast would have gone', () => {
+        assert.deepEqual(formatWeatherUnavailable(new Error('Forecast request failed (503)')), {
+            name: 'Weather',
+            items: [{
+                status: 'note',
+                text: 'Unavailable: Forecast request failed (503)',
+                children: [],
+            }],
+        });
+    });
+
+    it('keeps a failure that spans lines on one line', () => {
+        assert.equal(
+            formatWeatherUnavailable(new Error('fetch failed\n  cause: ECONNREFUSED')).items[0].text,
+            'Unavailable: fetch failed cause: ECONNREFUSED',
+        );
     });
 });
 
