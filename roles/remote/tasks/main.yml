@@ -97,9 +97,9 @@
               REMOTE_TV_IP: "{{ config.remote.tv_ip }}"
               REMOTE_TV_MAC: "{{ config.remote.tv_mac }}"
               REMOTE_TV_CLIENT_NAME: "{{ config.remote.tv_client_name }}"
-              REMOTE_TV_TOKEN: "{{ config.remote.tv_token }}"
               REMOTE_LAN_CIDR: "{{ config.remote.lan_cidr }}"
               RECORDINGS_PATH: /data/recordings.jsonl
+              REMOTE_TOKEN_PATH: /data/token
               TZ: America/Los_Angeles
             volumes:
               - /mnt/gluster/remote/data:/data

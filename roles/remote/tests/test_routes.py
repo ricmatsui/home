@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+import app as app_module
 from app import create_app
 from app.recordings import Recordings
 
@@ -147,3 +148,34 @@ def test_a_missing_model_file_is_a_404(client):
     response = client.get('/model/nope.json')
 
     assert response.status_code == 404
+
+
+class FakeTvControl:
+    def __init__(self, **keywords):
+        self.keywords = keywords
+        FakeTvControl.built = self
+
+    def start(self):
+        pass
+
+
+def test_create_app_pairs_through_a_token_file_not_the_environment(
+    monkeypatch, tmp_path, static_root
+):
+    """Nothing is baked in at deploy time: an unpaired container starts fine
+    and the TV prompts on the first command."""
+    monkeypatch.setattr(app_module, 'TvControl', FakeTvControl)
+    monkeypatch.setattr(app_module, 'local_addresses', lambda: ['10.0.0.2/24'])
+    monkeypatch.setenv('REMOTE_TV_IP', '10.0.0.5')
+    monkeypatch.setenv('REMOTE_TV_MAC', 'aa:bb:cc:dd:ee:ff')
+    monkeypatch.setenv('REMOTE_TV_CLIENT_NAME', 'Remote')
+    monkeypatch.setenv('REMOTE_LAN_CIDR', '10.0.0.0/24')
+    monkeypatch.setenv('REMOTE_TOKEN_PATH', str(tmp_path / 'token'))
+    monkeypatch.setenv('RECORDINGS_PATH', str(tmp_path / 'recordings.jsonl'))
+    monkeypatch.delenv('REMOTE_TV_TOKEN', raising=False)
+
+    create_app(static=static_root)
+
+    keywords = FakeTvControl.built.keywords
+    assert keywords['token_store'].path == tmp_path / 'token'
+    assert keywords['lan'].broadcast_ip == '10.0.0.255'

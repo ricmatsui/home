@@ -6,7 +6,9 @@ from pathlib import Path
 import flask
 
 from app.control import TvControl
+from app.network import local_addresses, select_lan_interface
 from app.recordings import Recordings
+from app.token_store import TokenStore
 
 ROOT = Path(__file__).parent.parent
 
@@ -27,8 +29,12 @@ def create_app(control=None, recordings=None, static=None):
             ip=os.environ['REMOTE_TV_IP'],
             mac=os.environ['REMOTE_TV_MAC'],
             client_name=os.environ['REMOTE_TV_CLIENT_NAME'],
-            token=os.environ['REMOTE_TV_TOKEN'],
-            lan_cidr=os.environ['REMOTE_LAN_CIDR'],
+            token_store=TokenStore(
+                Path(os.environ.get('REMOTE_TOKEN_PATH', '/data/token'))
+            ),
+            lan=select_lan_interface(
+                local_addresses(), os.environ['REMOTE_LAN_CIDR']
+            ),
         )
         control.start()
 
