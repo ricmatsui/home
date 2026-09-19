@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
+import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, upsertFrontmatterLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
 import { Section } from './types.js';
 
 describe('parseAction', () => {
@@ -1005,5 +1005,127 @@ describe('extendDailyList', () => {
 
     it('refuses a file with no daily list', () => {
         assert.throws(() => extendDailyList('---\ntitle: TODO\n---\n', '2026-09-23'), /Daily list/);
+    });
+});
+
+describe('upsertFrontmatterLink', () => {
+    const day = (...links: string[]) => [
+        '---',
+        'title: 2026-09-18',
+        'tags: :zettel:',
+        'date: 2026-09-18 00:00',
+        ...links,
+        '---',
+        '',
+        '# Work',
+        '',
+        '- [ ] Task',
+        '',
+    ].join('\n');
+
+    it('inserts previous below parent', () => {
+        assert.equal(
+            upsertFrontmatterLink({
+                content: day('parent: [TODO](220306-0621)'),
+                key: 'previous',
+                dateStr: '2026-09-17',
+                fileId: '260917-0000',
+            }),
+            day('parent: [TODO](220306-0621)', 'previous: [2026-09-17](260917-0000)'),
+        );
+    });
+
+    it('inserts next below previous', () => {
+        assert.equal(
+            upsertFrontmatterLink({
+                content: day('parent: [TODO](220306-0621)', 'previous: [2026-09-17](260917-0000)'),
+                key: 'next',
+                dateStr: '2026-09-19',
+                fileId: '260919-0000',
+            }),
+            day(
+                'parent: [TODO](220306-0621)',
+                'previous: [2026-09-17](260917-0000)',
+                'next: [2026-09-19](260919-0000)',
+            ),
+        );
+    });
+
+    it('inserts previous above an existing next', () => {
+        assert.equal(
+            upsertFrontmatterLink({
+                content: day('parent: [TODO](220306-0621)', 'next: [2026-09-19](260919-0000)'),
+                key: 'previous',
+                dateStr: '2026-09-17',
+                fileId: '260917-0000',
+            }),
+            day(
+                'parent: [TODO](220306-0621)',
+                'previous: [2026-09-17](260917-0000)',
+                'next: [2026-09-19](260919-0000)',
+            ),
+        );
+    });
+
+    it('replaces an existing link rather than stacking a second one', () => {
+        assert.equal(
+            upsertFrontmatterLink({
+                content: day('parent: [TODO](220306-0621)', 'previous: [2026-09-16](260916-0000)'),
+                key: 'previous',
+                dateStr: '2026-09-17',
+                fileId: '260917-0000',
+            }),
+            day('parent: [TODO](220306-0621)', 'previous: [2026-09-17](260917-0000)'),
+        );
+    });
+
+    it('closes the frontmatter with the link when no parent is there to anchor it', () => {
+        assert.equal(
+            upsertFrontmatterLink({
+                content: day(),
+                key: 'previous',
+                dateStr: '2026-09-17',
+                fileId: '260917-0000',
+            }),
+            day('previous: [2026-09-17](260917-0000)'),
+        );
+    });
+
+    it('keeps a file id carrying a collision suffix intact', () => {
+        assert.match(
+            upsertFrontmatterLink({
+                content: day('parent: [TODO](220306-0621)'),
+                key: 'previous',
+                dateStr: '2026-02-27',
+                fileId: '260227-0919a',
+            }),
+            /^previous: \[2026-02-27\]\(260227-0919a\)$/m,
+        );
+    });
+
+    it('leaves the body alone when it holds a line the key would match', () => {
+        const content = day('parent: [TODO](220306-0621)') + '- next: whatever\n';
+
+        assert.equal(
+            upsertFrontmatterLink({
+                content,
+                key: 'next',
+                dateStr: '2026-09-19',
+                fileId: '260919-0000',
+            }),
+            day('parent: [TODO](220306-0621)', 'next: [2026-09-19](260919-0000)') + '- next: whatever\n',
+        );
+    });
+
+    it('throws when the file has no frontmatter', () => {
+        assert.throws(
+            () => upsertFrontmatterLink({
+                content: '# Work\n\n- [ ] Task\n',
+                key: 'previous',
+                dateStr: '2026-09-17',
+                fileId: '260917-0000',
+            }),
+            /Frontmatter not found/,
+        );
     });
 });

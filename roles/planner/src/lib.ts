@@ -639,3 +639,70 @@ export async function updateTodayLink(dateStr: string, dayFilePath: string): Pro
     const content = await fs.promises.readFile(indexPath, 'utf-8');
     await fs.promises.writeFile(indexPath, upsertTodayLink(content, dateStr, fileId), 'utf-8');
 }
+
+// Read in the order a day is walked: up to the list it belongs to, then back,
+// then forward
+const LINK_KEY_ORDER = ['parent', 'previous', 'next'];
+
+const FRONTMATTER_PATTERN = /^---\n([\s\S]*?)\n---\n/;
+
+export function upsertFrontmatterLink({ content, key, dateStr, fileId }: {
+    content: string;
+    key: 'previous' | 'next';
+    dateStr: string;
+    fileId: string;
+}): string {
+    const match = content.match(FRONTMATTER_PATTERN);
+    if (!match) {
+        throw new Error('Frontmatter not found');
+    }
+
+    const lines = match[1].split('\n');
+    const link = `${key}: [${dateStr}](${fileId})`;
+    const existing = lines.findIndex(line => line.startsWith(`${key}:`));
+
+    if (existing !== -1) {
+        lines[existing] = link;
+    } else {
+        // Below the last link it should follow, so a day missing one of them
+        // still reads in order; missing all of them, the link closes the block
+        const preceding = LINK_KEY_ORDER.slice(0, LINK_KEY_ORDER.indexOf(key));
+        const anchor = lines.reduce(
+            (last, line, index) => preceding.some(k => line.startsWith(`${k}:`)) ? index : last,
+            -1,
+        );
+        lines.splice(anchor === -1 ? lines.length : anchor + 1, 0, link);
+    }
+
+    return [
+        content.slice(0, match.index),
+        `---\n${lines.join('\n')}\n---\n`,
+        content.slice(match.index! + match[0].length),
+    ].join('');
+}
+
+// Both sides of the chain in one write, so a day and its neighbour cannot end
+// up pointing at each other only one way
+export async function linkAdjacentDays({ previousPath, previousDateStr, nextPath, nextDateStr }: {
+    previousPath: string;
+    previousDateStr: string;
+    nextPath: string;
+    nextDateStr: string;
+}): Promise<void> {
+    const previousContent = await fs.promises.readFile(previousPath, 'utf-8');
+    const nextContent = await fs.promises.readFile(nextPath, 'utf-8');
+
+    await fs.promises.writeFile(previousPath, upsertFrontmatterLink({
+        content: previousContent,
+        key: 'next',
+        dateStr: nextDateStr,
+        fileId: path.basename(nextPath, '.md'),
+    }), 'utf-8');
+
+    await fs.promises.writeFile(nextPath, upsertFrontmatterLink({
+        content: nextContent,
+        key: 'previous',
+        dateStr: previousDateStr,
+        fileId: path.basename(previousPath, '.md'),
+    }), 'utf-8');
+}

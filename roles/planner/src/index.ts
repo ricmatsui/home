@@ -2,7 +2,7 @@ import { DBOS, WorkflowQueue } from '@dbos-inc/dbos-sdk';
 import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
-import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink } from './lib.js';
+import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink, linkAdjacentDays } from './lib.js';
 import { fetchDailyForecast, formatWeatherSection, formatWeatherUnavailable, WEATHER_SECTION } from './weather.js';
 import { DONETICK_SECTION, fetchChoreHistory, fetchChores, countCompletedOn, countDueOn, formatDonetickSection, formatDonetickUnavailable, withCompletedCount, withCompletedUnavailable } from './donetick.js';
 import { seedJournalSection } from './journal.js';
@@ -65,6 +65,17 @@ const wikiFunction = async (nextDate: Date) => {
         }
 
         return { nextDayFilePath: await createDayFile(todoFile, nextDateStr) };
+    });
+
+    await DBOS.runStep(async () => {
+        if (!dayFilePath) return;
+
+        await linkAdjacentDays({
+            previousPath: dayFilePath,
+            previousDateStr: formatDateStr(date),
+            nextPath: nextDayFilePath,
+            nextDateStr: formatDateStr(nextDate),
+        });
     });
 
     const { existingNextData } = await DBOS.runStep(async () => {
