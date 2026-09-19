@@ -1,0 +1,19 @@
+{
+    "name": "reader",
+    "version": "1.0.0",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "build": "tsc || exit 1",
+        "test": "rm -rf dist && tsc && TZ=America/Los_Angeles node --test dist/*.test.js",
+        "start": "node dist/index.js"
+    },
+    "dependencies": {
+        "markdown-it": "^14.1.0"
+    },
+    "devDependencies": {
+        "@types/markdown-it": "^14.1.2",
+        "@types/node": "^26.2.0",
+        "typescript": "^5.9.3"
+    }
+}

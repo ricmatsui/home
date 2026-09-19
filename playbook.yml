@@ -194,6 +194,9 @@
     - role: ticker
       tags: ticker
 
+    - role: reader
+      tags: reader
+
     - role: paper
       tags: paper
 
