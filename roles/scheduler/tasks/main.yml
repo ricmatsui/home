@@ -44,6 +44,7 @@
 
       [Service]
       Type=simple
+      StateDirectory=scheduler
       ExecStart=/opt/scheduler.sh
   notify: scheduler_service_restart
 

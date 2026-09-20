@@ -1,6 +1,10 @@
 #!/bin/bash
 set -Eeuo pipefail
 
+state_file="${STATE_DIRECTORY:-/var/lib/scheduler}/deficits.json"
+
+deficit_threshold_seconds=1200
+
 if ! docker node ls --format json 2>/dev/null \
     | jq -r 'select(.Self == true) | .ManagerStatus' \
     | grep -qx 'Leader'; then
@@ -46,6 +50,30 @@ if [[ "$(echo "${managed_services_json}" | jq 'length')" -eq 0 ]]; then
     exit 0
 fi
 
+mkdir -p "$(dirname "${state_file}")"
+
+previous_deficits_json="$(
+    jq -c 'if type == "object" then . else {} end' "${state_file}" 2>/dev/null || true
+)"
+if [[ -z "${previous_deficits_json}" ]]; then
+    previous_deficits_json='{}'
+fi
+
+deficits_json="$(
+    jq -n \
+        --argjson previous "${previous_deficits_json}" \
+        --argjson services "${managed_services_json}" \
+        '
+            (now | floor) as $now
+            | $services
+            | map(select(.running < .replicas) | .name)
+            | map({key: ., value: ($previous[.] // $now)})
+            | from_entries
+        '
+)"
+
+echo "${deficits_json}" > "${state_file}"
+
 if [[ "$(echo "${managed_services_json}" | jq '[.[] | .is_stable] | all')" != "true" ]]; then
     echo "Not all services are stable"
     exit 0
@@ -79,6 +107,22 @@ if [[ "${target_desired}" -lt "${target_replicas}" ]]; then
     docker service scale -d "${target_name}=${target_new_desired}"
     exit 0
 fi
+
+target_deficit_since="$(echo "${deficits_json}" | jq -r --arg name "${target_name}" '.[$name] // empty')"
+
+if [[ -z "${target_deficit_since}" ]]; then
+    echo "No deficit recorded for ${target_name}"
+    exit 0
+fi
+
+target_deficit_seconds="$(($(date +%s) - target_deficit_since))"
+
+if [[ "${target_deficit_seconds}" -lt "${deficit_threshold_seconds}" ]]; then
+    echo "Deficit for ${target_name} is ${target_deficit_seconds}s, below ${deficit_threshold_seconds}s, waiting"
+    exit 0
+fi
+
+echo "Deficit for ${target_name} is ${target_deficit_seconds}s, at or above ${deficit_threshold_seconds}s"
 
 echo "Finding donor service"
 
