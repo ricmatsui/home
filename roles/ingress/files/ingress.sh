@@ -1,5 +1,5 @@
 #!/bin/bash
-set -Exeuo pipefail
+set -Eeuo pipefail
 
 LABEL="com.docker.swarm.service.name=traefik_traefik"
 TICK_SECS=300
@@ -64,7 +64,8 @@ handle_peer() {
     ensure_up vpn-peer
 }
 
-trap handle_peer ERR EXIT
+trap 'echo "Failed at line $LINENO: $BASH_COMMAND" >&2; handle_peer' ERR
+trap handle_peer EXIT
 
 get_state() {
     local ids
@@ -76,8 +77,18 @@ get_state() {
     fi
 }
 
+last_state=""
+
 apply_current_state() {
-    case "$(get_state)" in
+    local state
+    state=$(get_state)
+
+    if [[ "$state" != "$last_state" ]]; then
+        echo "State is now $state"
+        last_state=$state
+    fi
+
+    case "$state" in
         host) handle_host ;;
         peer) handle_peer ;;
     esac
