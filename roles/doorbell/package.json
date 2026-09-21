@@ -1,0 +1,23 @@
+{
+    "name": "doorbell",
+    "version": "1.0.0",
+    "license": "MIT",
+    "type": "module",
+    "scripts": {
+        "build": "tsc || exit 1",
+        "test": "rm -rf dist && tsc && TZ=America/Los_Angeles node --test 'dist/**/*.test.js'",
+        "start": "node dist/index.js",
+        "eval": "tsc && node dist/eval/cli.js"
+    },
+    "dependencies": {
+        "@google-cloud/pubsub": "^6.0.1",
+        "@lmstudio/sdk": "^1.5.0",
+        "jimp": "^1.6.1",
+        "mqtt": "^5.15.2",
+        "zod": "^3.25.76"
+    },
+    "devDependencies": {
+        "@types/node": "^24.13.3",
+        "typescript": "^5.9.3"
+    }
+}

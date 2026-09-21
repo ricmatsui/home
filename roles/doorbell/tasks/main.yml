@@ -1,0 +1,81 @@
+---
+
+- name: create directories
+  ansible.builtin.file:
+    path: /mnt/gluster/doorbell/frames
+    owner: pi
+    group: pi
+    state: directory
+
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/doorbell"
+    tag: latest
+    path: "{{ role_path }}"
+    rebuild: always
+    platform:
+      - linux/amd64
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: doorbell
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          doorbell:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            networks:
+              - go2rtc_go2rtc
+              - mosquitto_mosquitto
+            volumes:
+              - /mnt/gluster/doorbell/frames:/frames
+            environment:
+              TZ: America/Los_Angeles
+              GOOGLE_CREDENTIALS_BASE64: "{{ config.doorbell.google_credentials | b64encode }}"
+              PUBSUB_SUBSCRIPTION: "{{ config.doorbell.pubsub_subscription }}"
+              NEST_DEVICE_ID: "{{ config.doorbell.nest_device_id }}"
+              GO2RTC_URL: "{{ doorbell_go2rtc_url }}"
+              GO2RTC_STREAM: "{{ config.doorbell.go2rtc_stream }}"
+              LM_STUDIO_URL: "{{ config.doorbell.lm_studio_url }}"
+              LM_STUDIO_MODEL: "{{ doorbell_lm_studio_model }}"
+              MQTT_URL: "{{ doorbell_mqtt_url }}"
+              FRIGATE_URL: "{{ doorbell_frigate_url }}"
+              FRIGATE_CAMERA: "{{ config.doorbell.frigate_camera }}"
+              WINDOW_MS: "{{ doorbell_window_ms }}"
+              POLL_MS: "{{ doorbell_poll_ms }}"
+              OFF_HEARTBEAT_MS: "{{ doorbell_off_heartbeat_ms }}"
+              MISS_LIMIT: "{{ doorbell_miss_limit }}"
+              QUEUE_MAX: "{{ doorbell_queue_max }}"
+              FRAMES_PATH: /frames
+              LOG_LEVEL: "{{ doorbell_log_level }}"
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=40"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '0.50'
+                  memory: 150M
+              restart_policy:
+                delay: 1m
+              update_config:
+                order: stop-first
+        networks:
+          go2rtc_go2rtc:
+            external: true
+          mosquitto_mosquitto:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python

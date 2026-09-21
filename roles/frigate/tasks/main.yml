@@ -64,8 +64,7 @@
               replicas: 1
               labels:
                 - "home.scheduler.replicas=1"
-                - "home.scheduler.priority=60"
-                - "home.scheduler.restart=true"
+                - "home.scheduler.priority=50"
                 - "traefik.enable=true"
                 - "traefik.http.routers.frigate.rule=Host(`frigate.{{ config.domain }}`)"
                 - "traefik.http.routers.frigate.middlewares=traefik-internal"

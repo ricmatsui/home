@@ -230,6 +230,9 @@
     - role: frigate
       tags: frigate
 
+    - role: doorbell
+      tags: doorbell
+
     - role: vpn_ui
       tags: vpn_ui
 

@@ -6,6 +6,7 @@
 - Cloudflare DDNS
 - Datadog
 - Docker Swarm
+- Doorbell
 - External USB Drive
 - Frigate
 - Gitea

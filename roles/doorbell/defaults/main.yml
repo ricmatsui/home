@@ -1,0 +1,12 @@
+---
+
+doorbell_go2rtc_url: http://go2rtc:1984
+doorbell_lm_studio_model: google/gemma-4-12b-qat
+doorbell_mqtt_url: mqtt://mosquitto:1883
+doorbell_frigate_url: http://frigate:5000
+doorbell_window_ms: 120000
+doorbell_poll_ms: 30000
+doorbell_off_heartbeat_ms: 30000
+doorbell_miss_limit: 3
+doorbell_queue_max: 4
+doorbell_log_level: info
