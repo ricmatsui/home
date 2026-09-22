@@ -862,10 +862,10 @@ describe('upsertTodayLink', () => {
         'date: 2022-03-06 06:20',
         '---',
         '',
-        '[TODO](220306-0621)',
-        '[Projects](221224-0019)',
-        '[Processes](250102-1639)',
-        '[Inbox](220306-0955)',
+        '- [TODO](220306-0621)',
+        '- [Projects](221224-0019)',
+        '- [Processes](250102-1639)',
+        '- [Inbox](220306-0955)',
         '',
         '---',
         '',
@@ -876,7 +876,7 @@ describe('upsertTodayLink', () => {
 
         assert.equal(
             result,
-            index.replace('[TODO]', '[2026-09-08](260908-0000)\n[TODO]'),
+            index.replace('- [TODO]', '- [2026-09-08](260908-0000)\n- [TODO]'),
         );
     });
 
@@ -886,31 +886,31 @@ describe('upsertTodayLink', () => {
 
         assert.equal(
             twice,
-            index.replace('[TODO]', '[2026-09-09](260909-0000)\n[TODO]'),
+            index.replace('- [TODO]', '- [2026-09-09](260909-0000)\n- [TODO]'),
         );
     });
 
     it('keeps a file id carrying a collision suffix intact', () => {
         const result = upsertTodayLink(index, '2026-02-27', '260227-0919a');
 
-        assert.match(result, /^\[2026-02-27\]\(260227-0919a\)$/m);
+        assert.match(result, /^- \[2026-02-27\]\(260227-0919a\)$/m);
     });
 
     it('leaves a date link that is not adjacent to TODO alone', () => {
         const withDistantLink = index.replace(
-            '[Inbox](220306-0955)',
-            '[Inbox](220306-0955)\n[2020-01-01](200101-0000)',
+            '- [Inbox](220306-0955)',
+            '- [Inbox](220306-0955)\n- [2020-01-01](200101-0000)',
         );
 
         const result = upsertTodayLink(withDistantLink, '2026-09-08', '260908-0000');
 
-        assert.match(result, /^\[2020-01-01\]\(200101-0000\)$/m);
-        assert.match(result, /^\[2026-09-08\]\(260908-0000\)\n\[TODO\]/m);
+        assert.match(result, /^- \[2020-01-01\]\(200101-0000\)$/m);
+        assert.match(result, /^- \[2026-09-08\]\(260908-0000\)\n- \[TODO\]/m);
     });
 
     it('throws when the index has no TODO link', () => {
         assert.throws(
-            () => upsertTodayLink('[Inbox](220306-0955)\n', '2026-09-08', '260908-0000'),
+            () => upsertTodayLink('- [Inbox](220306-0955)\n', '2026-09-08', '260908-0000'),
             /TODO link not found/,
         );
     });

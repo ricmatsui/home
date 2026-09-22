@@ -606,7 +606,7 @@ export function upsertSection(
     return [...others.slice(0, index), section, ...others.slice(index)];
 }
 
-const TODAY_LINK_PATTERN = /^\[\d{4}-\d{2}-\d{2}\]\([^)]+\)$/;
+const TODAY_LINK_PATTERN = /^- \[\d{4}-\d{2}-\d{2}\]\([^)]+\)$/;
 
 // Anchored to the line above [TODO] so an unrelated date link elsewhere in the
 // index is never rewritten, and the first run installs the line by itself
@@ -621,7 +621,7 @@ export function upsertTodayLink(
         throw new Error('TODO link not found in index.md');
     }
 
-    const link = `[${dateStr}](${fileId})`;
+    const link = `- [${dateStr}](${fileId})`;
     const previous = todoIndex > 0 ? lines[todoIndex - 1] : null;
 
     if (previous !== null && TODAY_LINK_PATTERN.test(previous)) {
