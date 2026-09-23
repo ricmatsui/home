@@ -172,3 +172,72 @@ test('ignores a query string when resolving the note', async () => {
         assert.match(await response.text(), /<h1>Index<\/h1>/);
     });
 });
+
+test('serves the web app manifest', async () => {
+    await withServer({ 'index.md': INDEX }, async base => {
+        const response = await fetch(`${base}/manifest.webmanifest`);
+
+        assert.equal(response.status, 200);
+        assert.equal(response.headers.get('content-type'), 'application/manifest+json');
+        assert.equal(JSON.parse(await response.text()).name, 'Reader');
+    });
+});
+
+test('serves each icon the manifest names', async () => {
+    await withServer({ 'index.md': INDEX }, async base => {
+        const manifest = await (await fetch(`${base}/manifest.webmanifest`)).json();
+
+        for (const icon of manifest.icons) {
+            const response = await fetch(`${base}${icon.src}`);
+            const bytes = await response.arrayBuffer();
+
+            assert.equal(response.status, 200, `${icon.src} is not served`);
+            assert.equal(response.headers.get('content-type'), icon.type);
+            assert.equal(bytes.byteLength > 0, true);
+        }
+    });
+});
+
+test('an asset wins over a note that would answer to the same name', async () => {
+    const shadow = '---\ntitle: Shadow\n---\n\nnot the manifest\n';
+
+    await withServer({ 'index.md': INDEX, 'manifest.webmanifest.md': shadow }, async base => {
+        const response = await fetch(`${base}/manifest.webmanifest`);
+        const text = await response.text();
+
+        assert.equal(response.headers.get('content-type'), 'application/manifest+json');
+        assert.equal(text.includes('Shadow'), false);
+    });
+});
+
+test('answers a matching if-none-match for an asset with an empty 304', async () => {
+    await withServer({ 'index.md': INDEX }, async base => {
+        const first = await fetch(`${base}/icon.svg`);
+        const etag = first.headers.get('etag') ?? '';
+        await first.text();
+
+        const second = await fetch(`${base}/icon.svg`, {
+            headers: { 'if-none-match': etag },
+        });
+
+        assert.equal(second.status, 304);
+        assert.equal(second.headers.get('etag'), etag);
+        assert.equal(await second.text(), '');
+    });
+});
+
+test('a HEAD for an asset carries the headers but no body', async () => {
+    await withServer({ 'index.md': INDEX }, async base => {
+        const get = await fetch(`${base}/icon.svg`);
+        const length = get.headers.get('content-length');
+        await get.text();
+
+        const response = await fetch(`${base}/icon.svg`, { method: 'HEAD' });
+
+        assert.equal(response.status, 200);
+        // The length a GET would have sent, not zero.
+        assert.equal(response.headers.get('content-length'), length);
+        assert.match(response.headers.get('etag') ?? '', /^"[0-9a-f]+"$/);
+        assert.equal(await response.text(), '');
+    });
+});

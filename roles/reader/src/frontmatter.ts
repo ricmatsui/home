@@ -3,6 +3,8 @@ export interface Frontmatter {
     tags?: string;
     date?: string;
     parent?: string;
+    previous?: string;
+    next?: string;
 }
 
 export interface ParsedNote {
@@ -15,7 +17,14 @@ export interface ParsedNote {
 }
 
 const PAIR = /^([A-Za-z_][A-Za-z0-9_-]*):[ \t]*(.*)$/;
-const KNOWN_KEYS = new Set(['title', 'tags', 'date', 'parent']);
+const KNOWN_KEYS = new Set([
+    'title',
+    'tags',
+    'date',
+    'parent',
+    'previous',
+    'next',
+]);
 
 function isDelimiter(line: string): boolean {
     return line.trimEnd() === '---';

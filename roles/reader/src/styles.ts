@@ -4,9 +4,15 @@
 //
 // Green means exactly one thing: resolved. Section headings are therefore
 // plain with a hairline rule rather than Title-green as they are in vim.
+
+// The tile and splash colour. An installed app paints this before the page
+// loads, so the manifest and the theme-color meta have to agree with --bg or
+// launching flashes one colour and settles on another.
+export const BACKGROUND = '#151515';
+
 export const STYLES = `
 :root {
-    --bg: #151515;
+    --bg: ${BACKGROUND};
     --fg: #e8e8d3;
     --green: #70b950;
     --grey: #888888;
@@ -43,6 +49,18 @@ h1 {
     font-weight: 650;
     letter-spacing: -0.01em;
     margin: 0 0 0.2rem;
+}
+
+/* The chain out of a note reads at body size: it is navigation, not a
+   caption, and on a phone it has to be a tap target. Grey applies to the
+   separators and arrows only -- the links themselves stay --blue.
+   em, not rem: the narrow-screen query steps body down to 15px, and a rem
+   would ignore that and leave the nav a point larger than the text it sits
+   above. */
+.nav {
+    font-size: 1em;
+    color: var(--grey);
+    margin: 0.35rem 0 0.15rem;
 }
 
 .meta {

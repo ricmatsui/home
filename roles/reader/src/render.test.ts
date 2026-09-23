@@ -8,6 +8,8 @@ const NOTE = [
     'tags: :zettel:',
     'date: 2026-07-26 00:00',
     'parent: [Parent note](220306-0621)',
+    'previous: [2026-09-17](260917-0910a)',
+    'next: [2026-09-19](260919-0910a)',
     '---',
     '',
     '# Section',
@@ -53,6 +55,47 @@ test('shows the tags', () => {
     assert.match(html, /:zettel:/);
 });
 
+test('renders the chain links with the arrow each one is walked by', () => {
+    const html = renderNote(NOTE, '260726-0000a');
+
+    assert.match(html, /&uarr; <a href="\/220306-0621">Parent note<\/a>/);
+    assert.match(html, /&larr; <a href="\/260917-0910a">2026-09-17<\/a>/);
+    assert.match(html, /<a href="\/260919-0910a">2026-09-19<\/a> &rarr;/);
+});
+
+test('a note with no chain renders the parent alone', () => {
+    const html = renderNote(
+        '---\ntitle: T\nparent: [Up](220306-0621)\n---\nbody\n',
+        'x',
+    );
+
+    assert.match(html, /<div class="nav">&uarr; <a href="\/220306-0621">Up<\/a><\/div>/);
+    assert.equal(html.includes('&larr;'), false);
+    assert.equal(html.includes('&rarr;'), false);
+});
+
+test('the date and tags sit in their own line below the nav', () => {
+    const html = renderNote(NOTE, '260726-0000a');
+
+    assert.match(
+        html,
+        /<div class="meta">2026-07-26 00:00 &middot; :zettel:<\/div>/,
+    );
+});
+
+test('a note with nothing but a title renders neither line', () => {
+    const html = renderNote('---\ntitle: T\n---\nbody\n', 'x');
+
+    assert.equal(html.includes('class="nav"'), false);
+    assert.equal(html.includes('class="meta"'), false);
+});
+
+test('a note carries no link back to the index', () => {
+    const html = renderNote(NOTE, '260726-0000a');
+
+    assert.equal(html.includes('href="/"'), false);
+});
+
 test('inlines the stylesheet rather than linking an asset', () => {
     const html = renderNote(NOTE, '260726-0000a');
 
@@ -63,9 +106,9 @@ test('inlines the stylesheet rather than linking an asset', () => {
 test('offsets checkbox line numbers past the frontmatter', () => {
     const html = renderNote(NOTE, '260726-0000a');
 
-    // The '- [X] Follow ...' line is line 9 of the source file.
-    assert.equal(NOTE.split('\n')[9].startsWith('- [X] Follow'), true);
-    assert.match(html, /data-line="9"/);
+    // The '- [X] Follow ...' line is line 11 of the source file.
+    assert.equal(NOTE.split('\n')[11].startsWith('- [X] Follow'), true);
+    assert.match(html, /data-line="11"/);
 });
 
 test('escapes a title that contains html-significant characters', () => {
@@ -88,4 +131,25 @@ test('escapes the id on the not found page', () => {
 
     assert.equal(html.includes('<script>x</script>'), false);
     assert.match(html, /&lt;script&gt;/);
+});
+
+test('links the web app manifest and the icons from the head', () => {
+    const html = renderNote(NOTE, '260726-0000a');
+
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+    assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/icon\.svg">/);
+    assert.match(html, /<link rel="apple-touch-icon" href="\/icon-192\.png">/);
+});
+
+test('names the app and its colour for an ios home screen', () => {
+    const html = renderNote(NOTE, '260726-0000a');
+
+    assert.match(html, /<meta name="apple-mobile-web-app-title" content="Reader">/);
+    assert.match(html, /<meta name="theme-color" content="#151515">/);
+});
+
+test('the not found page is installable too, so a cold start still has the manifest', () => {
+    const html = renderNotFound('nope');
+
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest">/);
 });

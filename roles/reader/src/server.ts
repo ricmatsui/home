@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import { resolveNotePath } from './ids.js';
 import { renderNote, renderNotFound } from './render.js';
 import { RenderCache, computeEtag, type CacheEntry } from './cache.js';
+import { ASSETS, type Asset } from './assets.js';
 
 export interface ServerOptions {
     wikiPath: string;
@@ -34,6 +35,39 @@ export function createServer(options: ServerOptions): http.Server {
         response.end(html);
     }
 
+    function sendAsset(
+        request: http.IncomingMessage,
+        response: http.ServerResponse,
+        asset: Asset,
+    ): void {
+        // An asset changes only when the build does, but the url carries no
+        // hash to prove it, so it revalidates like a note rather than being
+        // cached for a year and going stale.
+        const headers: http.OutgoingHttpHeaders = {
+            'cache-control': 'no-cache',
+            etag: asset.etag,
+        };
+
+        if (etagMatches(request.headers['if-none-match'], asset.etag)) {
+            response.writeHead(304, headers);
+            response.end();
+            return;
+        }
+
+        response.writeHead(200, {
+            ...headers,
+            'content-type': asset.contentType,
+            'content-length': asset.body.length,
+        });
+
+        if (request.method === 'HEAD') {
+            response.end();
+            return;
+        }
+
+        response.end(asset.body);
+    }
+
     async function handle(
         request: http.IncomingMessage,
         response: http.ServerResponse,
@@ -46,6 +80,15 @@ export function createServer(options: ServerOptions): http.Server {
 
         const url = new URL(request.url ?? '/', 'http://localhost');
         const pathname = decodeURIComponent(url.pathname);
+        // Ahead of note resolution, not after it: a dot is legal in an id, so
+        // `manifest.webmanifest` is a name a note could answer to, and the
+        // asset has to win rather than depend on no such file existing.
+        const asset = ASSETS.get(pathname);
+        if (asset !== undefined) {
+            sendAsset(request, response, asset);
+            return;
+        }
+
         const id = pathname === '/' ? 'index' : pathname.slice(1);
 
         const file = resolveNotePath(options.wikiPath, id);

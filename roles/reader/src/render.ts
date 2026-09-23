@@ -1,6 +1,6 @@
 import { parseFrontmatter } from './frontmatter.js';
 import { createMarkdown } from './markdown.js';
-import { STYLES } from './styles.js';
+import { BACKGROUND, STYLES } from './styles.js';
 
 function escapeHtml(value: string): string {
     return value
@@ -17,7 +17,13 @@ function document(title: string, body: string): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
+<meta name="theme-color" content="${BACKGROUND}">
 <title>${escapeHtml(title)}</title>
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<!-- Safari ignores an svg here, so the raster icon earns its place. -->
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="apple-mobile-web-app-title" content="Reader">
 <style>${STYLES}</style>
 </head>
 <body>
@@ -29,30 +35,50 @@ ${body}
 `;
 }
 
+function present(value: string | undefined): value is string {
+    return value !== undefined && value !== '';
+}
+
+function line(className: string, parts: string[]): string {
+    return parts.length > 0
+        ? `<div class="${className}">${parts.join(' &middot; ')}</div>\n`
+        : '';
+}
+
 export function renderNote(source: string, id: string): string {
     const parsed = parseFrontmatter(source);
     const md = createMarkdown(parsed.bodyOffset);
-    const title = parsed.frontmatter.title ?? id;
+    const { title, tags, date, parent, previous, next } = parsed.frontmatter;
+    const heading = title ?? id;
+
+    // The order a day is walked, matching the order the planner writes the
+    // keys in: up to the list it belongs to, then back, then forward. Each
+    // arrow leads the link it points at, except next, which follows it.
+    const navParts: string[] = [];
+    if (present(parent)) {
+        navParts.push(`&uarr; ${md.renderInline(parent)}`);
+    }
+    if (present(previous)) {
+        navParts.push(`&larr; ${md.renderInline(previous)}`);
+    }
+    if (present(next)) {
+        navParts.push(`${md.renderInline(next)} &rarr;`);
+    }
 
     const metaParts: string[] = [];
-    if (parsed.frontmatter.parent !== undefined && parsed.frontmatter.parent !== '') {
-        metaParts.push(`&uarr; ${md.renderInline(parsed.frontmatter.parent)}`);
+    if (present(date)) {
+        metaParts.push(escapeHtml(date));
     }
-    if (parsed.frontmatter.tags !== undefined && parsed.frontmatter.tags !== '') {
-        metaParts.push(escapeHtml(parsed.frontmatter.tags));
+    if (present(tags)) {
+        metaParts.push(escapeHtml(tags));
     }
-    if (id !== 'index') {
-        metaParts.push('<a href="/">index</a>');
-    }
-
-    const meta =
-        metaParts.length > 0
-            ? `<div class="meta">${metaParts.join(' &middot; ')}</div>`
-            : '';
 
     return document(
-        title,
-        `<h1>${escapeHtml(title)}</h1>\n${meta}\n${md.render(parsed.body)}`,
+        heading,
+        `<h1>${escapeHtml(heading)}</h1>\n` +
+            line('nav', navParts) +
+            line('meta', metaParts) +
+            md.render(parsed.body),
     );
 }
 

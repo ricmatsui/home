@@ -7,8 +7,8 @@ export interface CacheEntry {
     html: string;
 }
 
-export function computeEtag(html: string): string {
-    return `"${createHash('sha256').update(html).digest('hex').slice(0, 16)}"`;
+export function computeEtag(content: string | Buffer): string {
+    return `"${createHash('sha256').update(content).digest('hex').slice(0, 16)}"`;
 }
 
 const DEFAULT_MAX = 100;

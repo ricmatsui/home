@@ -8,6 +8,8 @@ const NOTE = [
     'tags: :zettel:',
     'date: 2026-07-26 00:00',
     'parent: [Parent note](220306-0621)',
+    'previous: [2026-09-17](260917-0910a)',
+    'next: [2026-09-19](260919-0910a)',
     '---',
     '',
     '# Section',
@@ -22,6 +24,13 @@ test('parses the frontmatter fields of a note', () => {
     assert.equal(parsed.frontmatter.title, '2026-09-18');
     assert.equal(parsed.frontmatter.tags, ':zettel:');
     assert.equal(parsed.frontmatter.date, '2026-07-26 00:00');
+});
+
+test('parses the chain fields a day file carries', () => {
+    const parsed = parseFrontmatter(NOTE);
+
+    assert.equal(parsed.frontmatter.previous, '[2026-09-17](260917-0910a)');
+    assert.equal(parsed.frontmatter.next, '[2026-09-19](260919-0910a)');
 });
 
 test('keeps a markdown link in a value intact', () => {
@@ -40,9 +49,9 @@ test('body excludes the frontmatter block', () => {
 test('bodyOffset counts the lines the frontmatter consumed', () => {
     const parsed = parseFrontmatter(NOTE);
 
-    // Lines 0-5 are the block including both --- delimiters, so the body
-    // starts at source line 6.
-    assert.equal(parsed.bodyOffset, 6);
+    // Lines 0-7 are the block including both --- delimiters, so the body
+    // starts at source line 8.
+    assert.equal(parsed.bodyOffset, 8);
     assert.equal(NOTE.split('\n')[parsed.bodyOffset + 1], '# Section');
 });
 
