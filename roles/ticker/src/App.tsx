@@ -6,6 +6,7 @@ import { useChores } from './hooks/useChores';
 import { useDayRollover } from './hooks/useDayRollover';
 import { usePublicOnly } from './hooks/usePublicOnly';
 import { filterPublic } from './lib/chores';
+import { LOCKED_PUBLIC } from './lib/config';
 import { USERS } from './lib/users';
 import type { User } from './types';
 
@@ -14,9 +15,18 @@ type AppProps = {
     // roster without going through the build-time variable it normally
     // comes from.
     users?: User[];
+    /*
+     * Whether this deployment is the public board and only ever that: the
+     * kitchen tablet, which hangs on a wall behind no login. The filter is
+     * held on and the control that would turn it off is not offered.
+     */
+    lockedPublic?: boolean;
 };
 
-export default function App({ users = USERS }: AppProps = {}) {
+export default function App({
+    users = USERS,
+    lockedPublic = LOCKED_PUBLIC,
+}: AppProps = {}) {
     const {
         chores,
         rowStatus,
@@ -29,7 +39,11 @@ export default function App({ users = USERS }: AppProps = {}) {
         cancelComplete,
         complete,
     } = useChores();
-    const { publicOnly, togglePublicOnly } = usePublicOnly();
+    const { publicOnly: publicOnlyPreferred, togglePublicOnly } = usePublicOnly();
+    // The lock wins outright. A tablet that ran the ordinary board before the
+    // kitchen one existed still has a preference sitting in its storage, and
+    // it has no business deciding what a wall board shows.
+    const publicOnly = lockedPublic || publicOnlyPreferred;
 
     useDayRollover(() => window.location.reload());
 
@@ -59,7 +73,12 @@ export default function App({ users = USERS }: AppProps = {}) {
             <header className="header">
                 <h1 className="header__title">Tasks</h1>
                 <div className="header__actions">
-                    <PublicFilterButton publicOnly={publicOnly} onToggle={togglePublicOnly} />
+                    {lockedPublic ? null : (
+                        <PublicFilterButton
+                            publicOnly={publicOnly}
+                            onToggle={togglePublicOnly}
+                        />
+                    )}
                     <RefreshButton onRefresh={() => void refresh()} loading={loading} />
                 </div>
             </header>

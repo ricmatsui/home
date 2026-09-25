@@ -3,11 +3,14 @@
 - name: set dns record
   community.general.cloudflare_dns:
     zone: "{{ config.cloudflare.zone }}"
-    record: "ticker.{{ config.domain }}"
+    record: "{{ item }}"
     type: A
     value: "{{ config.ip }}"
     api_token: "{{ config.cloudflare.api_key }}"
   delegate_to: localhost
+  loop:
+    - "ticker.{{ config.domain }}"
+    - "kitchen-ticker.{{ config.domain }}"
 
 - name: build
   community.docker.docker_image_build:
@@ -55,6 +58,40 @@
                 - "traefik.http.routers.ticker.entrypoints=websecure"
                 - "traefik.http.routers.ticker.tls.certresolver=letsencrypt"
                 - "traefik.http.services.ticker.loadbalancer.server.port=80"
+              resources:
+                limits:
+                  cpus: '0.15'
+                  memory: 20M
+              restart_policy:
+                delay: 30s
+              update_config:
+                order: stop-first
+
+          # The kitchen board: the same image as above, told at runtime that it
+          # is a public board and nothing else. One build serves both, so the
+          # two can never drift apart.
+          kitchen:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            networks:
+              - traefik_traefik
+            environment:
+              DONETICK_API_KEY: "{{ config.ticker.donetick_api_key }}"
+              DONETICK_URL: http://donetick_donetick:2021
+              TZ: America/Los_Angeles
+              TICKER_LOCKED_PUBLIC: 'true'
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=50"
+                - "home.scheduler.restart=true"
+                - "traefik.enable=true"
+                - "traefik.http.routers.ticker-kitchen.rule=Host(`kitchen-ticker.{{ config.domain }}`)"
+                - "traefik.http.routers.ticker-kitchen.middlewares=traefik-internal"
+                - "traefik.http.routers.ticker-kitchen.entrypoints=websecure"
+                - "traefik.http.routers.ticker-kitchen.tls.certresolver=letsencrypt"
+                - "traefik.http.services.ticker-kitchen.loadbalancer.server.port=80"
               resources:
                 limits:
                   cpus: '0.15'

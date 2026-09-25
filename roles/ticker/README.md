@@ -2,7 +2,9 @@
 
 A single-purpose web app for clearing [Donetick](https://donetick.com/) chores.
 It lists what is overdue or due within the next 24 hours and gives each row a
-Done button. Live at `https://ticker.<domain>`.
+Done button. Live at `https://ticker.<domain>` behind a login, and again at
+`https://kitchen-ticker.<domain>` — the same image, deployed as a public board
+and nothing else, for the tablet on the kitchen wall.
 
 It is deliberately not a second Donetick UI. If you are about to add chore
 creation, editing, snoozing, or a second axis of filtering, stop and
@@ -71,16 +73,28 @@ completion does. The preference is kept in `localStorage` under
 both reads and writes are guarded and the filter simply forgets itself rather
 than taking the board down.
 
+On the kitchen deployment the filter is not a preference at all. It is held on
+and the toggle is not rendered, because a board hanging in a room with no login
+in front of it has no business offering a way to the household's private
+chores, and a control that cannot change anything is worse than no control. The
+lock beats anything left in `localStorage`: a tablet that ran the ordinary
+board before the kitchen one existed still has a preference sitting in storage,
+and it does not get a vote. See **Deployment** for the flag that sets it.
+
 The empty list has to say which filter emptied it: "Nothing due" and "Nothing
 public due" are different facts, and only the second one is true when a private
 chore is sitting hidden behind the toggle.
 
 ## Who did it
 
-Done is two taps when there is more than one person configured. The first
-replaces the row's name and due line with a button per person; the second sends
-the completion with `completedBy`, so Donetick credits it to them instead of to
-the user the API key belongs to. The finished row then reads `Done · John` in
+Done is two taps when the Public filter is on and more than one person is
+configured — so always, on the kitchen board, which is locked to public.
+Crediting a completion is a question about the household, and the unfiltered
+board is somebody looking at their own chores, where the second tap would only
+ever name the person already holding the device. The first tap replaces the
+row's name and due line with a button per person; the second sends the
+completion with `completedBy`, so Donetick credits it to them instead of to the
+user the API key belongs to. The finished row then reads `Done · John` in
 place of its due time — with no undo and no cancel, that line is the only
 chance to notice a completion went to the wrong person.
 
@@ -177,13 +191,14 @@ Abridged — the parts worth knowing before you go looking.
 roles/ticker/
   Dockerfile                     multi-stage: node build → nginx
   nginx/default.conf.template    envsubst'd at container start
-  tasks/main.yml                 DNS → build/push → docker_stack
+  tasks/main.yml                 DNS → build/push → docker_stack, two services
   public/                        manifest + icons, copied to dist/ by Vite
   src/
     api/donetick.ts              fetch wrappers + error classification
     lib/chores.ts                helpers for chores
     lib/description.ts           allowlist sanitizer for Donetick's Quill HTML
     lib/users.ts                 the roster, parsed from VITE_TICKER_USERS
+    lib/config.ts                the runtime flag, read from /config.js
     lib/errors.ts                SessionExpiredError / NetworkError /
                                  ChoreChangedError / ApiError
     lib/queue.ts                 serialises completions, one request at a time
@@ -503,8 +518,16 @@ rsvg-convert -w 512 -h 512 icon-maskable.svg -o icon-maskable-512.png
 task deploy --tags ticker
 ```
 
-That sets the Cloudflare DNS record, builds and pushes a multi-arch image to
-the Gitea registry, and deploys the Swarm stack by digest.
+That sets both Cloudflare DNS records, builds and pushes one multi-arch image
+to the Gitea registry, and deploys the Swarm stack by digest.
+
+The stack is two services off that one image. `ticker` is the ordinary board,
+routed at `ticker.<domain>` behind `traefik-internal,traefik-forward-auth`.
+`kitchen` is the wall tablet's, routed at `kitchen-ticker.<domain>` behind
+`traefik-internal` alone — the tablet has nobody to log in as, so the IP
+allowlist is what keeps the board inside the house and `TICKER_LOCKED_PUBLIC`
+is what keeps private chores off it. One build for both is the point: two
+images, or a second role, is two things to drift apart.
 
 The roster is a *build* argument rather than one of these, so changing it takes
 a redeploy and not merely a restart — `task deploy --tags ticker` rebuilds the
@@ -513,18 +536,35 @@ and `id` pairs, and `tasks/main.yml` hands it to the build as JSON via
 `to_json`. Unset, it defaults to `[]` and the board keeps its single
 unattributed Done button rather than failing the deploy.
 
-The container takes three environment variables, all set in `tasks/main.yml`:
+The container takes four environment variables, set in `tasks/main.yml`:
 
 | Variable | Value |
 |---|---|
 | `DONETICK_API_KEY` | from sops (`config.ticker.donetick_api_key`) |
 | `DONETICK_URL` | `http://donetick_donetick:2021` — Swarm service DNS |
 | `TZ` | `America/Los_Angeles`, so due times read as local |
+| `TICKER_LOCKED_PUBLIC` | `true` on the `kitchen` service only; the image defaults it to `false` |
 
 nginx's stock entrypoint runs `envsubst` over `/etc/nginx/templates/*.template`
 at startup, which is what puts them into the config — no custom entrypoint, no
 Docker secret. Rotating the key is a sops edit plus a redeploy; no image
 rebuild, because the key is not in the bundle.
+
+`TICKER_LOCKED_PUBLIC` is the one piece of configuration that reaches the
+browser at runtime rather than being built in, and it goes the same way the API
+key does. The template answers `GET /config.js` with one line —
+`window.TICKER_LOCKED_PUBLIC='${TICKER_LOCKED_PUBLIC}';` — which `index.html`
+loads as an ordinary script, before the deferred module that reads it. Only the
+exact string `true` locks the board, so a misspelling costs the lock rather
+than the board.
+
+Two details in there are load-bearing. The value is substituted **inside
+quotes** so that it is a string either way, and the Dockerfile gives it a
+default: `envsubst` only substitutes variables that are actually set and leaves
+the rest as literal text, which nginx then reads as a variable of its own and
+refuses to start over. `public/config.js` holds the unlocked default for the
+dev server alone — in the image the exact-match `location` answers first and
+that file is never reached.
 
 `update_config.order` is `stop-first` with one replica, so each deploy has a
 few seconds where Traefik has no backend for the host and returns its
@@ -534,11 +574,17 @@ plain-text `404 page not found`. That is expected, not a broken deploy.
 
 ```bash
 # Service is up
-ssh pi 'sudo docker service ps ticker_ticker'
+ssh pi 'sudo docker service ps ticker_ticker ticker_kitchen'
 
 # Auth is actually attached — MUST be 307, not 200.
 # A 200 means the middleware label is wrong and the app is open to the VPN.
 curl -s -o /dev/null -w '%{http_code}\n' https://ticker.<domain>/
+
+# The kitchen board, the other way round: 200, and locked.
+# A 307 means it grew a login the tablet cannot answer; a 'false' here means
+# the flag did not arrive and the board is showing private chores.
+curl -s -o /dev/null -w '%{http_code}\n' https://kitchen-ticker.<domain>/
+curl -s https://kitchen-ticker.<domain>/config.js
 
 # The key is reaching Donetick (run on the node hosting the container)
 ssh tart 'C=$(sudo docker ps --filter name=ticker_ticker -q | head -1);

@@ -18,3 +18,5 @@ FROM nginx:1.29.5@sha256:341bf0f3ce6c5277d6002cf6e1fb0319fa4252add24ab6a0e262e00
 
 COPY --from=build /home/node/app/dist /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/
+
+ENV TICKER_LOCKED_PUBLIC=false

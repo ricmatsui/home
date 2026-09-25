@@ -511,6 +511,65 @@ describe('App', () => {
         });
     });
 
+    /*
+     * The kitchen board. Same image as the ordinary one, deployed behind no
+     * login, so the filter is not a preference there but the whole reason it
+     * can be left on a wall.
+     */
+    describe('locked to public', () => {
+        function mixed() {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({ id: 1, name: 'Trash', isPrivate: false }),
+                chore({ id: 2, name: 'Plants', isPrivate: true }),
+            ]);
+        }
+
+        it('hides the private chores with nothing tapped', async () => {
+            mixed();
+
+            render(<App lockedPublic />);
+
+            expect(await screen.findByText('Trash')).toBeInTheDocument();
+            expect(screen.queryByText('Plants')).not.toBeInTheDocument();
+        });
+
+        // A board anybody can walk up to has no business offering a way to
+        // the household's private chores, and a control that cannot change
+        // anything is worse than no control.
+        it('offers no way back to the whole board', async () => {
+            render(<App lockedPublic />);
+            await screen.findByText(/nothing public due/i);
+
+            expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+                'Refresh',
+            ]);
+        });
+
+        // Nothing wrote this; a tablet that ran the ordinary board before the
+        // kitchen one existed still has the key sitting in storage.
+        it('stays locked over a stored preference of off', async () => {
+            localStorage.setItem('ticker.public-only', 'false');
+            mixed();
+
+            render(<App lockedPublic />);
+
+            expect(await screen.findByText('Trash')).toBeInTheDocument();
+            expect(screen.queryByText('Plants')).not.toBeInTheDocument();
+        });
+
+        it('asks who did it on the first tap', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+
+            render(<App lockedPublic users={[JANE, JOHN]} />);
+            await userEvent.click(await screen.findByRole('button', { name: 'Mark Trash done' }));
+
+            expect(
+                screen.getByRole('button', { name: 'Mark Trash done as John' }),
+            ).toBeInTheDocument();
+            expect(api.completeChore).not.toHaveBeenCalled();
+        });
+    });
+
     describe('description', () => {
         it('shows a chore description under the row', async () => {
             vi.mocked(api.getChores).mockResolvedValue([
