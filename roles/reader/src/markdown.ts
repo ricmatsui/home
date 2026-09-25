@@ -1,5 +1,5 @@
 import MarkdownIt from 'markdown-it';
-import type { StateCore, StateInline, Token } from 'markdown-it';
+import type { StateCore, StateInline } from 'markdown-it';
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const OPEN_BRACKET = 0x5b; // [
@@ -85,33 +85,6 @@ const MARKERS = new Map<string, CheckboxState>([
 
 const MARKER_PATTERN = /^\[(.)\][ \t]+/;
 
-// True when the item at openIndex contains a nested list before its own
-// close token. The class drives the css guide rail, which is only drawn for
-// items that actually have children.
-function hasNestedList(tokens: Token[], openIndex: number): boolean {
-    let depth = 0;
-
-    for (let i = openIndex + 1; i < tokens.length; i++) {
-        const type = tokens[i].type;
-
-        if (type === 'list_item_open') {
-            depth++;
-        } else if (type === 'list_item_close') {
-            if (depth === 0) {
-                return false;
-            }
-            depth--;
-        } else if (
-            depth === 0 &&
-            (type === 'bullet_list_open' || type === 'ordered_list_open')
-        ) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 // The wiki uses '#' for section headings almost exclusively -- 988 '#'
 // against 14 '##' and 3 '###' across the corpus -- so body headings arrive
 // as h1 and would collide with the note title. Demoting one level leaves a
@@ -174,9 +147,6 @@ function createCheckboxRule(bodyOffset: number) {
 
             itemOpen.attrJoin('class', 'cb-item');
             itemOpen.attrJoin('class', `cb-${checkboxState}`);
-            if (hasNestedList(tokens, i)) {
-                itemOpen.attrJoin('class', 'cb-parent');
-            }
             itemOpen.attrSet('data-state', checkboxState);
             itemOpen.attrSet(
                 'data-line',

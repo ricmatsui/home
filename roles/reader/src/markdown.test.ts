@@ -126,3 +126,33 @@ test('clamps demotion at h6 rather than emitting h7', () => {
     assert.match(html, /<h6>deep<\/h6>/);
     assert.equal(html.includes('<h7>'), false);
 });
+
+// The blank lines the wiki puts between top-level items are the only record
+// of the spacing the author intended, and markdown-it keeps that record: a
+// list whose items are separated by blank lines is loose and wraps each item
+// in a <p>, a list written without them is tight and does not. The stylesheet
+// reads those <p> tags back to restore the gap, so the distinction is a
+// contract rather than an implementation detail.
+test('wraps items of a blank-line-separated list in paragraphs', () => {
+    const html = createMarkdown().render('- first\n\n- second\n');
+
+    assert.match(html, /<li>\s*<p>first<\/p>/);
+    assert.match(html, /<li>\s*<p>second<\/p>/);
+});
+
+test('leaves items of a list written without blank lines unwrapped', () => {
+    const html = createMarkdown().render('- first\n- second\n');
+
+    assert.equal(html.includes('<p>'), false);
+});
+
+test('keeps a tight nested list tight inside a loose parent', () => {
+    // The wiki's shape: blank lines between the outer items only. The gap
+    // belongs between those, not between a parent and its children.
+    const html = createMarkdown().render(
+        ['- [ ] parent', '    - child', '', '- [ ] sibling'].join('\n'),
+    );
+
+    assert.match(html, /<p>parent<\/p>/);
+    assert.match(html, /<li>child<\/li>/);
+});

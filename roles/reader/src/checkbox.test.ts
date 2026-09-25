@@ -54,20 +54,6 @@ test('offsets source lines by the frontmatter length', () => {
     assert.match(html, /data-line="7"/);
 });
 
-test('marks an item that has a nested list so css can draw its rail', () => {
-    const html = createMarkdown().render(
-        ['- [ ] parent', '    - [ ] child'].join('\n'),
-    );
-
-    assert.match(html, /<li class="cb-item cb-open cb-parent"[^>]*>/);
-});
-
-test('does not mark a leaf item as a parent', () => {
-    const html = createMarkdown().render('- [ ] leaf');
-
-    assert.equal(html.includes('cb-parent'), false);
-});
-
 test('parses four levels of four-space indentation as nested lists', () => {
     const html = createMarkdown().render(
         [
