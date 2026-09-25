@@ -4,8 +4,11 @@
 
 - Actual Budget
 - Cloudflare DDNS
+- ConvertX
 - Datadog
+- DBOS
 - Docker Swarm
+- Donetick
 - Doorbell
 - External USB Drive
 - Frigate
@@ -14,15 +17,23 @@
 - go2rtc
 - Home Assistant
 - Homepage
+- Impression
 - Jellyfin
 - Let's Encrypt
 - Light Control
+- Mosquitto
 - MQTT Explorer
+- Paperless-ngx
 - PaperMC
+- Planner
+- Rclone
+- Reader
 - Remote
 - Resilio Sync
+- Scheduler
 - Selenium
 - Sherpa DNS
+- Tang
 - Temporal
 - Temporal UI
 - Ticker
