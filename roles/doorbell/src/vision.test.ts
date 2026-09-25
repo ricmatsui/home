@@ -2,9 +2,18 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Jimp } from 'jimp';
 import {
+    InferenceAbortedError,
+    InferenceTimeoutError,
+    TruncatedResponseError,
+    UnparseableResponseError,
+    backoffMs,
+    errorCode,
+    retryable,
+    withDeadline,
+    withRetries,
+    assertComplete,
     PROMPT,
     detectionsSchema,
-    hasCat,
     once,
     parseDetections,
     promptFor,
@@ -36,25 +45,6 @@ test('normalises an inverted box', () => {
     assert.equal(box.xMax, 800);
     assert.equal(box.yMin, 200);
     assert.equal(box.yMax, 800);
-});
-
-test('hasCat is true for any cat label regardless of case', () => {
-    assert.equal(hasCat([{ label: 'Cat', box_2d: [0, 0, 1, 1] }]), true);
-    assert.equal(hasCat([{ label: 'cat', box_2d: [0, 0, 1, 1] }]), true);
-});
-
-test('hasCat is false for an empty list', () => {
-    assert.equal(hasCat([]), false);
-});
-
-test('hasCat is false when nothing is a cat', () => {
-    assert.equal(hasCat([{ label: 'dog', box_2d: [0, 0, 1, 1] }]), false);
-});
-
-test('hasCat matches the label exactly, so a word merely containing cat is not one', () => {
-    assert.equal(hasCat([{ label: 'caterpillar', box_2d: [0, 0, 1, 1] }]), false);
-    assert.equal(hasCat([{ label: 'cat toy', box_2d: [0, 0, 1, 1] }]), false);
-    assert.equal(hasCat([{ label: ' cat ', box_2d: [0, 0, 1, 1] }]), true);
 });
 
 test('the schema accepts a well-formed response', () => {
@@ -209,4 +199,247 @@ test('once can be reset, so a dead handle is not cached forever', async () => {
     load.reset();
 
     assert.equal(await load(), 'model 2');
+});
+
+test('a response the model finished on its own terms is complete', () => {
+    assert.doesNotThrow(() => assertComplete('eosFound'));
+    assert.doesNotThrow(() => assertComplete('stopStringFound'));
+});
+
+test('a response cut short by eviction is rejected before it is parsed', () => {
+    assert.throws(() => assertComplete('modelUnloaded'), TruncatedResponseError);
+});
+
+test('a response cut short by the context length is rejected', () => {
+    assert.throws(() => assertComplete('contextLengthReached'), /contextLengthReached/);
+});
+
+test('a response with no stats is taken at face value', () => {
+    // The stop reason is optional on the SDK's result; an absent one is not
+    // evidence of truncation, and inventing a failure here would lose good frames.
+    assert.doesNotThrow(() => assertComplete(undefined));
+});
+
+test('reads the error code LM Studio puts on an evicted model', () => {
+    const error = Object.assign(new Error('Model unloaded'), {
+        displayData: { code: 'generic.specificModelUnloaded' },
+    });
+
+    assert.equal(errorCode(error), 'generic.specificModelUnloaded');
+});
+
+test('an error carrying no display data has no code', () => {
+    assert.equal(errorCode(new Error('socket hang up')), undefined);
+});
+
+test('a model the server no longer has loaded is worth retrying', () => {
+    const error = Object.assign(new Error('No model matching query'), {
+        displayData: { code: 'generic.noModelMatchingQuery' },
+    });
+
+    assert.equal(retryable(error), true);
+});
+
+test('a connection failure is worth retrying', () => {
+    assert.equal(retryable(new Error('connect ECONNREFUSED 127.0.0.1:1234')), true);
+});
+
+test('a response cut short by eviction is worth retrying', () => {
+    assert.equal(retryable(new TruncatedResponseError('modelUnloaded')), true);
+});
+
+test('an unparseable response is not retried, because temperature is zero', () => {
+    // The same image and the same prompt produce the same text; a retry would
+    // spend a model load to be told the same thing again.
+    assert.equal(retryable(new UnparseableResponseError('sorry, no cats today')), false);
+});
+
+test('a call that already burned its deadline is not retried', () => {
+    assert.equal(retryable(new InferenceTimeoutError(600_000)), false);
+});
+
+test('a call abandoned at shutdown is not retried', () => {
+    assert.equal(retryable(new InferenceAbortedError()), false);
+});
+
+test('parseDetections throws the unparseable error, so callers can classify it', () => {
+    assert.throws(() => parseDetections('sorry, no cats today'), UnparseableResponseError);
+});
+
+test('the backoff doubles from a second', () => {
+    assert.deepEqual([1, 2, 3, 4, 5].map(backoffMs), [1000, 2000, 4000, 8000, 16000]);
+});
+
+/** Records what it was asked to wait for without actually waiting. */
+function fakeSleep(): { waits: number[]; sleep: (ms: number) => Promise<void> } {
+    const waits: number[] = [];
+    return { waits, sleep: async (ms: number) => void waits.push(ms) };
+}
+
+test('a call that succeeds first time never sleeps', async () => {
+    const { waits, sleep } = fakeSleep();
+
+    assert.equal(await withRetries(async () => 'ok', { attempts: 6, sleep }), 'ok');
+    assert.deepEqual(waits, []);
+});
+
+test('a retryable failure is tried again and can still succeed', async () => {
+    let calls = 0;
+    const { sleep } = fakeSleep();
+
+    const result = await withRetries(async () => {
+        calls += 1;
+        if (calls < 3) throw new TruncatedResponseError('modelUnloaded');
+        return 'ok';
+    }, { attempts: 6, sleep });
+
+    assert.equal(result, 'ok');
+    assert.equal(calls, 3);
+});
+
+test('five retries follow the first attempt, then it gives up', async () => {
+    let calls = 0;
+    const { sleep } = fakeSleep();
+
+    await assert.rejects(withRetries(async () => {
+        calls += 1;
+        throw new Error('connect ECONNREFUSED');
+    }, { attempts: 6, sleep }), /ECONNREFUSED/);
+
+    assert.equal(calls, 6);
+});
+
+test('it backs off between attempts, and not after the last one', async () => {
+    const { waits, sleep } = fakeSleep();
+
+    await assert.rejects(withRetries(async () => {
+        throw new Error('connect ECONNREFUSED');
+    }, { attempts: 4, sleep }));
+
+    assert.deepEqual(waits, [1000, 2000, 4000]);
+});
+
+test('a failure another attempt cannot change is thrown at once', async () => {
+    let calls = 0;
+    const { sleep } = fakeSleep();
+
+    await assert.rejects(withRetries(async () => {
+        calls += 1;
+        throw new UnparseableResponseError('sorry, no cats today');
+    }, { attempts: 6, sleep }), UnparseableResponseError);
+
+    assert.equal(calls, 1);
+});
+
+test('each attempt is told which attempt it is', async () => {
+    const seen: number[] = [];
+    const { sleep } = fakeSleep();
+
+    await assert.rejects(withRetries(async (attempt) => {
+        seen.push(attempt);
+        throw new Error('connect ECONNREFUSED');
+    }, { attempts: 3, sleep }));
+
+    assert.deepEqual(seen, [1, 2, 3]);
+});
+
+test('every retry is reported, so a recovered failure still leaves a trace', async () => {
+    const reported: Array<{ attempt: number; delayMs: number }> = [];
+    const { sleep } = fakeSleep();
+
+    await withRetries(async (attempt) => {
+        if (attempt < 3) throw new TruncatedResponseError('modelUnloaded');
+        return 'ok';
+    }, {
+        attempts: 6,
+        sleep,
+        onRetry: (_error, attempt, delayMs) => reported.push({ attempt, delayMs }),
+    });
+
+    assert.deepEqual(reported, [{ attempt: 1, delayMs: 1000 }, { attempt: 2, delayMs: 2000 }]);
+});
+
+test('a call that finishes inside its deadline returns normally', async () => {
+    assert.equal(await withDeadline(async () => 'ok', { deadlineMs: 1000 }), 'ok');
+});
+
+test('the run is handed a signal that fires when the deadline passes', async () => {
+    await assert.rejects(
+        withDeadline((signal) => new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }), { deadlineMs: 5 }),
+        InferenceTimeoutError,
+    );
+});
+
+test('the timeout error names the deadline it spent', async () => {
+    await assert.rejects(
+        withDeadline((signal) => new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }), { deadlineMs: 5 }),
+        /5ms/,
+    );
+});
+
+test('a caller that has already given up is not made to wait', async () => {
+    await assert.rejects(
+        withDeadline((signal) => new Promise((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        }), { deadlineMs: 60_000, signal: AbortSignal.abort() }),
+        InferenceAbortedError,
+    );
+});
+
+test('a shutdown mid-call reads as abandoned, not as a spent deadline', async () => {
+    const controller = new AbortController();
+    const pending = withDeadline((signal) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }), { deadlineMs: 60_000, signal: controller.signal });
+
+    controller.abort();
+
+    await assert.rejects(pending, InferenceAbortedError);
+});
+
+test('a failure of its own is not mistaken for a deadline', async () => {
+    await assert.rejects(
+        withDeadline(async () => { throw new Error('socket hang up'); }, { deadlineMs: 60_000 }),
+        /socket hang up/,
+    );
+});
+
+test('a caller that has already given up never reaches the server', async () => {
+    let called = false;
+
+    await assert.rejects(withDeadline(async () => {
+        called = true;
+        return 'ok';
+    }, { deadlineMs: 60_000, signal: AbortSignal.abort() }), InferenceAbortedError);
+
+    assert.equal(called, false);
+});
+
+test('once hands the factory the arguments of the call that woke it', async () => {
+    const seen: string[] = [];
+    const load = once(async (label: string) => {
+        seen.push(label);
+        return label;
+    });
+
+    assert.equal(await load('first'), 'first');
+    assert.deepEqual(seen, ['first']);
+});
+
+test('a caller that finds the memo warm does not re-run the factory with its own arguments', async () => {
+    // The memo means the first caller's arguments govern the shared load. Worth
+    // stating outright: a later caller's signal has no say over a load in flight.
+    const seen: string[] = [];
+    const load = once(async (label: string) => {
+        seen.push(label);
+        return label;
+    });
+
+    assert.equal(await load('first'), 'first');
+    assert.equal(await load('second'), 'first');
+    assert.deepEqual(seen, ['first']);
 });

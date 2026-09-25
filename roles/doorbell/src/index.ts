@@ -3,7 +3,7 @@ import { subscribeToDoorbellEvents } from './events.js';
 import { ActivityWindow } from './window.js';
 import { CatPresence } from './presence.js';
 import { SerialQueue } from './queue.js';
-import { createVisionClient, hasCat } from './vision.js';
+import { createVisionClient, errorCode } from './vision.js';
 import { Frame, grabFrame } from './frames.js';
 import { annotate, writeResult } from './annotate.js';
 import { connectMqtt } from './mqtt.js';
@@ -35,9 +35,16 @@ log.info('starting', {
     poll_ms: config.pollMs,
     off_heartbeat_ms: config.offHeartbeatMs,
     miss_limit: config.missLimit,
-    queue_max: config.queueMax,
+    presence_hold_ms: config.presenceHoldMs,
+    queue_warn_depth: config.queueWarnDepth,
     frames_path: config.framesPath,
 });
+
+/**
+ * Abandons inference in flight. Only shutdown pulls it — deliberately not the window
+ * closing, which is what lets a frame outlive the window that grabbed it.
+ */
+const abandon = new AbortController();
 
 const broker = await connectMqtt({
     url: config.mqttUrl,
@@ -49,6 +56,7 @@ const frigateEvents = createFrigateEvents({ baseUrl: config.frigateUrl, camera: 
 
 const presence = new CatPresence({
     missLimit: config.missLimit,
+    holdMs: config.presenceHoldMs,
     onChange: (present) => {
         log.info(`cat ${present ? 'present' : 'absent'}`);
         broker.setCatPresent(present);
@@ -57,16 +65,20 @@ const presence = new CatPresence({
 });
 
 const queue = new SerialQueue<Frame>({
-    max: config.queueMax,
-    onEvict: (frame) => log.warn('evicted, queue is backed up', { path: frame.rawPath }),
-    onError: (error, frame) => log.error('failed to process frame', { path: frame.rawPath, error }),
+    warnDepth: config.queueWarnDepth,
+    onBacklog: (depth) => log.warn('queue is backed up', { depth, warn_depth: config.queueWarnDepth }),
+    onError: (error, frame) => log.error('failed to process frame', {
+        path: frame.rawPath,
+        code: errorCode(error),
+        error,
+    }),
     worker: async (frame) => {
         const started = performance.now();
         log.debug('processing frame', { path: frame.rawPath, age_ms: Date.now() - frame.at.getTime() });
 
         let detections;
         try {
-            detections = await vision.detect(frame.rawPath);
+            detections = await vision.detect(frame.rawPath, { signal: abandon.signal });
         } catch (error) {
             // An inference failure says nothing about the cat, so the miss counter
             // is deliberately left alone.
@@ -81,7 +93,7 @@ const queue = new SerialQueue<Frame>({
         }
 
         const { buffer, boxes } = await annotate(frame.raw, detections);
-        const cat = hasCat(detections);
+        const cat = detections.length > 0;
 
         await writeResult({
             framesPath: config.framesPath,
@@ -131,13 +143,9 @@ const activityWindow = new ActivityWindow({
         },
         onTick: (signal) => tick(signal),
         onClose: () => {
-            log.info('window closed', { queue_depth: queue.size });
+            log.info('window closed', { queue_depth: queue.size, cat_present: presence.present });
             frigateEvents.closeWindow();
             broker.setWindowOpen(false);
-            presence.reset();
-            // reset() only emits on a transition; publish unconditionally so the
-            // retained topic is OFF whatever the latch thought.
-            broker.setCatPresent(false);
         },
     },
 });
@@ -163,6 +171,11 @@ async function shutdown(code: number): Promise<void> {
 
     log.info('shutting down', { code, window_open: activityWindow.isOpen, queue_depth: queue.size });
     activityWindow.close();
+    // The queue is unbounded and a single inference may hold a ten-minute deadline,
+    // so draining it as it stands could outlast anything willing to wait. Abandoning
+    // first makes every queued frame fail fast without opening a request, and the
+    // drain below is then only about letting their results be written.
+    abandon.abort();
 
     try {
         await subscription.close();

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { annotate } from '../annotate.js';
-import { createVisionClient, hasCat, promptFor } from '../vision.js';
+import { createVisionClient, promptFor } from '../vision.js';
 import { imagesDir, labelsSha, loadLabels, mergeLabels, walkImages, writeLabels } from './corpus.js';
 import { loadDotEnv } from './env.js';
 import { ImageResult, RunFile, byDirectory, diffRuns, mcnemarExact, outcomeFor, score, sha } from './metrics.js';
@@ -22,7 +22,37 @@ const DEFAULT_DIR = path.join(PACKAGE_ROOT, 'eval');
 // Which LM Studio to talk to is a property of the machine running the harness, not
 // of the corpus, so it comes from the environment or --url.
 const DEFAULT_URL = process.env.LM_STUDIO_URL ?? 'ws://localhost:1234';
+// The model the service actually runs (roles/doorbell/defaults/main.yml), so a bare
+// `yarn eval run` scores the deployed configuration rather than refusing to start.
+// Kept in step with that file by hand: the harness runs on a laptop, nowhere near
+// Ansible, and reading the role's YAML to learn one string is not worth the coupling.
+const DEFAULT_MODEL = process.env.LM_STUDIO_MODEL ?? 'google/gemma-4-12b-qat';
 const DEFAULT_BETA = 0.5;
+/**
+ * The service retries an evicted model because a missed frame is a missed cat. A
+ * scored run wants the opposite. Each result carries the wall clock around its own
+ * `detect`, and that number is read months later to compare one model against
+ * another: silently folding backoff sleeps and burned attempts into it would put a
+ * wrong figure in a kept artifact. A failure here is already cheap and honest —
+ * recorded as `error` and excluded from the matrix — and a server dropping the model
+ * mid-corpus is a fact about the setup worth seeing rather than smoothing over.
+ */
+const EVAL_ATTEMPTS = 1;
+/**
+ * No retries means nothing bounds a wedged server but this. Far short of the
+ * service's ten minutes because a human is watching the counter tick, and it can
+ * afford to be: it bounds the inference only, which on a warm model is seconds.
+ */
+const EVAL_DEADLINE_MS = 120_000;
+/**
+ * The load keeps the generous bound the service uses. A batch launched from a laptop
+ * is the one caller that reliably pays a cold load — often the first thing to touch
+ * that model since it was last evicted — and at `DEFAULT_CONCURRENCY` the lanes enter
+ * together, so the first one's bound is the bound they all wait under. Anything tight
+ * enough to keep a watched counter moving would fail the whole first lane on a model
+ * that was merely coming off disk.
+ */
+const EVAL_LOAD_DEADLINE_MS = 600_000;
 // Measured on a 12B model: two in flight buys about 1.66x, four about 1.81x, and
 // eight no more than that. Decode is memory-bandwidth bound, so the extra lanes
 // mostly slow each other down; two collects the bulk of it.
@@ -30,12 +60,15 @@ const DEFAULT_CONCURRENCY = 2;
 
 const USAGE = `usage:
   yarn eval bootstrap [--dir <corpus>]
-  yarn eval run       [--dir <corpus>] --model <name> [--url <ws://…>] [--prompt-file <f>] [--limit <n>]
-                      [--concurrency <n>]
+  yarn eval run       [--dir <corpus>] [--model <name>] [--url <ws://…>] [--prompt-file <f>]
+                      [--limit <n>] [--concurrency <n>]
   yarn eval compare   <runA.json> <runB.json> [--beta <n>]
 
 --url defaults to LM_STUDIO_URL, which may be set in the environment or in a .env
 file next to package.json, and falls back to ws://localhost:1234.
+
+--model defaults the same way from LM_STUDIO_MODEL, falling back to the model the
+service is deployed with (${DEFAULT_MODEL}).
 `;
 
 function fail(message: string): never {
@@ -93,7 +126,14 @@ async function run(options: {
     // Record the prompt that actually ran, not the override: an artifact whose
     // promptSha hashes an empty string is unattributable months later.
     const prompt = promptFor(override);
-    const vision = createVisionClient({ baseUrl: options.baseUrl, model: options.model, prompt });
+    const vision = createVisionClient({
+        baseUrl: options.baseUrl,
+        model: options.model,
+        prompt,
+        attempts: EVAL_ATTEMPTS,
+        deadlineMs: EVAL_DEADLINE_MS,
+        loadDeadlineMs: EVAL_LOAD_DEADLINE_MS,
+    });
 
     const startedAt = new Date();
     const name = `${stamp(startedAt)}-${slug(options.model)}`;
@@ -121,7 +161,7 @@ async function run(options: {
 
         try {
             const detections = await vision.detect(imagePath);
-            const verdict = hasCat(detections);
+            const verdict = detections.length > 0;
             let annotated: string | null = null;
 
             const raw = await fs.promises.readFile(imagePath);
@@ -246,10 +286,9 @@ const corpusDir = path.resolve(values.dir ?? DEFAULT_DIR);
 if (command === 'bootstrap') {
     await bootstrap(corpusDir);
 } else if (command === 'run') {
-    if (!values.model) fail(`--model is required\n\n${USAGE}`);
     await run({
         corpusDir,
-        model: values.model,
+        model: values.model ?? DEFAULT_MODEL,
         baseUrl: values.url ?? DEFAULT_URL,
         promptFile: values['prompt-file'],
         limit: values.limit ? Number(values.limit) : undefined,

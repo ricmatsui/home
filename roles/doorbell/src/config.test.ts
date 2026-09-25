@@ -25,7 +25,8 @@ const validEnv = {
     POLL_MS: '30000',
     OFF_HEARTBEAT_MS: '30000',
     MISS_LIMIT: '3',
-    QUEUE_MAX: '4',
+    PRESENCE_HOLD_MS: '600000',
+    QUEUE_WARN_DEPTH: '4',
     FRAMES_PATH: '/frames',
 };
 
@@ -43,8 +44,9 @@ test('loadConfig parses numbers and credentials', () => {
     assert.equal(config.windowMs, 120000);
     assert.equal(config.pollMs, 30000);
     assert.equal(config.offHeartbeatMs, 30000);
+    assert.equal(config.presenceHoldMs, 600000);
     assert.equal(config.missLimit, 3);
-    assert.equal(config.queueMax, 4);
+    assert.equal(config.queueWarnDepth, 4);
     assert.equal(config.googleCredentials.project_id, 'example-project');
     assert.equal(config.frigateUrl, 'http://frigate:5000');
     assert.equal(config.frigateCamera, 'example_camera');

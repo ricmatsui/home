@@ -2,10 +2,15 @@
 
 - name: create directories
   ansible.builtin.file:
-    path: /mnt/gluster/doorbell/frames
+    path: "{{ item }}"
     owner: pi
     group: pi
     state: directory
+  loop:
+    - /mnt/gluster/doorbell/frames
+    - /mnt/gluster/doorbell/eval
+    - /mnt/gluster/doorbell/eval/images
+    - /mnt/gluster/doorbell/eval/runs
 
 - name: build
   community.docker.docker_image_build:
@@ -52,7 +57,8 @@
               POLL_MS: "{{ doorbell_poll_ms }}"
               OFF_HEARTBEAT_MS: "{{ doorbell_off_heartbeat_ms }}"
               MISS_LIMIT: "{{ doorbell_miss_limit }}"
-              QUEUE_MAX: "{{ doorbell_queue_max }}"
+              PRESENCE_HOLD_MS: "{{ doorbell_presence_hold_ms }}"
+              QUEUE_WARN_DEPTH: "{{ doorbell_queue_warn_depth }}"
               FRAMES_PATH: /frames
               LOG_LEVEL: "{{ doorbell_log_level }}"
             deploy:
@@ -79,3 +85,28 @@
             external: true
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
+
+- name: configure backup
+  ansible.builtin.copy:
+    dest: /mnt/gluster/rclone/scripts/doorbell.sh
+    mode: u=rwx,g=rx,o=rx
+    content: |
+      #!/bin/bash
+      . /mnt/gluster/rclone/functions
+
+      rclone copy --immutable /mnt/gluster/doorbell/frames \
+        :s3:/$ARCHIVE_PATH/doorbell/frames \
+        --min-age 1d
+
+      rclone copy --immutable /mnt/gluster/doorbell/eval/images \
+        :s3:/$ARCHIVE_PATH/doorbell/eval/images \
+        --min-age 1d
+
+      rclone copy --immutable /mnt/gluster/doorbell/eval/runs \
+        :s3:/$ARCHIVE_PATH/doorbell/eval/runs \
+        --min-age 1d
+
+      rclone copy /mnt/gluster/doorbell/eval \
+        :s3:/$ARCHIVE_PATH/$BACKUP_DATE/doorbell/eval \
+        --exclude "images/**" \
+        --exclude "runs/**"

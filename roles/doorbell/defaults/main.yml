@@ -8,5 +8,6 @@ doorbell_window_ms: 120000
 doorbell_poll_ms: 30000
 doorbell_off_heartbeat_ms: 30000
 doorbell_miss_limit: 3
-doorbell_queue_max: 4
+doorbell_presence_hold_ms: 600000
+doorbell_queue_warn_depth: 4
 doorbell_log_level: info

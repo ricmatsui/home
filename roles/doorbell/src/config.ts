@@ -31,7 +31,10 @@ export interface Config {
     pollMs: number;
     offHeartbeatMs: number;
     missLimit: number;
-    queueMax: number;
+    /** How long presence outlives its last cat frame when no frame contradicts it. */
+    presenceHoldMs: number;
+    /** Depth at which a backlog stops being normal. The queue itself is unbounded. */
+    queueWarnDepth: number;
     framesPath: string;
 }
 
@@ -79,7 +82,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
         pollMs: requireNumber('POLL_MS', env),
         offHeartbeatMs: requireNumber('OFF_HEARTBEAT_MS', env),
         missLimit: requireNumber('MISS_LIMIT', env),
-        queueMax: requireNumber('QUEUE_MAX', env),
+        presenceHoldMs: requireNumber('PRESENCE_HOLD_MS', env),
+        queueWarnDepth: requireNumber('QUEUE_WARN_DEPTH', env),
         framesPath: requireEnv('FRAMES_PATH', env),
     };
 }
