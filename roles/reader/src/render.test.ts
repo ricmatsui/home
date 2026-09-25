@@ -136,7 +136,7 @@ test('escapes the id on the not found page', () => {
 test('links the web app manifest and the icons from the head', () => {
     const html = renderNote(NOTE, '260726-0000a');
 
-    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest" crossorigin="use-credentials">/);
     assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="\/icon\.svg">/);
     assert.match(html, /<link rel="apple-touch-icon" href="\/icon-192\.png">/);
 });
@@ -151,5 +151,73 @@ test('names the app and its colour for an ios home screen', () => {
 test('the not found page is installable too, so a cold start still has the manifest', () => {
     const html = renderNotFound('nope');
 
-    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest">/);
+    assert.match(html, /<link rel="manifest" href="\/manifest\.webmanifest" crossorigin="use-credentials">/);
+});
+
+const SECTIONED = [
+    '---',
+    'title: 2026-09-24',
+    '---',
+    '',
+    '# Weather',
+    '',
+    '- Overcast',
+    '',
+    '# Personal',
+    '',
+    '- [X] House',
+    '',
+    '# Work',
+    '',
+    '- [ ] Code Review',
+    '',
+].join('\n');
+
+test('a note with two or more sections gets a jump bar', () => {
+    const html = renderNote(SECTIONED, '260924-0000');
+
+    assert.match(html, /<nav class="jump"/);
+});
+
+test('the jump bar links to every section in document order', () => {
+    const html = renderNote(SECTIONED, '260924-0000');
+
+    const bar = /<nav class="jump"[^>]*>([\s\S]*?)<\/nav>/.exec(html);
+    assert.notEqual(bar, null);
+    assert.deepEqual(
+        [...bar![1].matchAll(/<a href="(#[^"]+)">([^<]+)<\/a>/g)].map(m => [m[1], m[2]]),
+        [
+            ['#weather', 'Weather'],
+            ['#personal', 'Personal'],
+            ['#work', 'Work'],
+        ],
+    );
+});
+
+test('the sections the jump bar points at carry matching ids', () => {
+    const html = renderNote(SECTIONED, '260924-0000');
+
+    assert.match(html, /<h2 id="weather">Weather<\/h2>/);
+    assert.match(html, /<h2 id="personal">Personal<\/h2>/);
+    assert.match(html, /<h2 id="work">Work<\/h2>/);
+});
+
+test('a note with a single section gets no jump bar', () => {
+    const html = renderNote(NOTE, '260726-0000a');
+
+    assert.doesNotMatch(html, /<nav class="jump"/);
+});
+
+test('a note with no sections gets no jump bar', () => {
+    const html = renderNote('just body text\n', '221126-1938');
+
+    assert.doesNotMatch(html, /<nav class="jump"/);
+});
+
+test('heading text is escaped in the jump bar', () => {
+    const html = renderNote('# Tom & Jerry\n\n# <script>\n', '221126-1938');
+
+    assert.match(html, /<a href="#tom-jerry">Tom &amp; Jerry<\/a>/);
+    assert.match(html, /<a href="#script">&lt;script&gt;<\/a>/);
+    assert.doesNotMatch(html, /<script>/);
 });

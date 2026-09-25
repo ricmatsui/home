@@ -68,7 +68,11 @@ describe('web app manifest', () => {
 
     it('is linked from the document, with the icons Safari looks for', () => {
         const html = text('index.html');
-        expect(html).toContain('rel="manifest" href="/manifest.json"');
+        // The attribute is load-bearing, not decoration: the board is behind
+        // forward-auth, which bounces a credential-less manifest fetch to the login.
+        expect(html).toContain(
+            'rel="manifest" href="/manifest.json" crossorigin="use-credentials"',
+        );
         expect(html).toContain('rel="apple-touch-icon" href="/apple-touch-icon.png"');
         expect(pngSize('public/apple-touch-icon.png')).toEqual({ width: 180, height: 180 });
     });

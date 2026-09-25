@@ -4,6 +4,15 @@ import type { StateCore, StateInline } from 'markdown-it';
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 const OPEN_BRACKET = 0x5b; // [
 
+export interface Heading {
+    id: string;
+    text: string;
+}
+
+export interface MarkdownEnv {
+    headings?: Heading[];
+}
+
 export interface NormalizedHref {
     href: string;
     external: boolean;
@@ -156,6 +165,57 @@ function createCheckboxRule(bodyOffset: number) {
     };
 }
 
+// Runs at the END of the core chain, unlike the two rules above: the id and
+// the jump bar's label both come from the heading's plain text, and the
+// children that hold it only exist once 'inline' has run.
+//
+// Ids are collected per render rather than per markdown instance, so two
+// renders through one instance cannot inherit each other's suffixes.
+function headingAnchors(state: StateCore): void {
+    const env = state.env as MarkdownEnv;
+    const taken = new Set<string>();
+    const tokens = state.tokens;
+
+    for (let i = 0; i < tokens.length; i++) {
+        const open = tokens[i];
+        if (open.type !== 'heading_open') {
+            continue;
+        }
+
+        const inline = tokens[i + 1];
+        if (inline === undefined || inline.type !== 'inline') {
+            continue;
+        }
+
+        // Link and emphasis markup contributes no text of its own, so
+        // flattening to the text and code children leaves the words a reader
+        // actually sees -- and nothing that needs escaping in an id.
+        const text = (inline.children ?? [])
+            .filter(child => child.type === 'text' || child.type === 'code_inline')
+            .map(child => child.content)
+            .join('');
+
+        const base =
+            text
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'section';
+
+        // A heading whose own text already slugs to `${base}-2` would collide
+        // with the suffix, so step until the id is genuinely unused.
+        let id = base;
+        for (let n = 2; taken.has(id); n++) {
+            id = `${base}-${n}`;
+        }
+        taken.add(id);
+
+        open.attrSet('id', id);
+
+        env.headings ??= [];
+        env.headings.push({ id, text });
+    }
+}
+
 export function createMarkdown(bodyOffset = 0): MarkdownIt {
     const md = new MarkdownIt({
         // The corpus contains no HTML, and disabling it removes the
@@ -173,6 +233,7 @@ export function createMarkdown(bodyOffset = 0): MarkdownIt {
         createCheckboxRule(bodyOffset),
     );
     md.core.ruler.before('inline', 'demote_headings', demoteHeadings);
+    md.core.ruler.push('heading_anchors', headingAnchors);
 
     const defaultLinkOpen = md.renderer.rules.link_open;
 

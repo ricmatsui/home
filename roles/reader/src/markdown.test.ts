@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMarkdown, normalizeHref } from './markdown.js';
+import { createMarkdown, normalizeHref, type MarkdownEnv } from './markdown.js';
 
 test('an extensionless relative link becomes a root-relative note link', () => {
     assert.deepEqual(normalizeHref('260415-0000a'), {
@@ -108,23 +108,23 @@ test('demotes body headings one level so the note title is the only h1', () => {
     // with the document title.
     const html = createMarkdown().render('# Weather\n\ntext\n');
 
-    assert.match(html, /<h2>Weather<\/h2>/);
+    assert.match(html, /<h2[^>]*>Weather<\/h2>/);
     assert.equal(html.includes('<h1>'), false);
 });
 
 test('demotes each heading level in turn', () => {
     const html = createMarkdown().render('# a\n\n## b\n\n### c\n');
 
-    assert.match(html, /<h2>a<\/h2>/);
-    assert.match(html, /<h3>b<\/h3>/);
-    assert.match(html, /<h4>c<\/h4>/);
+    assert.match(html, /<h2[^>]*>a<\/h2>/);
+    assert.match(html, /<h3[^>]*>b<\/h3>/);
+    assert.match(html, /<h4[^>]*>c<\/h4>/);
 });
 
 test('clamps demotion at h6 rather than emitting h7', () => {
     const html = createMarkdown().render('###### deep\n');
 
-    assert.match(html, /<h6>deep<\/h6>/);
-    assert.equal(html.includes('<h7>'), false);
+    assert.match(html, /<h6[^>]*>deep<\/h6>/);
+    assert.doesNotMatch(html, /<h7[\s>]/);
 });
 
 // The blank lines the wiki puts between top-level items are the only record
@@ -155,4 +155,69 @@ test('keeps a tight nested list tight inside a loose parent', () => {
 
     assert.match(html, /<p>parent<\/p>/);
     assert.match(html, /<li>child<\/li>/);
+});
+
+test('a heading is given an id slugged from its text', () => {
+    const md = createMarkdown();
+
+    assert.match(md.render('# Weather\n'), /<h2 id="weather">Weather<\/h2>/);
+});
+
+test('headings are collected on the env in document order', () => {
+    const md = createMarkdown();
+    const env: MarkdownEnv = {};
+
+    md.render('# Weather\n\n# Personal\n\n# Work\n', env);
+
+    assert.deepEqual(env.headings, [
+        { id: 'weather', text: 'Weather' },
+        { id: 'personal', text: 'Personal' },
+        { id: 'work', text: 'Work' },
+    ]);
+});
+
+test('a repeated heading text still gets a unique id', () => {
+    const md = createMarkdown();
+    const env: MarkdownEnv = {};
+
+    md.render('# End of session\n\n# End of session\n', env);
+
+    assert.deepEqual(env.headings, [
+        { id: 'end-of-session', text: 'End of session' },
+        { id: 'end-of-session-2', text: 'End of session' },
+    ]);
+});
+
+test('a heading slugs to its words, dropping punctuation and case', () => {
+    const md = createMarkdown();
+    const env: MarkdownEnv = {};
+
+    md.render('# 11:00 Introductions & Goal Setting\n', env);
+
+    assert.deepEqual(env.headings, [
+        { id: '11-00-introductions-goal-setting', text: '11:00 Introductions & Goal Setting' },
+    ]);
+});
+
+test('a heading with nothing sluggable falls back to a usable id', () => {
+    const md = createMarkdown();
+    const env: MarkdownEnv = {};
+
+    md.render('# ???\n\n# ***\n', env);
+
+    assert.deepEqual(env.headings, [
+        { id: 'section', text: '???' },
+        { id: 'section-2', text: '***' },
+    ]);
+});
+
+test('heading markup is flattened for the id and the collected text', () => {
+    const md = createMarkdown();
+    const env: MarkdownEnv = {};
+
+    md.render('# A [link](260415-0000a) here\n', env);
+
+    assert.deepEqual(env.headings, [
+        { id: 'a-link-here', text: 'A link here' },
+    ]);
 });

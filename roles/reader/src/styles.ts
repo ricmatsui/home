@@ -24,6 +24,13 @@ export const STYLES = `
     --rail: 0.7rem;
     --lh: 1.55em;
     --item-gap: 1.4rem;
+    --measure: 46rem;
+    --jump-font: 0.86rem;
+    --jump-lh: 1.7;
+    --jump-pad: 0.6rem;
+    /* The bar's ceiling, quoted in both the max-height that enforces it and
+       the page padding that has to clear it. */
+    --jump-max: calc(3 * var(--jump-lh) * var(--jump-font));
 }
 
 * { box-sizing: border-box; }
@@ -46,7 +53,7 @@ body {
    so it opts back out and scrolls inside its own box. */
 pre { overflow-wrap: normal; }
 
-main { max-width: 46rem; margin: 0 auto; }
+main { max-width: var(--measure); margin: 0 auto; }
 
 h1 {
     font-size: 1.4rem;
@@ -183,6 +190,60 @@ ul > li::before {
 li > p:first-of-type { margin-top: 0; }
 li > p:last-of-type { margin-bottom: 0; }
 li:has(> p) + li { margin-top: var(--item-gap); }
+
+/* ---- jump bar ---- */
+
+.jump {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    /* Translucent over --bg, so text passing underneath reads as context
+       rather than as something the bar has cut off. */
+    background: rgba(21, 21, 21, 0.86);
+    border-top: 1px solid var(--rule);
+    padding: var(--jump-pad) 1.15rem;
+    /* The home indicator on an installed app sits below the bar's padding
+       rather than eating into it. */
+    padding-bottom: calc(var(--jump-pad) + env(safe-area-inset-bottom));
+}
+
+/* Three lines is the ceiling; beyond it the list scrolls within itself, so
+   the note with nineteen sections cannot take the screen. The padding lives
+   on .jump and not here, so max-height measures lines of text and nothing
+   else. Centred on the same measure as the body: a fixed element is laid out
+   against the viewport, so it does not inherit main's column. */
+.jump-list {
+    max-width: var(--measure);
+    margin: 0 auto;
+    max-height: var(--jump-max);
+    overflow-y: auto;
+    /* Reaching the end of the list must not start scrolling the note behind
+       it. */
+    overscroll-behavior: contain;
+    text-align: center;
+    font-size: var(--jump-font);
+    line-height: var(--jump-lh);
+    color: var(--grey);
+}
+
+/* Underlines are dropped here alone: at this density they close up into a
+   rule. The separators stay --grey and the links stay --blue, as in .nav. */
+.jump a { border-bottom: none; }
+
+/* Reserved only where the bar exists. Sized for the three-line ceiling rather than the bar's
+   current height, so the last line of a note clears it at every height the
+   bar can take. */
+body:has(.jump) {
+    padding-bottom: calc(
+        var(--jump-max) + 2 * var(--jump-pad) + 2rem + env(safe-area-inset-bottom)
+    );
+}
+
+/* A jumped-to section lands below the top edge rather than flush against
+   it. Only headings the bar can reach need it. */
+:is(h2, h3, h4, h5, h6)[id] { scroll-margin-top: 0.8rem; }
 
 /* ---- checkbox lists ---- */
 
