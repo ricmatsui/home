@@ -45,6 +45,13 @@
             | select('match', '^(tfjs/|gestures\\.json$)') | list }}"
   delegate_to: localhost
 
+- name: record model revision in staging
+  ansible.builtin.copy:
+    dest: "{{ remote_model_staging.path }}/model/revision"
+    content: "{{ remote_model_info.json.sha }}\n"
+    mode: '0644'
+  delegate_to: localhost
+
 - name: sync model files into the build context
   ansible.builtin.command:
     argv:

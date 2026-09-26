@@ -8,6 +8,7 @@ import app as app_module
 from app import create_app
 from app.recordings import Recordings
 
+REVISION = '0123456789abcdef0123456789abcdef01234567'
 
 class FakeControl:
     def __init__(self):
@@ -53,11 +54,12 @@ def fetched_model(static_root):
         (static_root / 'gestures.json').read_text()
     )
     (directory / 'model.json').write_text('{"format": "layers-model"}')
+    (directory / 'revision').write_text(REVISION + '\n')
     return directory
 
 
 @pytest.fixture
-def client(control, static_root, tmp_path):
+def client(control, static_root, fetched_model, tmp_path):
     app = create_app(
         control=control,
         recordings=Recordings(tmp_path / 'recordings.jsonl'),
@@ -87,20 +89,24 @@ def test_the_roster_is_served_without_caching(client):
     assert json.loads(response.data)[0]['name'] == 'up'
 
 
-def test_the_label_vector_is_served_from_the_fetched_model(client, fetched_model):
-    response = client.get('/model/gestures.json')
+def test_the_label_vector_is_served_under_the_model_revision(client):
+    response = client.get(f'/model/{REVISION}/gestures.json')
 
     assert response.status_code == 200
-    assert response.cache_control.no_cache
     assert json.loads(response.data)[0]['name'] == 'up'
 
 
-def test_the_label_vector_404s_when_the_model_has_not_been_fetched(client):
+def test_create_app_fails_when_the_model_has_not_been_fetched(
+    control, static_root, tmp_path
+):
     """A build that skipped the Ansible fetch must fail visibly, not serve
     the roster as though it were the model's label vector."""
-    response = client.get('/model/gestures.json')
-
-    assert response.status_code == 404
+    with pytest.raises(FileNotFoundError):
+        create_app(
+            control=control,
+            recordings=Recordings(tmp_path / 'recordings.jsonl'),
+            static=static_root,
+        )
 
 
 def test_control_enqueues_the_parsed_message(client, control):
@@ -137,15 +143,37 @@ def test_manifest_is_served_from_the_root(client):
     assert json.loads(response.data)['short_name'] == 'Remote'
 
 
-def test_model_files_are_served_without_caching(client, fetched_model):
-    response = client.get('/model/model.json')
+def test_index_names_the_model_revision_and_is_never_reused(client):
+    response = client.get('/')
+
+    assert response.cache_control.no_cache
+    assert f"content='{REVISION}'".encode() in response.data
+
+
+def test_model_files_are_cached_forever_under_their_revision(client):
+    response = client.get(f'/model/{REVISION}/model.json')
 
     assert response.status_code == 200
-    assert response.cache_control.no_cache
+    assert not response.cache_control.no_cache
+    assert response.cache_control.public
+    assert response.cache_control.max_age == 31536000
+    assert response.cache_control.immutable
+
+
+def test_another_revision_is_a_404_not_the_current_files(client):
+    response = client.get(f'/model/{"f" * 40}/model.json')
+
+    assert response.status_code == 404
+
+
+def test_the_unversioned_model_path_is_gone(client):
+    response = client.get('/model/model.json')
+
+    assert response.status_code == 404
 
 
 def test_a_missing_model_file_is_a_404(client):
-    response = client.get('/model/nope.json')
+    response = client.get(f'/model/{REVISION}/nope.json')
 
     assert response.status_code == 404
 
@@ -160,7 +188,7 @@ class FakeTvControl:
 
 
 def test_create_app_pairs_through_a_token_file_not_the_environment(
-    monkeypatch, tmp_path, static_root
+    monkeypatch, tmp_path, static_root, fetched_model
 ):
     """Nothing is baked in at deploy time: an unpaired container starts fine
     and the TV prompts on the first command."""

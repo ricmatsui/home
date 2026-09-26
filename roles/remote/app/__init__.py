@@ -41,9 +41,18 @@ def create_app(control=None, recordings=None, static=None):
     # Tests pass an isolated static root; production uses Flask's own.
     static = Path(static) if static else Path(app.static_folder)
 
+    # The Ansible fetch writes the Hugging Face commit beside the files it
+    # fetched, so the URL names exactly the weights it serves.
+    model_revision = (static / 'model' / 'revision').read_text().strip()
+
     @app.route('/')
     def index():
-        return flask.render_template('index.html')
+        # The only response naming the current revision: never reuse it.
+        response = flask.make_response(
+            flask.render_template('index.html', model_revision=model_revision)
+        )
+        response.cache_control.no_cache = True
+        return response
 
     @app.route('/control', methods=['POST'])
     def post_control():
@@ -72,13 +81,21 @@ def create_app(control=None, recordings=None, static=None):
         response.cache_control.no_cache = True
         return response
 
-    @app.route('/model/<path:filename>')
-    def model(filename):
+    @app.route('/model/<revision>/<path:filename>')
+    def model(revision, filename):
+        # Serving today's files under another revision would pin them in
+        # the browser's cache under the wrong name.
+        if revision != model_revision:
+            flask.abort(404)
+
         response = flask.make_response(
             flask.send_from_directory(static / 'model', filename)
         )
-        response.cache_control.max_age = None
-        response.cache_control.no_cache = True
+        # send_from_directory marks everything no-cache, which beats immutable.
+        response.cache_control.no_cache = None
+        response.cache_control.public = True
+        response.cache_control.max_age = 31536000
+        response.cache_control.immutable = True
         return response
 
     @app.route('/favicon.png')

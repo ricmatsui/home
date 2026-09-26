@@ -5,11 +5,19 @@ const post = (url, values = {}) =>
         body: new URLSearchParams(values),
     });
 
-const roster = await (await fetch('gestures.json')).json();
+const fetchJson = async (url) => (await fetch(url)).json();
+
+const modelRoot = '/model/'
+    + document.querySelector("meta[name='model-revision']").content;
+const loadingModel = tf.loadLayersModel(`${modelRoot}/model.json`);
+
+const [roster, labels] = await Promise.all([
+    fetchJson('gestures.json'),
+    fetchJson(`${modelRoot}/gestures.json`),
+]);
 const actions = new Map(roster.map((gesture) => [gesture.name, gesture]));
 
-const labels = await (await fetch('/model/gestures.json')).json();
-const modelPromise = tf.loadLayersModel('/model/model.json').then((model) => {
+const modelPromise = loadingModel.then(async (model) => {
     if (labels.length !== model.outputs[0].shape[1]) {
         throw new Error(
             `model has ${model.outputs[0].shape[1]} outputs but `
@@ -25,6 +33,13 @@ const modelPromise = tf.loadLayersModel('/model/model.json').then((model) => {
         );
     }
 
+    // The first predict compiles the backend's kernels; pay for it now
+    // rather than on the first gesture.
+    const input = tf.zeros([1, ...model.inputs[0].shape.slice(1)]);
+    const output = model.predict(input);
+    await output.data();
+    tf.dispose([input, output]);
+
     return model;
 });
 
@@ -35,9 +50,30 @@ class Point {
     }
 }
 
-if ('wakeLock' in navigator) {
-    navigator.wakeLock.request('screen').catch((error) => alert(error.message));
-}
+// The browser drops the lock whenever the page is hidden, so take it again
+// on return, and on any touch in case a request was refused.
+let isWakeLockRequested = false;
+
+const ensureWakeLock = async () => {
+    if (!('wakeLock' in navigator) || isWakeLockRequested || document.hidden) {
+        return;
+    }
+
+    isWakeLockRequested = true;
+    try {
+        const sentinel = await navigator.wakeLock.request('screen');
+        sentinel.addEventListener('release', () => {
+            isWakeLockRequested = false;
+        });
+    } catch (error) {
+        isWakeLockRequested = false;
+        console.warn(`wake lock: ${error.message}`);
+    }
+};
+
+ensureWakeLock();
+document.addEventListener('visibilitychange', ensureWakeLock);
+document.addEventListener('pointerdown', ensureWakeLock);
 
 document.querySelector('.help-button').addEventListener('click', () => {
     const image = document.createElement('img');
