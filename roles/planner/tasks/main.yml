@@ -42,6 +42,9 @@
               DONETICK_URL: http://donetick_donetick:2021
               DONETICK_API_KEY: "{{ config.planner.donetick_api_key }}"
               DONETICK_USER_ID: "{{ config.planner.donetick_user_id }}"
+              GOOGLE_TASKS_CLIENT_ID: "{{ config.planner.google_tasks.client_id }}"
+              GOOGLE_TASKS_CLIENT_SECRET: "{{ config.planner.google_tasks.client_secret }}"
+              GOOGLE_TASKS_REFRESH_TOKEN: "{{ config.planner.google_tasks.refresh_token }}"
             deploy:
               mode: replicated
               replicas: 1

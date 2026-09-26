@@ -1,6 +1,12 @@
-import { Section, TodoItem, Chore, ChoreHistory, DueCounts } from './types.js';
+import { Section, Chore, ChoreHistory, DueCounts } from './types.js';
 import { requireEnv } from './env.js';
-import { describeError } from './errors.js';
+import {
+    isSameLocalDay,
+    formatDueCountsSection,
+    formatDueCountsUnavailable,
+    withSectionCompletedCount,
+    withSectionCompletedUnavailable,
+} from './dueCounts.js';
 
 export const DONETICK_SECTION = 'Donetick';
 
@@ -31,14 +37,6 @@ const DONETICK = {
         return id;
     },
 };
-
-// The day a completion belongs to is the one it reads as on the wall, so the
-// instant is compared in local time rather than against a UTC day boundary.
-function isSameLocalDay(instant: Date, day: Date): boolean {
-    return instant.getFullYear() === day.getFullYear()
-        && instant.getMonth() === day.getMonth()
-        && instant.getDate() === day.getDate();
-}
 
 /*
  * Credited to DONETICK_USER_ID rather than to whoever the API key belongs to.
@@ -97,73 +95,20 @@ export function countDueOn(chores: Chore[], day: Date): DueCounts {
     return counts;
 }
 
-// Written when the day is opened, a midnight snapshot of what it starts out
-// carrying. The completed count joins it when the day is closed.
 export function formatDonetickSection(counts: DueCounts): Section {
-    return {
-        name: DONETICK_SECTION,
-        items: [
-            { status: 'note', text: `${counts.overdue} overdue`, children: [] },
-            { status: 'note', text: `${counts.dueToday} due today`, children: [] },
-        ],
-    };
+    return formatDueCountsSection(DONETICK_SECTION, counts);
 }
 
-// Written in the counts' place rather than left out, so a day that opened
-// without them says why instead of reading as a day with nothing due
 export function formatDonetickUnavailable(error: unknown): Section {
-    return {
-        name: DONETICK_SECTION,
-        items: [{
-            status: 'note',
-            text: `Due counts unavailable: ${describeError(error)}`,
-            children: [],
-        }],
-    };
+    return formatDueCountsUnavailable(DONETICK_SECTION, error);
 }
 
-const COMPLETED_PATTERN = /^\d+ completed$/;
-const COMPLETED_UNAVAILABLE_PREFIX = 'Completed count unavailable: ';
-
-// What the day was opened with: whatever an earlier close left behind is
-// dropped, so closing the same day twice replaces that line rather than
-// stacking a second one under it
-function openedItems(section: Section | undefined): TodoItem[] {
-    return (section?.items ?? []).filter(item =>
-        !COMPLETED_PATTERN.test(item.text) && !item.text.startsWith(COMPLETED_UNAVAILABLE_PREFIX));
-}
-
-/*
- * The other half of the day: recorded onto the section already in the file
- * rather than over it, so the counts the day was opened with survive alongside
- * what came of them. Closing the same day twice replaces the completed count
- * instead of leaving a second one behind.
- */
 export function withCompletedCount(section: Section | undefined, count: number): Section {
-    const opened = openedItems(section);
-
-    return {
-        name: DONETICK_SECTION,
-        items: [...opened, { status: 'note', text: `${count} completed`, children: [] }],
-    };
+    return withSectionCompletedCount(DONETICK_SECTION, section, count);
 }
 
-/*
- * The same half of the day, when the history could not be read. The due counts
- * the day opened with are kept — and so is a note saying they were never read,
- * which is a different fact about the day than this one.
- */
 export function withCompletedUnavailable(section: Section | undefined, error: unknown): Section {
-    const opened = openedItems(section);
-
-    return {
-        name: DONETICK_SECTION,
-        items: [...opened, {
-            status: 'note',
-            text: `${COMPLETED_UNAVAILABLE_PREFIX}${describeError(error)}`,
-            children: [],
-        }],
-    };
+    return withSectionCompletedUnavailable(DONETICK_SECTION, section, error);
 }
 
 /*

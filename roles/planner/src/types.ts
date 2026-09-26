@@ -53,3 +53,10 @@ export interface ChoreHistory {
     completedBy: number;
     performedAt: string | null;
 }
+
+export interface GoogleTask {
+    id: string;
+    status: 'needsAction' | 'completed';
+    due?: string;
+    completed?: string;
+}
