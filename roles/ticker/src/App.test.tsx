@@ -5,6 +5,7 @@ import App from './App';
 import * as api from './api/donetick';
 import { ApiError, NetworkError, SessionExpiredError } from './lib/errors';
 import { TICK_MS } from './hooks/useDayRollover';
+import { HOURLY_MS } from './hooks/useHourlyRender';
 import type { Chore, User } from './types';
 
 function chore(overrides: Partial<Chore> = {}): Chore {
@@ -67,6 +68,28 @@ describe('App', () => {
 
         expect(await screen.findByText('Water Plants')).toBeInTheDocument();
         expect(screen.getByText('in 5 hours')).toBeInTheDocument();
+    });
+
+    it('counts the time remaining down each hour without refetching', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true });
+        vi.setSystemTime(new Date('2026-09-05T09:00:00'));
+        vi.mocked(api.getChores).mockResolvedValue([
+            chore({
+                id: 1,
+                name: 'Water Plants',
+                nextDueDate: new Date(Date.now() + 5 * HOUR + 60_000).toISOString(),
+            }),
+        ]);
+
+        render(<App />);
+        expect(await screen.findByText('in 5 hours')).toBeInTheDocument();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(HOURLY_MS);
+        });
+
+        expect(screen.getByText('in 4 hours')).toBeInTheDocument();
+        expect(api.getChores).toHaveBeenCalledTimes(1);
     });
 
     it('leaves out a chore due beyond the next day', async () => {

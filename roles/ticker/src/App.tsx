@@ -4,6 +4,7 @@ import { PublicFilterButton } from './components/PublicFilterButton';
 import { RefreshButton } from './components/RefreshButton';
 import { useChores } from './hooks/useChores';
 import { useDayRollover } from './hooks/useDayRollover';
+import { useHourlyRender } from './hooks/useHourlyRender';
 import { usePublicOnly } from './hooks/usePublicOnly';
 import { filterPublic } from './lib/chores';
 import { LOCKED_PUBLIC } from './lib/config';
@@ -46,6 +47,7 @@ export default function App({
     const publicOnly = lockedPublic || publicOnlyPreferred;
 
     useDayRollover(() => window.location.reload());
+    useHourlyRender();
 
     // Applied here rather than in useChores: the filter changes what is on
     // screen, not what was fetched, so toggling it must not cost a round trip.
