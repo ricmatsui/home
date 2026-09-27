@@ -44,6 +44,14 @@ test('the sheet lists every label with its current verdict and source path', () 
     assert.match(html, /<!doctype html>/i);
 });
 
+test('the sheet marks an unlabelled image apart from nocat', () => {
+    const html = renderSheet({ 'a.jpg': { cat: null }, 'b.jpg': { cat: false } });
+
+    assert.match(html, /class="unlabelled"[^]*\? unlabelled<br>a\.jpg/);
+    assert.match(html, /— nocat<br>b\.jpg/);
+    assert.match(html, /1 unlabelled/);
+});
+
 test('the sheet escapes paths and notes', () => {
     const html = renderSheet({ 'a.jpg': { cat: false, note: '<script>alert(1)</script>' } });
 

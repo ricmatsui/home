@@ -10,6 +10,7 @@ import {
     labelsSha,
     loadLabels,
     mergeLabels,
+    pendingLabels,
     walkImages,
     writeLabels,
 } from './corpus.js';
@@ -85,14 +86,14 @@ test('a broken symlink is skipped', async () => {
     assert.deepEqual(await walkImages(dir), ['a.jpg']);
 });
 
-test('merge preserves existing labels and adds new files as false', () => {
+test('merge preserves existing labels and adds new files as unlabelled', () => {
     const existing: Labels = { 'a.jpg': { cat: true, note: 'on the mat' } };
 
     const merged = mergeLabels(existing, ['a.jpg', 'b.jpg']);
 
     assert.deepEqual(merged.labels, {
         'a.jpg': { cat: true, note: 'on the mat' },
-        'b.jpg': { cat: false },
+        'b.jpg': { cat: null },
     });
     assert.deepEqual(merged.added, ['b.jpg']);
     assert.deepEqual(merged.orphaned, []);
@@ -111,6 +112,17 @@ test('merge does not mutate the labels it was given', () => {
     mergeLabels(existing, ['a.jpg', 'b.jpg']);
 
     assert.deepEqual(existing, { 'a.jpg': { cat: true } });
+});
+
+test('pendingLabels lists every key without a boolean cat, and none that has one', () => {
+    const labels = {
+        'b.jpg': { cat: null },
+        'a.jpg': {} as Labels[string],
+        'c.jpg': { cat: false },
+        'd.jpg': { cat: true },
+    };
+
+    assert.deepEqual(pendingLabels(labels), ['a.jpg', 'b.jpg']);
 });
 
 test('labels round-trip through disk sorted by key', async () => {

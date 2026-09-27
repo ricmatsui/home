@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export interface Label {
-    cat: boolean;
+    /** `null` until a human has looked at the frame; `run` refuses a corpus holding any. */
+    cat: boolean | null;
     /** Free text for a human reviewing a failure months later. Not ground truth. */
     note?: string;
 }
@@ -98,7 +99,7 @@ export function mergeLabels(existing: Labels, found: string[]): {
 
     for (const key of found) {
         if (labels[key]) continue;
-        labels[key] = { cat: false };
+        labels[key] = { cat: null };
         added.push(key);
     }
 
@@ -106,6 +107,13 @@ export function mergeLabels(existing: Labels, found: string[]): {
     const orphaned = Object.keys(existing).filter((key) => !present.has(key)).sort();
 
     return { labels: sortKeys(labels), added, orphaned };
+}
+
+/** Keys still waiting on a human. Anything but a boolean counts, so a hand-edit typo is caught too. */
+export function pendingLabels(labels: Labels): string[] {
+    return Object.keys(labels)
+        .filter((key) => typeof labels[key]?.cat !== 'boolean')
+        .sort();
 }
 
 /**

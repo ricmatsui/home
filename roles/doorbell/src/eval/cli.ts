@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { annotate } from '../annotate.js';
 import { createVisionClient, promptFor } from '../vision.js';
-import { imagesDir, labelsSha, loadLabels, mergeLabels, walkImages, writeLabels } from './corpus.js';
+import { imagesDir, labelsSha, loadLabels, mergeLabels, pendingLabels, walkImages, writeLabels } from './corpus.js';
 import { loadDotEnv } from './env.js';
 import { ImageResult, RunFile, byDirectory, diffRuns, mcnemarExact, outcomeFor, score, sha } from './metrics.js';
 import { mapWithConcurrency } from './pool.js';
@@ -86,12 +86,14 @@ async function bootstrap(corpusDir: string): Promise<void> {
     await writeLabels(corpusDir, labels);
     await fs.promises.writeFile(path.join(corpusDir, 'sheet.html'), renderSheet(labels));
 
-    const positives = Object.values(labels).filter((label) => label.cat).length;
+    const positives = Object.values(labels).filter((label) => label.cat === true).length;
+    const negatives = Object.values(labels).filter((label) => label.cat === false).length;
+    const pending = pendingLabels(labels).length;
 
     console.log(`found ${found.length} images in ${images}`);
-    console.log(`added ${added.length} as nocat`);
+    console.log(`added ${added.length} as unlabelled`);
     if (orphaned.length > 0) console.log(`orphaned ${orphaned.length} labels with no image (kept)`);
-    console.log(`labels: ${positives} cat / ${Object.keys(labels).length - positives} nocat`);
+    console.log(`labels: ${positives} cat / ${negatives} nocat / ${pending} unlabelled`);
     console.log(`open ${path.join(corpusDir, 'sheet.html')} and correct ${path.join(corpusDir, 'labels.json')}`);
 }
 
@@ -114,6 +116,12 @@ async function run(options: {
     const labels = await loadLabels(options.corpusDir);
     const keys = Object.keys(labels).sort();
     if (keys.length === 0) fail(`no labels in ${options.corpusDir}; run "yarn eval bootstrap" first`);
+
+    const pending = pendingLabels(labels);
+    if (pending.length > 0) {
+        fail(`${pending.length} images have no cat label; set "cat" to true or false in labels.json:\n` +
+            pending.map((key) => `  ${key}`).join('\n'));
+    }
 
     const images = imagesDir(options.corpusDir);
     const onDisk = new Set(await walkImages(images));

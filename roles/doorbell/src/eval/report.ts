@@ -1,4 +1,4 @@
-import { Labels } from './corpus.js';
+import { Labels, pendingLabels } from './corpus.js';
 import { ImageResult, RunDiff, RunFile, Scores } from './metrics.js';
 
 const SIGNIFICANT = 0.05;
@@ -20,6 +20,7 @@ figure { margin: 0; width: 14rem; }
 img { width: 100%; border-radius: 4px; display: block; background: #222; }
 figcaption { font-size: 0.75rem; color: #aaa; word-break: break-all; margin-top: 0.25rem; }
 .cat { outline: 3px solid #e33; }
+.unlabelled { outline: 3px dashed #eb3; }
 table { border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
 th, td { border: 1px solid #444; padding: 0.25rem 0.6rem; text-align: right; }
 th:first-child, td:first-child { text-align: left; }
@@ -42,20 +43,24 @@ ${body}
  */
 export function renderSheet(labels: Labels): string {
     const keys = Object.keys(labels).sort();
-    const positives = keys.filter((key) => labels[key]?.cat).length;
+    const positives = keys.filter((key) => labels[key]?.cat === true).length;
+    const pending = pendingLabels(labels).length;
 
     const figures = keys.map((key) => {
         const label = labels[key];
         const note = label?.note ? `<br>${escapeHtml(label.note)}` : '';
+        const [className, caption] = label?.cat === true ? ['cat', '🐈 cat']
+            : label?.cat === false ? ['', '— nocat']
+            : ['unlabelled', '? unlabelled'];
         return `<figure>
-  <img class="${label?.cat ? 'cat' : ''}" src="images/${escapeHtml(key)}" loading="lazy" alt="">
-  <figcaption>${label?.cat ? '🐈 cat' : '— nocat'}<br>${escapeHtml(key)}${note}</figcaption>
+  <img class="${className}" src="images/${escapeHtml(key)}" loading="lazy" alt="">
+  <figcaption>${caption}<br>${escapeHtml(key)}${note}</figcaption>
 </figure>`;
     });
 
     return page('doorbell eval corpus', `<h1>Corpus</h1>
-<p>${keys.length} images, ${positives} labelled cat. Red outline means <code>cat: true</code>.
-Edit <code>labels.json</code> to correct.</p>
+<p>${keys.length} images, ${positives} labelled cat, ${pending} unlabelled. Red outline means <code>cat: true</code>,
+dashed amber means <code>cat: null</code>. Edit <code>labels.json</code> to correct.</p>
 <div class="grid">
 ${figures.join('\n')}
 </div>`);
