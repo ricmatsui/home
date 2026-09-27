@@ -439,10 +439,9 @@ describe('App', () => {
             render(<App />);
             await screen.findByText(/nothing due/i);
 
-            expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
-                'Public',
-                'Refresh',
-            ]);
+            expect(
+                screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+            ).toEqual(['Show only public tasks', 'Refresh']);
         });
 
         it('hides private chores once it is on', async () => {
@@ -563,9 +562,9 @@ describe('App', () => {
             render(<App lockedPublic />);
             await screen.findByText(/nothing public due/i);
 
-            expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
-                'Refresh',
-            ]);
+            expect(
+                screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
+            ).toEqual(['Refresh']);
         });
 
         // Nothing wrote this; a tablet that ran the ordinary board before the
