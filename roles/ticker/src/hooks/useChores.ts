@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { completeChore, getChores } from '../api/donetick';
-import { selectDue } from '../lib/chores';
+import { completeChore, getChores, rescheduleChore } from '../api/donetick';
+import { postpone, selectDue } from '../lib/chores';
 import { SessionExpiredError } from '../lib/errors';
 import type { Chore, RowStatus, User } from '../types';
 
@@ -44,6 +44,30 @@ export function useChores(now: () => Date = defaultClock) {
         // Deliberately no focus listener and no interval: refresh is manual only.
     }, [refresh]);
 
+    const clearRowError = useCallback((id: number) => {
+        setRowError((current) => {
+            const next = { ...current };
+            delete next[id];
+            return next;
+        });
+    }, []);
+
+    /*
+     * A lapsed session is not a problem with this row — it blocks everything,
+     * so it belongs in the global banner. A chore that moved on deliberately
+     * does not go there: it is one row's problem, and the rest of the board is
+     * still tappable.
+     */
+    const fail = useCallback((id: number, caught: unknown) => {
+        if (caught instanceof SessionExpiredError) {
+            setError(caught);
+            setRowStatus((current) => ({ ...current, [id]: 'idle' }));
+            return;
+        }
+        setRowStatus((current) => ({ ...current, [id]: 'error' }));
+        setRowError((current) => ({ ...current, [id]: (caught as Error).message }));
+    }, []);
+
     /*
      * Tapping Done on a board with people configured does not complete
      * anything — it opens the row for a choice. The state lives here rather
@@ -52,12 +76,8 @@ export function useChores(now: () => Date = defaultClock) {
      */
     const beginComplete = useCallback((id: number) => {
         setRowStatus((current) => ({ ...current, [id]: 'picking' }));
-        setRowError((current) => {
-            const next = { ...current };
-            delete next[id];
-            return next;
-        });
-    }, []);
+        clearRowError(id);
+    }, [clearRowError]);
 
     /*
      * Backing out of the choice. The row returns to 'idle' rather than having
@@ -81,11 +101,7 @@ export function useChores(now: () => Date = defaultClock) {
     const complete = useCallback(
         async (id: number, user?: User) => {
             setRowStatus((current) => ({ ...current, [id]: 'pending' }));
-            setRowError((current) => {
-                const next = { ...current };
-                delete next[id];
-                return next;
-            });
+            clearRowError(id);
 
             try {
                 const dueDate = allChores.find((chore) => chore.id === id)?.nextDueDate ?? null;
@@ -95,20 +111,61 @@ export function useChores(now: () => Date = defaultClock) {
                     setRowCompletedBy((current) => ({ ...current, [id]: user }));
                 }
             } catch (caught) {
-                // A lapsed session is not a problem with this row — it blocks
-                // everything, so it belongs in the global banner. A chore that
-                // moved on deliberately does not go here: it is one row's
-                // problem, and the rest of the board is still tappable.
-                if (caught instanceof SessionExpiredError) {
-                    setError(caught);
-                    setRowStatus((current) => ({ ...current, [id]: 'idle' }));
-                    return;
-                }
-                setRowStatus((current) => ({ ...current, [id]: 'error' }));
-                setRowError((current) => ({ ...current, [id]: (caught as Error).message }));
+                fail(id, caught);
             }
         },
-        [allChores],
+        [allChores, clearRowError, fail],
+    );
+
+    /*
+     * The clock's counterpart to beginComplete: opens the row for how many
+     * days, and sends nothing.
+     */
+    const beginReschedule = useCallback((id: number) => {
+        setRowStatus((current) => ({ ...current, [id]: 'rescheduling' }));
+        clearRowError(id);
+    }, [clearRowError]);
+
+    const cancelReschedule = useCallback((id: number) => {
+        setRowStatus((current) => ({ ...current, [id]: 'idle' }));
+    }, []);
+
+    /*
+     * The new due date is worked out from this hook's copy of the chore, as
+     * the completion's check is, and written back into that copy once
+     * Donetick has taken it — the 200 is the confirmation. Donetick's reply
+     * carries the chore as it was before the change, so it is no use for
+     * this.
+     *
+     * The row stays where it is on the board even when the move takes it past
+     * the next day: taking it out would hop every row below it up under a
+     * thumb. The next refresh drops it.
+     */
+    const reschedule = useCallback(
+        async (id: number, days: number) => {
+            const dueDate = allChores.find((chore) => chore.id === id)?.nextDueDate;
+            // The clock is disabled on an undated chore; there is nothing to
+            // count the days from.
+            if (!dueDate) {
+                return;
+            }
+
+            setRowStatus((current) => ({ ...current, [id]: 'moving' }));
+            clearRowError(id);
+
+            try {
+                const nextDueDate = postpone(dueDate, days, now());
+                await rescheduleChore({ id, dueDate, nextDueDate });
+                const move = (chores: Chore[]) =>
+                    chores.map((chore) => (chore.id === id ? { ...chore, nextDueDate } : chore));
+                setAllChores(move);
+                setDueChores(move);
+                setRowStatus((current) => ({ ...current, [id]: 'moved' }));
+            } catch (caught) {
+                fail(id, caught);
+            }
+        },
+        [allChores, now, clearRowError, fail],
     );
 
     return {
@@ -123,5 +180,8 @@ export function useChores(now: () => Date = defaultClock) {
         beginComplete,
         cancelComplete,
         complete,
+        beginReschedule,
+        cancelReschedule,
+        reschedule,
     };
 }

@@ -85,9 +85,10 @@ export async function getChore(id: number): Promise<Chore> {
 }
 
 /*
- * Completions are serialised.
+ * Writes are serialised — completions and reschedules alike, since either one
+ * moves the due date the other is checked against.
  */
-const completions = createQueue();
+const writes = createQueue();
 
 /*
  * `completedBy` credits the completion to someone other than the user the API
@@ -137,11 +138,46 @@ export async function completeChore({
 }: CompleteChoreOptions): Promise<void> {
     const body = JSON.stringify(completedBy === undefined ? {} : { completedBy });
 
-    await completions(async () => {
+    await writes(async () => {
         const current = await getChore(id);
         if (!sameInstant(current.nextDueDate, dueDate)) {
             throw new ChoreChangedError();
         }
         return request(`/chores/${id}/do`, { method: 'POST', body });
+    });
+}
+
+/*
+ * `dueDate` is the due date the board showed, checked the same way and for
+ * the same reason as a completion's; `nextDueDate` is where it moves to.
+ */
+export interface RescheduleChoreOptions {
+    id: number;
+    dueDate: string;
+    nextDueDate: string;
+}
+
+/*
+ * Donetick has a guard of its own here, which completion lacks: the PUT
+ * carries the `updatedAt` the caller last saw, and a chore written since comes
+ * back 403. That 403 has an empty body and is the same one a missing
+ * permission gets, so it cannot say which it was — the pre-read stays, to turn
+ * the common case into the same "due date changed" a completion reports, and
+ * the `updatedAt` it hands over closes most of the gap after it.
+ *
+ * No trailing slash, like the single-chore read.
+ */
+export async function rescheduleChore({
+    id,
+    dueDate,
+    nextDueDate,
+}: RescheduleChoreOptions): Promise<void> {
+    await writes(async () => {
+        const current = await getChore(id);
+        if (!sameInstant(current.nextDueDate, dueDate)) {
+            throw new ChoreChangedError();
+        }
+        const body = JSON.stringify({ dueDate: nextDueDate, updatedAt: current.updatedAt });
+        return request(`/chores/${id}/dueDate`, { method: 'PUT', body });
     });
 }

@@ -36,6 +36,12 @@
      * on four hues — ink idle, amber working, green done, red failed.
      */
     --pending: #c2620d;
+    /*
+     * Blue for a chore pushed back: the one hue nothing else on the board
+     * uses. Green would claim it was finished, and it is not — it is struck
+     * off for now, and back on the board when its new date comes round.
+     */
+    --moved: #3b6ea5;
 
     /*
      * Donetick only really distinguishes P1 (red) from P2 (amber) and leaves
@@ -86,6 +92,9 @@
      */
     --tile: 3rem;
     --tile-icon: 1.5rem;
+    /* Between two tiles standing side by side, in the header or on a row.
+     * Tighter than --gap, so a row's pair reads as one group of controls. */
+    --tile-gap: 0.5rem;
     /* A row's end padding, which the header matches so its controls stand in
      * the same column as the Done buttons. */
     --row-inset: 0.9rem;
@@ -105,6 +114,7 @@
         /* Orange, not the board amber: --ink is amber here, so reusing it
          * would leave pending and idle the same colour in dark mode. */
         --pending: #ff9a2b;
+        --moved: #6aa8e8;
 
         --p1: #ff6b5e;
         --p2: #ffa033;
@@ -178,7 +188,7 @@ body {
 .header__actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--tile-gap);
     /* Held in from the edge by what a row is, so Refresh stands directly
      * above the Done buttons. */
     padding-inline-end: var(--row-inset);
@@ -289,15 +299,18 @@ body {
  * A grid rather than a flex line, so a description can span the full width of
  * the row — under the Done button as well as under the name. Rows without one
  * are a single grid line and lay out exactly as the old flex row did.
+ *
+ * The gutters are tracks of their own rather than a column-gap, because they
+ * differ: the two buttons sit as close as the header's controls do, and the
+ * text stands further off them.
  */
 .row {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr var(--gap) auto var(--tile-gap) auto;
     grid-template-areas:
-        'text action'
-        'description description';
+        'text . reschedule . action'
+        'description description description description description';
     align-items: center;
-    column-gap: var(--gap);
     min-height: 3.5rem;
     padding: 0.7rem var(--row-inset);
     border-bottom: 1px solid var(--rule);
@@ -484,11 +497,13 @@ body {
  * minimum in every direction, so it is a larger target than the wide, short
  * button it replaces.
  *
- * Shared with .row__cancel, which stands in exactly this place while the
- * picker is open. That the two are the same size is load-bearing rather than
- * incidental, so they take it from one declaration and cannot drift apart.
+ * Shared with the clock beside it, and with .row__cancel, which stands in
+ * exactly this place while a picker is open. That they are the same size is
+ * load-bearing rather than incidental, so they take it from one declaration
+ * and cannot drift apart.
  */
 .row__action,
+.row__reschedule,
 .row__cancel {
     display: grid;
     place-items: center;
@@ -514,23 +529,30 @@ body {
     grid-area: action;
 }
 
+.row__reschedule {
+    grid-area: reschedule;
+}
+
 .row__icon {
     width: var(--tile-icon);
     height: var(--tile-icon);
 }
 
 .row__action:active:not(:disabled),
+.row__reschedule:active:not(:disabled),
 .row__cancel:active {
     transform: scale(0.94);
 }
 
 /*
- * A Done that cannot be pressed yet — only search lists a chore whose
- * completion window is still shut. Faded the way a disabled header control
- * is. Scoped to idle rows: pending and done disable the button too, and each
- * already says so in its own colour.
+ * A button that cannot be pressed: a Done whose completion window is still
+ * shut (only search lists one), a clock on an undated chore, or either one
+ * held while the other is in flight or the chore is done. Faded the way a
+ * disabled header control is — except the button that is itself the state,
+ * which already says so in its own colour.
  */
-.row[data-status='idle'] .row__action:disabled {
+.row:not([data-status='pending'], [data-status='done']) .row__action:disabled,
+.row:not([data-status='moving']) .row__reschedule:disabled {
     opacity: 0.45;
     cursor: default;
 }
@@ -545,12 +567,12 @@ body {
 }
 
 /*
- * The picker takes the whole first row of the grid — both the text column and
- * the button column — for as long as the row is asking who did it. The people
- * spread across the text column, and cancel takes the button column. Two
- * people crammed into the 3rem the Done button occupies would be a pair of
- * targets too small to hit at arm's length, which is the only distance this
- * board is ever read from.
+ * The picker takes the whole first row of the grid — the text column and both
+ * button columns — for as long as the row is asking who did it, or by how
+ * many days. The choices spread across the text column, and cancel takes the
+ * button columns. Two people crammed into the 3rem the Done button occupies
+ * would be a pair of targets too small to hit at arm's length, which is the
+ * only distance this board is ever read from.
  *
  * 3rem tall because that is exactly what .row__action is: the button is what
  * sets the height of an ordinary row, so a picker the same height leaves the
@@ -565,15 +587,15 @@ body {
 }
 
 /*
- * The only state on the board with no hue of its own, and the only one that
- * carries words. Every colour here already means something — four priority
+ * The only states on the board with no hue of their own, and the only ones
+ * that carry words. Every colour here already means something — four priority
  * bands, amber working, green done, red failed — so a fifth would have to be
- * read against all of them, and the buttons say "Jane" and "John" in
- * plain letters anyway. Outline is the same "available" that .control uses in
+ * read against all of them, and the buttons say "Jane" and "+3" in plain
+ * letters anyway. Outline is the same "available" that .control uses in
  * the header, in --ink for the same reason: it is the one mark on this board
  * that claims nothing.
  */
-.row__person {
+.row__choice {
     flex: 1;
     min-height: var(--tile);
     padding-inline: 0.5rem;
@@ -594,13 +616,13 @@ body {
     transition: transform 90ms ease, background-color 120ms ease, color 120ms ease;
 }
 
-.row__person:hover,
-.row__person:focus-visible {
+.row__choice:hover,
+.row__choice:focus-visible {
     background-color: var(--ink);
     color: var(--paper);
 }
 
-.row__person:active {
+.row__choice:active {
     transform: scale(0.98);
 }
 
@@ -620,11 +642,22 @@ body {
  * what returns to that square has to read as the thing that was there before,
  * not as a third person to choose from.
  *
- * flex rather than width alone — the people are flex: 1 and would otherwise
+ * flex rather than width alone — the choices are flex: 1 and would otherwise
  * squeeze this one as the names grow.
  */
 .row__cancel {
     flex: 0 0 var(--tile);
+}
+
+/*
+ * The reschedule picker's cancel covers the clock's square as well as Done's,
+ * and the gap between them. The clock is the button that opened it, so a
+ * second tap on the same spot has to back out here too — the choice it would
+ * otherwise meet is "+5".
+ */
+.row__cancel[data-span='2'] {
+    flex-basis: calc(var(--tile) * 2 + var(--tile-gap));
+    width: auto;
 }
 
 /* The picker's two kinds of control invert alike on hover, whatever their
@@ -636,33 +669,39 @@ body {
 }
 
 /*
- * Pending, done, and error wash the whole row in the same hue as their button,
- * so the state is legible from across the room rather than only from the 3rem
- * glyph at the end of it. The button is the control; the wash is the
+ * Pending, done, moved, and error wash the whole row in the same hue as their
+ * button, so the state is legible from across the room rather than only from
+ * the 3rem glyph at the end of it. The button is the control; the wash is the
  * announcement.
  *
  * Each state names its hue once, and the three surfaces that carry it — ground,
  * rule, text — are written once against --hue rather than three times each.
  * Adding a state means adding a hue, not another block of near-identical rules.
  */
-.row[data-status='pending'] {
+.row[data-status='pending'],
+.row[data-status='moving'] {
     --hue: var(--pending);
 }
 .row[data-status='done'] {
     --hue: var(--done);
+}
+.row[data-status='moved'] {
+    --hue: var(--moved);
 }
 .row[data-status='error'] {
     --hue: var(--danger);
 }
 
 /*
- * 'picking' is deliberately absent from the list above. It is the one state
- * whose control is labelled, so it needs no colour to say what it is — see
- * .row__person.
+ * 'picking' and 'rescheduling' are deliberately absent from the list above.
+ * They are the states whose controls are labelled, so they need no colour to
+ * say what they are — see .row__choice.
  */
 
 .row[data-status='pending'],
+.row[data-status='moving'],
 .row[data-status='done'],
+.row[data-status='moved'],
 .row[data-status='error'] {
     background-color: color-mix(in srgb, var(--hue) var(--wash), transparent);
     border-bottom-color: color-mix(in srgb, var(--hue) var(--wash-rule), var(--rule));
@@ -675,15 +714,20 @@ body {
  * name has to spare — every combination below stays above 5:1.
  */
 .row[data-status='pending'] .row__name,
+.row[data-status='moving'] .row__name,
 .row[data-status='error'] .row__name {
     color: color-mix(in srgb, var(--hue) var(--tint), var(--ink));
 }
 
 .row[data-status='pending'] .row__due,
+.row[data-status='moving'] .row__due,
 .row[data-status='done'] .row__due,
+.row[data-status='moved'] .row__due,
 .row[data-status='error'] .row__due,
 .row[data-status='pending'] .row__description,
+.row[data-status='moving'] .row__description,
 .row[data-status='done'] .row__description,
+.row[data-status='moved'] .row__description,
 .row[data-status='error'] .row__description {
     color: color-mix(in srgb, var(--hue) var(--tint), var(--ink-muted));
 }
@@ -691,18 +735,21 @@ body {
 /* The table rules take the hue too. Left at --rule they would stay the one
  * neutral thing on an otherwise washed row, and read as a hole in it. */
 .row[data-status='pending'] .row__description :is(td, th),
+.row[data-status='moving'] .row__description :is(td, th),
 .row[data-status='done'] .row__description :is(td, th),
+.row[data-status='moved'] .row__description :is(td, th),
 .row[data-status='error'] .row__description :is(td, th) {
     border-color: color-mix(in srgb, var(--hue) var(--wash-rule), var(--rule));
 }
 
 /*
- * Pending recolours the button in place and swaps the tick for an hourglass.
+ * Pending recolours the button in place and swaps its glyph for an hourglass.
  * Not dimmed: a faded control reads as unavailable, which is the opposite of
  * "something is happening right now". Still no size change — the row must not
  * resize while a thumb is resting on it.
  */
-.row[data-status='pending'] .row__action {
+.row[data-status='pending'] .row__action,
+.row[data-status='moving'] .row__reschedule {
     border-color: var(--pending);
     color: var(--pending);
     cursor: default;
@@ -715,9 +762,11 @@ body {
  * obvious way to say "finished" and the wrong one: at 0.55 the name measured
  * 3.2:1 against its own wash, so the row you had just cleared was the hardest
  * one on the board to read. Muted ink plus the hue lands at 5.2:1 and still
- * sits a clear step behind the live rows around it.
+ * sits a clear step behind the live rows around it. A moved name is struck
+ * the same way in its own blue, at 6.0:1 on paper and 5.1:1 on the board.
  */
-.row[data-status='done'] .row__name {
+.row[data-status='done'] .row__name,
+.row[data-status='moved'] .row__name {
     color: color-mix(in srgb, var(--hue) var(--tint), var(--ink-muted));
     text-decoration: line-through;
     text-decoration-thickness: 2px;
@@ -729,6 +778,16 @@ body {
     background: var(--done);
     color: var(--paper);
     cursor: default;
+}
+
+/*
+ * The clock fills the same way for a move. Still pressable — a moved chore
+ * can be moved again or done — so it keeps its pointer.
+ */
+.row[data-status='moved'] .row__reschedule {
+    border-color: var(--moved);
+    background: var(--moved);
+    color: var(--paper);
 }
 
 /*

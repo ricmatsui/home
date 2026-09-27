@@ -17,6 +17,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
         priority: 0,
         isPrivate: false,
         description: '',
+        updatedAt: '2026-08-01T12:00:00Z',
         ...overrides,
     };
 }
@@ -25,6 +26,7 @@ beforeEach(() => {
     localStorage.clear();
     vi.spyOn(api, 'getChores').mockResolvedValue([]);
     vi.spyOn(api, 'completeChore').mockResolvedValue(undefined);
+    vi.spyOn(api, 'rescheduleChore').mockResolvedValue(undefined);
     // jsdom refuses to navigate, so the real reload only logs a "not
     // implemented" error. Replacing it makes the call observable instead.
     Object.defineProperty(window, 'location', {
@@ -185,7 +187,7 @@ describe('App', () => {
         await user.click(within(item).getByRole('button', { name: /done/i }));
 
         await waitFor(() => expect(item).toHaveAttribute('data-status', 'pending'));
-        expect(within(item).getByRole('button')).toBeDisabled();
+        expect(within(item).getByRole('button', { name: /done/i })).toBeDisabled();
 
         resolveCompletion();
         await waitFor(() => expect(item).toHaveAttribute('data-status', 'done'));
@@ -208,7 +210,7 @@ describe('App', () => {
         const item = await screen.findByRole('listitem');
         await user.click(within(item).getByRole('button', { name: /done/i }));
 
-        const button = within(item).getByRole('button');
+        const button = within(item).getByRole('button', { name: /done/i });
         await waitFor(() => expect(button).toHaveAttribute('aria-busy', 'true'));
         expect(button.querySelector('[data-icon="hourglass"]')).toBeInTheDocument();
         expect(button.querySelector('[data-icon="check"]')).not.toBeInTheDocument();
@@ -234,6 +236,39 @@ describe('App', () => {
             await within(item).findByText('Chore is out of completion window'),
         ).toBeInTheDocument();
         expect(within(item).getByRole('button', { name: /done/i })).toBeEnabled();
+    });
+
+    it('moves a chore by the days chosen and says so on the row', async () => {
+        const user = userEvent.setup();
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 42, name: 'Trash' })]);
+
+        render(<App />);
+        const item = await screen.findByRole('listitem');
+
+        await user.click(within(item).getByRole('button', { name: 'Reschedule Trash' }));
+        expect(api.rescheduleChore).not.toHaveBeenCalled();
+        await user.click(within(item).getByRole('button', { name: 'Move Trash 3 days later' }));
+
+        await waitFor(() => expect(item).toHaveAttribute('data-status', 'moved'));
+        expect(api.rescheduleChore).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 42, dueDate: '2026-08-10T12:00:00Z' }),
+        );
+        expect(within(item).getByText(/^in /)).toBeInTheDocument();
+    });
+
+    it('puts the row back and sends nothing when the move is cancelled', async () => {
+        const user = userEvent.setup();
+        vi.mocked(api.getChores).mockResolvedValue([chore({ id: 42, name: 'Trash' })]);
+
+        render(<App />);
+        const item = await screen.findByRole('listitem');
+
+        await user.click(within(item).getByRole('button', { name: 'Reschedule Trash' }));
+        await user.click(within(item).getByRole('button', { name: 'Cancel rescheduling Trash' }));
+
+        expect(item).toHaveAttribute('data-status', 'idle');
+        expect(within(item).getByRole('button', { name: 'Reschedule Trash' })).toBeEnabled();
+        expect(api.rescheduleChore).not.toHaveBeenCalled();
     });
 
     describe('crediting a person', () => {
@@ -721,6 +756,25 @@ describe('App', () => {
             await userEvent.click(within(dialog).getByRole('button', { name: 'Close search' }));
             expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
             expect(boardRow).toHaveAttribute('data-status', 'done');
+        });
+
+        it('moves from the results and marks the row on the board too', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 42, name: 'Trash' })]);
+            render(<App />);
+            const boardRow = await screen.findByRole('listitem');
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('tra');
+            const found = within(dialog).getByRole('listitem');
+            await userEvent.click(within(found).getByRole('button', { name: 'Reschedule Trash' }));
+            await userEvent.click(
+                within(found).getByRole('button', { name: 'Move Trash 1 day later' }),
+            );
+
+            await waitFor(() => expect(found).toHaveAttribute('data-status', 'moved'));
+
+            await userEvent.click(within(dialog).getByRole('button', { name: 'Close search' }));
+            expect(boardRow).toHaveAttribute('data-status', 'moved');
         });
 
         // The completion goes out with the due date the row was drawn from,

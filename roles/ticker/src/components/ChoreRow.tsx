@@ -18,7 +18,13 @@ type ChoreRowProps = {
     onBeginComplete: (id: number) => void;
     onCancelComplete: (id: number) => void;
     onComplete: (id: number, user?: User) => void;
+    onBeginReschedule: (id: number) => void;
+    onCancelReschedule: (id: number) => void;
+    onReschedule: (id: number, days: number) => void;
 };
+
+// What the clock offers, in days. Counted from today when the chore is overdue.
+const DELAYS = [1, 3, 5];
 
 /*
  * Drawn rather than typed. A text glyph would inherit the body font's metrics
@@ -72,6 +78,27 @@ function HourglassIcon() {
 }
 
 /*
+ * Same stroke as the hourglass, the other glyph that means time rather than
+ * an outcome — and the clock turns into it while a move is in flight.
+ */
+function ClockIcon() {
+    return (
+        <svg
+            className="row__icon"
+            data-icon="clock"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            focusable="false"
+        >
+            <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="square">
+                <circle cx="12" cy="12" r="8.5" />
+                <path d="M12 7.5 V12 L15.5 14" />
+            </g>
+        </svg>
+    );
+}
+
+/*
  * Drawn for the same reason the tick is, and to the same measurements: it
  * sits in a button the exact size and place of the Done button, so the two
  * glyphs have to be the same weight or the swap reads as a size change.
@@ -104,10 +131,16 @@ export function ChoreRow({
     onBeginComplete,
     onCancelComplete,
     onComplete,
+    onBeginReschedule,
+    onCancelReschedule,
+    onReschedule,
 }: ChoreRowProps) {
     const done = status === 'done';
     const pending = status === 'pending';
     const picking = status === 'picking';
+    const rescheduling = status === 'rescheduling';
+    const moving = status === 'moving';
+    const busy = pending || moving;
     const opens = isCompletable(chore, now) ? null : opensAt(chore);
 
     const description = useMemo(
@@ -125,7 +158,7 @@ export function ChoreRow({
               * by those few pixels and hop the whole list up while a thumb is
               * on its way to the second tap.
               */}
-            <div className="row__text" aria-hidden={picking || undefined}>
+            <div className="row__text" aria-hidden={picking || rescheduling || undefined}>
                 <span className="row__name">{chore.name}</span>
                 <span className="row__due">
                     {done && completedBy ? (
@@ -155,13 +188,43 @@ export function ChoreRow({
               * a pair of targets too small to hit at arm's length, which is
               * the only distance this board is read from.
               */}
-            {picking ? (
+            {rescheduling ? (
+                /*
+                 * Laid out like the people, but cancel spans both button
+                 * columns rather than one. The clock that opened this sits
+                 * one column in from Done, so a second tap on it has to land
+                 * on cancel too — anywhere else it would push the chore five
+                 * days.
+                 */
+                <div className="row__picker">
+                    {DELAYS.map((days) => (
+                        <button
+                            key={days}
+                            type="button"
+                            className="row__choice"
+                            aria-label={`Move ${chore.name} ${days} ${days === 1 ? 'day' : 'days'} later`}
+                            onClick={() => onReschedule(chore.id, days)}
+                        >
+                            +{days}
+                        </button>
+                    ))}
+                    <button
+                        type="button"
+                        className="row__cancel"
+                        data-span="2"
+                        aria-label={`Cancel rescheduling ${chore.name}`}
+                        onClick={() => onCancelReschedule(chore.id)}
+                    >
+                        <CloseIcon />
+                    </button>
+                </div>
+            ) : picking ? (
                 <div className="row__picker">
                     {users.map((user) => (
                         <button
                             key={user.id}
                             type="button"
-                            className="row__person"
+                            className="row__choice"
                             // The visible label is the bare name — the chore's
                             // own name is hidden while the picker is open, so
                             // a screen reader needs it said here.
@@ -189,26 +252,39 @@ export function ChoreRow({
                     </button>
                 </div>
             ) : (
-                /*
-                 * The button carries no text, so the chore name has to live in
-                 * the accessible name — otherwise every row offers an
-                 * identically-labelled "Done".
-                 */
-                <button
-                    type="button"
-                    className="row__action"
-                    aria-label={`Mark ${chore.name} done`}
-                    aria-pressed={done}
-                    // The glyph change is invisible to a screen reader, so the
-                    // in-flight state has to be stated rather than drawn.
-                    aria-busy={pending}
-                    disabled={pending || done || opens !== null}
-                    onClick={() =>
-                        asksWhoDidIt ? onBeginComplete(chore.id) : onComplete(chore.id)
-                    }
-                >
-                    {pending ? <HourglassIcon /> : <CheckIcon />}
-                </button>
+                <>
+                    <button
+                        type="button"
+                        className="row__reschedule"
+                        aria-label={`Reschedule ${chore.name}`}
+                        aria-busy={moving}
+                        // An undated chore has no date to count on from.
+                        disabled={busy || done || !chore.nextDueDate}
+                        onClick={() => onBeginReschedule(chore.id)}
+                    >
+                        {moving ? <HourglassIcon /> : <ClockIcon />}
+                    </button>
+                    {/*
+                      * The button carries no text, so the chore name has to live
+                      * in the accessible name — otherwise every row offers an
+                      * identically-labelled "Done".
+                      */}
+                    <button
+                        type="button"
+                        className="row__action"
+                        aria-label={`Mark ${chore.name} done`}
+                        aria-pressed={done}
+                        // The glyph change is invisible to a screen reader, so the
+                        // in-flight state has to be stated rather than drawn.
+                        aria-busy={pending}
+                        disabled={busy || done || opens !== null}
+                        onClick={() =>
+                            asksWhoDidIt ? onBeginComplete(chore.id) : onComplete(chore.id)
+                        }
+                    >
+                        {pending ? <HourglassIcon /> : <CheckIcon />}
+                    </button>
+                </>
             )}
             {description ? (
                 <div

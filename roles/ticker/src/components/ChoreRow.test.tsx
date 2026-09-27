@@ -22,6 +22,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
         priority: 0,
         isPrivate: false,
         description: '',
+        updatedAt: '2026-08-01T12:00:00Z',
         ...overrides,
     };
 }
@@ -39,6 +40,9 @@ type RowOptions = {
     onBeginComplete?: (id: number) => void;
     onCancelComplete?: (id: number) => void;
     onComplete?: (id: number, user?: User) => void;
+    onBeginReschedule?: (id: number) => void;
+    onCancelReschedule?: (id: number) => void;
+    onReschedule?: (id: number, days: number) => void;
 };
 
 function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
@@ -50,6 +54,9 @@ function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
         onBeginComplete = () => {},
         onCancelComplete = () => {},
         onComplete = () => {},
+        onBeginReschedule = () => {},
+        onCancelReschedule = () => {},
+        onReschedule = () => {},
     } = options;
 
     return render(
@@ -64,6 +71,9 @@ function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
                 onBeginComplete={onBeginComplete}
                 onCancelComplete={onCancelComplete}
                 onComplete={onComplete}
+                onBeginReschedule={onBeginReschedule}
+                onCancelReschedule={onCancelReschedule}
+                onReschedule={onReschedule}
             />
         </ul>,
     );
@@ -128,7 +138,7 @@ describe('ChoreRow', () => {
             const { container } = renderRow({}, { status: 'picking', users: [JANE, JOHN] });
 
             expect(
-                [...container.querySelectorAll('.row__person')].map((button) => button.textContent),
+                [...container.querySelectorAll('.row__choice')].map((button) => button.textContent),
             ).toEqual(['Jane', 'John']);
         });
 
@@ -218,6 +228,121 @@ describe('ChoreRow', () => {
             renderRow({}, { status: 'done', users: [] });
 
             expect(screen.queryByText(/^Done ·/)).not.toBeInTheDocument();
+        });
+    });
+
+    describe('rescheduling', () => {
+        it('sits to the left of Done', () => {
+            renderRow();
+
+            const labels = screen
+                .getAllByRole('button')
+                .map((button) => button.getAttribute('aria-label'));
+            expect(labels).toEqual(['Reschedule Trash', 'Mark Trash done']);
+        });
+
+        it('opens the row for how many days rather than moving anything', async () => {
+            const onBeginReschedule = vi.fn();
+            const onReschedule = vi.fn();
+            renderRow({}, { onBeginReschedule, onReschedule });
+
+            await userEvent.click(screen.getByRole('button', { name: 'Reschedule Trash' }));
+
+            expect(onBeginReschedule).toHaveBeenCalledWith(1);
+            expect(onReschedule).not.toHaveBeenCalled();
+        });
+
+        it('offers one, three and five days, then cancel', () => {
+            const { container } = renderRow({}, { status: 'rescheduling' });
+
+            const buttons = [...container.querySelector('.row__picker')!.querySelectorAll('button')];
+
+            expect(buttons.map((button) => button.textContent)).toEqual(['+1', '+3', '+5', '']);
+            expect(buttons.map((button) => button.getAttribute('aria-label'))).toEqual([
+                'Move Trash 1 day later',
+                'Move Trash 3 days later',
+                'Move Trash 5 days later',
+                'Cancel rescheduling Trash',
+            ]);
+        });
+
+        /*
+         * The clock sits one column in from Done. A cancel that covered only
+         * Done's square would leave "+5" under a thumb tapping the clock
+         * twice, so this one spans both.
+         */
+        it('spans cancel across the clock as well as Done', () => {
+            renderRow({}, { status: 'rescheduling' });
+
+            expect(
+                screen.getByRole('button', { name: 'Cancel rescheduling Trash' }),
+            ).toHaveAttribute('data-span', '2');
+        });
+
+        it('keeps its text in the layout, hidden, so the row does not resize', () => {
+            const { container } = renderRow({}, { status: 'rescheduling' });
+
+            expect(container.querySelector('.row__text')).toHaveAttribute('aria-hidden', 'true');
+        });
+
+        it('moves by the days tapped', async () => {
+            const onReschedule = vi.fn();
+            renderRow({}, { status: 'rescheduling', onReschedule });
+
+            await userEvent.click(screen.getByRole('button', { name: 'Move Trash 3 days later' }));
+
+            expect(onReschedule).toHaveBeenCalledWith(1, 3);
+        });
+
+        it('backs out when cancel is tapped', async () => {
+            const onCancelReschedule = vi.fn();
+            const onReschedule = vi.fn();
+            renderRow({}, { status: 'rescheduling', onCancelReschedule, onReschedule });
+
+            await userEvent.click(screen.getByRole('button', { name: 'Cancel rescheduling Trash' }));
+
+            expect(onCancelReschedule).toHaveBeenCalledWith(1);
+            expect(onReschedule).not.toHaveBeenCalled();
+        });
+
+        it('holds the clock shut on a chore with no due date', () => {
+            renderRow({ nextDueDate: null });
+
+            expect(screen.getByRole('button', { name: 'Reschedule Trash' })).toBeDisabled();
+        });
+
+        it('holds the clock shut once the chore is done', () => {
+            renderRow({}, { status: 'done' });
+
+            expect(screen.getByRole('button', { name: 'Reschedule Trash' })).toBeDisabled();
+        });
+
+        // Each write checks the due date the other is about to change, so
+        // neither button is live while either is in flight.
+        it('swaps the clock for an hourglass, and holds both buttons, while moving', () => {
+            const { container } = renderRow({}, { status: 'moving' });
+
+            const clock = screen.getByRole('button', { name: 'Reschedule Trash' });
+            expect(clock).toBeDisabled();
+            expect(clock).toHaveAttribute('aria-busy', 'true');
+            expect(container.querySelector('[data-icon="hourglass"]')).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Mark Trash done' })).toBeDisabled();
+        });
+
+        it('holds the clock while a completion is in flight', () => {
+            renderRow({}, { status: 'pending' });
+
+            expect(screen.getByRole('button', { name: 'Reschedule Trash' })).toBeDisabled();
+        });
+
+        // A moved chore is still to do: both buttons stay live, and the due
+        // line shows the new time with no note — the row's styling marks the move.
+        it('shows a moved chore its new time, and leaves it actionable', () => {
+            renderRow({ nextDueDate: local(2026, 8, 18, 12).toISOString() }, { status: 'moved' });
+
+            expect(screen.getByText(/^in 3 days$/)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: 'Reschedule Trash' })).toBeEnabled();
+            expect(screen.getByRole('button', { name: 'Mark Trash done' })).toBeEnabled();
         });
     });
 });

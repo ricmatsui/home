@@ -169,3 +169,28 @@ function sortByDue(chores: Chore[]): Chore[] {
     };
     return [...chores].sort((a, b) => undatedLast(a) - undatedLast(b));
 }
+
+/*
+ * The due date a reschedule moves a chore to: `days` after whichever is later,
+ * its due date or today, at the time of day it was already due. Counting from
+ * an overdue date would leave "+1" on a chore three days late still two days
+ * late — pushed back, and still on the board.
+ *
+ * Local calendar days, stepped rather than added as milliseconds, for the
+ * same DST reason as isDueTomorrow: a 9am chore stays a 9am chore.
+ */
+export function postpone(nextDueDate: string, days: number, now: Date): string {
+    const due = new Date(nextDueDate);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const base =
+        new Date(due.getFullYear(), due.getMonth(), due.getDate()) < today ? today : due;
+    return new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        base.getDate() + days,
+        due.getHours(),
+        due.getMinutes(),
+        due.getSeconds(),
+        due.getMilliseconds(),
+    ).toISOString();
+}

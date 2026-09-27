@@ -17,6 +17,9 @@ type ChoreListProps = {
     onBeginComplete: (id: number) => void;
     onCancelComplete: (id: number) => void;
     onComplete: (id: number, user?: User) => void;
+    onBeginReschedule: (id: number) => void;
+    onCancelReschedule: (id: number) => void;
+    onReschedule: (id: number, days: number) => void;
 };
 
 export function ChoreList({
@@ -31,6 +34,9 @@ export function ChoreList({
     onBeginComplete,
     onCancelComplete,
     onComplete,
+    onBeginReschedule,
+    onCancelReschedule,
+    onReschedule,
 }: ChoreListProps) {
     if (chores.length === 0) {
         return <p className="empty">{emptyMessage}</p>;
@@ -51,6 +57,9 @@ export function ChoreList({
                     onBeginComplete={onBeginComplete}
                     onCancelComplete={onCancelComplete}
                     onComplete={onComplete}
+                    onBeginReschedule={onBeginReschedule}
+                    onCancelReschedule={onCancelReschedule}
+                    onReschedule={onReschedule}
                 />
             ))}
         </ul>

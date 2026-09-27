@@ -17,6 +17,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
         priority: 0,
         isPrivate: false,
         description: '',
+        updatedAt: '2026-08-01T12:00:00Z',
         ...overrides,
     };
 }
@@ -24,6 +25,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
 beforeEach(() => {
     vi.spyOn(api, 'getChores').mockResolvedValue([]);
     vi.spyOn(api, 'completeChore').mockResolvedValue(undefined);
+    vi.spyOn(api, 'rescheduleChore').mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -281,5 +283,145 @@ describe('useChores', () => {
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         expect(vi.mocked(api.getChores).mock.calls.length).toBe(callsAfterMount);
+    });
+
+    describe('rescheduling', () => {
+        async function loaded(chores: Chore[]) {
+            vi.mocked(api.getChores).mockResolvedValue(chores);
+            const hook = renderHook(() => useChores(clock));
+            await waitFor(() => expect(hook.result.current.loading).toBe(false));
+            return hook.result;
+        }
+
+        it('holds the row open for how many days before anything is sent', async () => {
+            const result = await loaded([chore({ id: 5 })]);
+
+            act(() => {
+                result.current.beginReschedule(5);
+            });
+
+            expect(result.current.rowStatus[5]).toBe('rescheduling');
+            expect(api.rescheduleChore).not.toHaveBeenCalled();
+        });
+
+        it('closes the row again when the choice is cancelled', async () => {
+            const result = await loaded([chore({ id: 5 })]);
+
+            act(() => {
+                result.current.beginReschedule(5);
+            });
+            act(() => {
+                result.current.cancelReschedule(5);
+            });
+
+            expect(result.current.rowStatus[5]).toBe('idle');
+            expect(api.rescheduleChore).not.toHaveBeenCalled();
+        });
+
+        // Due 10 August, five days before the clock: counted from today, not
+        // from the date it was already late for.
+        it('sends the due date the board is showing and the one it moves to', async () => {
+            const result = await loaded([chore({ id: 5, nextDueDate: '2026-08-10T12:00:00Z' })]);
+
+            await act(async () => {
+                await result.current.reschedule(5, 3);
+            });
+
+            expect(api.rescheduleChore).toHaveBeenCalledWith({
+                id: 5,
+                dueDate: '2026-08-10T12:00:00Z',
+                nextDueDate: '2026-08-18T12:00:00.000Z',
+            });
+        });
+
+        it('moves the chore, and says so, once the API agrees', async () => {
+            const result = await loaded([chore({ id: 5 })]);
+
+            await act(async () => {
+                await result.current.reschedule(5, 3);
+            });
+
+            expect(result.current.rowStatus[5]).toBe('moved');
+            expect(result.current.allChores[0].nextDueDate).toBe('2026-08-18T12:00:00.000Z');
+            // Still listed: dropping it would hop the rows below it up.
+            expect(result.current.dueChores.map((c) => c.id)).toEqual([5]);
+            expect(result.current.dueChores[0].nextDueDate).toBe('2026-08-18T12:00:00.000Z');
+        });
+
+        it('leaves the due date alone until the API agrees', async () => {
+            let settle!: () => void;
+            vi.mocked(api.rescheduleChore).mockReturnValue(
+                new Promise((resolve) => {
+                    settle = () => resolve(undefined);
+                }),
+            );
+            const result = await loaded([chore({ id: 5 })]);
+
+            act(() => {
+                void result.current.reschedule(5, 3);
+            });
+
+            expect(result.current.rowStatus[5]).toBe('moving');
+            expect(result.current.allChores[0].nextDueDate).toBe('2026-08-10T12:00:00Z');
+
+            await act(async () => {
+                settle();
+            });
+            expect(result.current.rowStatus[5]).toBe('moved');
+        });
+
+        it('reports a refused stale move on the row, and moves nothing', async () => {
+            vi.mocked(api.rescheduleChore).mockRejectedValue(new ChoreChangedError());
+            const result = await loaded([chore({ id: 5 })]);
+
+            await act(async () => {
+                await result.current.reschedule(5, 1);
+            });
+
+            expect(result.current.rowStatus[5]).toBe('error');
+            expect(result.current.rowError[5]).toBe('Due date changed — refresh.');
+            expect(result.current.allChores[0].nextDueDate).toBe('2026-08-10T12:00:00Z');
+            expect(result.current.error).toBeNull();
+        });
+
+        it('promotes a session expiry to the global error', async () => {
+            vi.mocked(api.rescheduleChore).mockRejectedValue(new SessionExpiredError());
+            const result = await loaded([chore({ id: 5 })]);
+
+            await act(async () => {
+                await result.current.reschedule(5, 1);
+            });
+
+            expect(result.current.error).toBeInstanceOf(SessionExpiredError);
+            expect(result.current.rowStatus[5]).toBe('idle');
+        });
+
+        it('sends nothing for a chore with no due date to count from', async () => {
+            const result = await loaded([chore({ id: 5, nextDueDate: null })]);
+
+            await act(async () => {
+                await result.current.reschedule(5, 1);
+            });
+
+            expect(api.rescheduleChore).not.toHaveBeenCalled();
+            expect(result.current.rowStatus[5]).toBeUndefined();
+        });
+
+        // A completion after a move is checked against the date the move set,
+        // not the one the fetch brought back.
+        it('completes a moved chore against its new due date', async () => {
+            const result = await loaded([chore({ id: 5 })]);
+
+            await act(async () => {
+                await result.current.reschedule(5, 3);
+            });
+            await act(async () => {
+                await result.current.complete(5);
+            });
+
+            expect(api.completeChore).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 5, dueDate: '2026-08-18T12:00:00.000Z' }),
+            );
+        });
     });
 });

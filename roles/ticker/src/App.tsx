@@ -43,6 +43,9 @@ export default function App({
         beginComplete,
         cancelComplete,
         complete,
+        beginReschedule,
+        cancelReschedule,
+        reschedule,
     } = useChores();
     const { publicOnly: publicOnlyPreferred, togglePublicOnly } = usePublicOnly();
     // The lock wins outright. A tablet that ran the ordinary board before the
@@ -79,8 +82,8 @@ export default function App({
 
     /*
      * Search draws its results with the board's own list, against the same
-     * row state, so a chore marked done in search is marked done on the board
-     * behind it.
+     * row state, so a chore marked done or moved in search is marked so on
+     * the board behind it.
      */
     const renderList = ({ chores, emptyMessage }: { chores: Chore[]; emptyMessage: string }) => (
         <ChoreList
@@ -95,6 +98,9 @@ export default function App({
             onBeginComplete={beginComplete}
             onCancelComplete={cancelComplete}
             onComplete={(id, user) => void complete(id, user)}
+            onBeginReschedule={beginReschedule}
+            onCancelReschedule={cancelReschedule}
+            onReschedule={(id, days) => void reschedule(id, days)}
         />
     );
 

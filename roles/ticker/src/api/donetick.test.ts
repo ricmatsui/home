@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { completeChore, getChore, getChores, REQUEST_TIMEOUT_MS } from './donetick';
+import {
+    completeChore,
+    getChore,
+    getChores,
+    REQUEST_TIMEOUT_MS,
+    rescheduleChore,
+} from './donetick';
 import { ApiError, ChoreChangedError, NetworkError, SessionExpiredError } from '../lib/errors';
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -388,6 +394,112 @@ describe('completeChore', () => {
 
         await assertions;
         vi.useRealTimers();
+    });
+});
+
+describe('rescheduleChore', () => {
+    const DUE = '2026-08-15T12:00:00Z';
+    const MOVED = '2026-08-18T12:00:00Z';
+    const UPDATED = '2026-08-14T08:30:00.123456Z';
+
+    function serveChore(nextDueDate: string | null = DUE) {
+        vi.mocked(fetch).mockImplementation((url) =>
+            Promise.resolve(
+                String(url).endsWith('/dueDate')
+                    ? jsonResponse({ res: {} })
+                    : jsonResponse({ res: { id: 42, nextDueDate, updatedAt: UPDATED } }),
+            ),
+        );
+    }
+
+    beforeEach(() => {
+        vi.stubGlobal('fetch', vi.fn());
+    });
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
+    it('reads the chore back, then puts the new due date', async () => {
+        serveChore();
+
+        await rescheduleChore({ id: 42, dueDate: DUE, nextDueDate: MOVED });
+
+        expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+            '/api/v1/chores/42',
+            '/api/v1/chores/42/dueDate',
+        ]);
+        expect(fetch).toHaveBeenLastCalledWith(
+            '/api/v1/chores/42/dueDate',
+            expect.objectContaining({ method: 'PUT', redirect: 'manual' }),
+        );
+    });
+
+    /*
+     * Donetick refuses the change if the chore was written after the
+     * updatedAt it is sent. Echoing the one just read, verbatim, is what lets
+     * it check against the chore this move was decided on.
+     */
+    it('sends the updatedAt it just read along with the new due date', async () => {
+        serveChore();
+
+        await rescheduleChore({ id: 42, dueDate: DUE, nextDueDate: MOVED });
+
+        const body = vi.mocked(fetch).mock.calls[1][1]!.body as string;
+        expect(JSON.parse(body)).toEqual({ dueDate: MOVED, updatedAt: UPDATED });
+    });
+
+    it('refuses the move, and puts nothing, when the due date has moved', async () => {
+        serveChore('2026-08-22T12:00:00Z');
+
+        await expect(
+            rescheduleChore({ id: 42, dueDate: DUE, nextDueDate: MOVED }),
+        ).rejects.toBeInstanceOf(ChoreChangedError);
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    // Donetick's own staleness 403 has an empty body, and is the same answer
+    // a missing permission gets, so it cannot be told apart and stays generic.
+    it('surfaces a refusal from Donetick as an ApiError', async () => {
+        vi.mocked(fetch).mockImplementation((url) =>
+            Promise.resolve(
+                String(url).endsWith('/dueDate')
+                    ? jsonResponse({}, 403)
+                    : jsonResponse({ res: { id: 42, nextDueDate: DUE, updatedAt: UPDATED } }),
+            ),
+        );
+
+        await expect(
+            rescheduleChore({ id: 42, dueDate: DUE, nextDueDate: MOVED }),
+        ).rejects.toMatchObject({ status: 403, message: 'Request failed (403)' });
+    });
+
+    // Either write moves the due date the other is checked against, so a
+    // reschedule waits behind a completion rather than racing it.
+    it('waits its turn behind a completion', async () => {
+        const post = deferred<Response>();
+        vi.mocked(fetch).mockImplementation((url) =>
+            String(url).endsWith('/do')
+                ? post.promise
+                : Promise.resolve(
+                      jsonResponse({ res: { id: 42, nextDueDate: DUE, updatedAt: UPDATED } }),
+                  ),
+        );
+
+        const completing = completeChore({ id: 42, dueDate: DUE });
+        const moving = rescheduleChore({ id: 7, dueDate: DUE, nextDueDate: MOVED });
+        await settle();
+
+        expect(vi.mocked(fetch).mock.calls.map((call) => call[0])).toEqual([
+            '/api/v1/chores/42',
+            '/api/v1/chores/42/do',
+        ]);
+
+        post.resolve(jsonResponse({ res: {} }));
+        await completing;
+        await moving;
+
+        expect(vi.mocked(fetch).mock.calls.at(-1)![0]).toBe('/api/v1/chores/7/dueDate');
     });
 });
 

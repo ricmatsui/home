@@ -5,6 +5,7 @@ import {
     formatDue,
     isDueTomorrow,
     opensAt,
+    postpone,
     searchChores,
     selectDue,
     sortChores,
@@ -36,6 +37,7 @@ function chore(overrides: Partial<Chore> = {}): Chore {
         priority: 0,
         isPrivate: false,
         description: '',
+        updatedAt: '2026-08-01T12:00:00Z',
         ...overrides,
     };
 }
@@ -410,5 +412,38 @@ describe('opensAt', () => {
 
     it('is null for a chore with no due date', () => {
         expect(opensAt(chore({ nextDueDate: null, completionWindow: 24 }))).toBeNull();
+    });
+});
+
+describe('postpone', () => {
+    const now = local(2026, 8, 15, 5);
+
+    it('counts on from a due date still ahead', () => {
+        expect(postpone(localIso(2026, 8, 16, 17), 3, now)).toBe(localIso(2026, 8, 19, 17));
+    });
+
+    /*
+     * Counted from the due date, "+1" on a chore three days late would leave
+     * it two days late — moved, and still overdue on the board. The time of
+     * day is kept; only the date comes from today.
+     */
+    it('counts on from today for a chore that is overdue', () => {
+        expect(postpone(localIso(2026, 8, 12, 9), 1, now)).toBe(localIso(2026, 8, 16, 9));
+    });
+
+    // Local dates decide it, not instants: 3am today has passed, but it is
+    // still today, so it moves the same as 10pm today does.
+    it('counts on from today for a chore due earlier today', () => {
+        expect(postpone(localIso(2026, 8, 15, 3), 1, now)).toBe(localIso(2026, 8, 16, 3));
+        expect(postpone(localIso(2026, 8, 15, 22), 1, now)).toBe(localIso(2026, 8, 16, 22));
+    });
+
+    // Clocks go back on 1 November 2026 in Los Angeles, so that day is 25
+    // hours long. A day of milliseconds would land at 8am.
+    it('keeps the time of day across a DST change', () => {
+        const moved = postpone(localIso(2026, 10, 31, 9), 1, local(2026, 10, 30));
+
+        expect(moved).toBe(localIso(2026, 11, 1, 9));
+        expect(new Date(moved).getTime() - local(2026, 10, 31, 9).getTime()).toBe(25 * 3600_000);
     });
 });
