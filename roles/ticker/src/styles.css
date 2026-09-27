@@ -525,6 +525,17 @@ body {
 }
 
 /*
+ * A Done that cannot be pressed yet — only search lists a chore whose
+ * completion window is still shut. Faded the way a disabled header control
+ * is. Scoped to idle rows: pending and done disable the button too, and each
+ * already says so in its own colour.
+ */
+.row[data-status='idle'] .row__action:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+/*
  * Hidden but still occupying its grid cell, which is the whole point: the row
  * keeps the height its name and due line give it, so opening the picker moves
  * nothing below it. display:none or unmounting the text would shrink the row.
@@ -729,6 +740,92 @@ body {
  */
 .row[data-status='error'] .row__error {
     color: color-mix(in srgb, var(--ink) 25%, var(--danger));
+}
+
+/* ---- Search ---------------------------------------------------------- */
+
+/*
+ * A second board laid over the first, in the same column: full height, the
+ * app's width, on the same paper. It is the board with a different filter,
+ * not a popup, so it should not look like one.
+ *
+ * height is 100% rather than a viewport unit. A modal dialog is fixed to the
+ * viewport, so the percentage is the live viewport height — the vh family goes
+ * stale in an installed PWA.
+ */
+.search {
+    width: 100%;
+    max-width: 46rem;
+    height: 100%;
+    max-height: none;
+    margin: 0 auto;
+    padding: 0;
+    border: none;
+    background-color: var(--paper);
+    color: var(--ink);
+}
+
+.search::backdrop {
+    background-color: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+
+.search__panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding-inline: var(--edge);
+}
+
+/* Built like .header, so the input stands where the title did and the close
+ * button in the column the header controls and the Done buttons share. */
+.search__bar {
+    display: flex;
+    align-items: center;
+    gap: var(--gap);
+    padding-block: 1rem 0.75rem;
+    padding-top: calc(1rem + env(safe-area-inset-top));
+    padding-inline-end: var(--row-inset);
+    border-bottom: 2px solid var(--ink);
+}
+
+/*
+ * The height of a tile so it lines up with the close button beside it. Never
+ * under 16px of type: iOS zooms the page into any input set smaller.
+ */
+.search__input {
+    flex: 1;
+    min-width: 0;
+    height: var(--tile);
+    padding-inline: 0.75rem;
+    border: 2px solid var(--ink);
+    border-radius: var(--radius);
+    background-color: var(--paper-raised);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: clamp(1rem, 0.7rem + 1vw, 1.4rem);
+    letter-spacing: 0.01em;
+}
+
+/* The engine's own clear glyph ignores the palette, and would stand as a
+ * second ✕ a thumb's width from the close button. */
+.search__input::-webkit-search-cancel-button {
+    appearance: none;
+}
+
+.search__input::placeholder {
+    color: var(--ink-soft);
+}
+
+/* The input already has a border to show focus against; the global outline
+ * offset would float a second ring off it. */
+.search__input:focus-visible {
+    outline-offset: 0;
+}
+
+.search__results {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 /* ---- Empty and loading ----------------------------------------------- */

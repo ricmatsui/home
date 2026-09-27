@@ -41,7 +41,7 @@ describe('useChores', () => {
         const { result } = renderHook(() => useChores(clock));
 
         await waitFor(() => expect(result.current.loading).toBe(false));
-        expect(result.current.chores.map((c) => c.id)).toEqual([2, 1]);
+        expect(result.current.dueChores.map((c) => c.id)).toEqual([2, 1]);
     });
 
     it('marks a row done after the API succeeds', async () => {
@@ -144,7 +144,7 @@ describe('useChores', () => {
             await result.current.complete(5);
         });
 
-        expect(result.current.chores.map((c) => c.id)).toEqual([5]);
+        expect(result.current.dueChores.map((c) => c.id)).toEqual([5]);
     });
 
     it('records a per-row error without setting the global error', async () => {
@@ -249,7 +249,7 @@ describe('useChores', () => {
 
         expect(result.current.rowStatus).toEqual({});
         expect(result.current.rowCompletedBy).toEqual({});
-        expect(result.current.chores.map((c) => c.id)).toEqual([9]);
+        expect(result.current.dueChores.map((c) => c.id)).toEqual([9]);
     });
 
     it('keeps completed row state until the refresh actually returns', async () => {

@@ -95,7 +95,7 @@ describe('ChoreRow', () => {
 
         const badge = screen.getByText('Tomorrow');
         expect(badge.parentElement).toHaveClass('row__due');
-        expect(badge.parentElement).toHaveTextContent(/^Tomorrow in \d+ hours$/);
+        expect(badge.parentElement).toHaveTextContent(/^Tomorrow in 1 day$/);
     });
 
     describe('crediting a person', () => {

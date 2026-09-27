@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-    dueChores,
     filterDue,
     filterPublic,
     formatDue,
     isDueTomorrow,
+    opensAt,
+    searchChores,
+    selectDue,
     sortChores,
 } from './chores';
 import type { Chore } from '../types';
@@ -226,9 +228,18 @@ describe('formatDue', () => {
     it('keeps hours at the edge of the window', () => {
         expect(formatDue('2026-08-16T11:00:00Z', NOW)).toBe('in 23 hours');
     });
+
+    // Search lists chores well past the board's day.
+    it('counts forward in days past a day', () => {
+        expect(formatDue('2026-08-18T12:00:00Z', NOW)).toBe('in 3 days');
+    });
+
+    it('counts forward in months past 60 days', () => {
+        expect(formatDue('2026-11-15T12:00:00Z', NOW)).toBe('in 3 months');
+    });
 });
 
-describe('dueChores', () => {
+describe('selectDue', () => {
     it('filters then sorts', () => {
         const chores = [
             chore({ id: 1, priority: 0, nextDueDate: '2026-08-14T12:00:00Z' }),
@@ -236,7 +247,7 @@ describe('dueChores', () => {
             chore({ id: 3, priority: 1, nextDueDate: '2026-08-20T12:00:00Z' }),
             chore({ id: 4, priority: 2, nextDueDate: '2026-08-15T18:00:00Z' }),
         ];
-        expect(dueChores(chores, NOW).map((c) => c.id)).toEqual([2, 4, 1]);
+        expect(selectDue(chores, NOW).map((c) => c.id)).toEqual([2, 4, 1]);
     });
 });
 
@@ -317,5 +328,87 @@ describe('isDueTomorrow', () => {
 
     it('is false for an unparseable due date', () => {
         expect(isDueTomorrow('not-a-date', now)).toBe(false);
+    });
+});
+
+describe('searchChores', () => {
+    const names = (chores: Chore[]) => chores.map((found) => found.name);
+
+    it('finds nothing for an empty query', () => {
+        expect(searchChores([chore({ name: 'Trash' })], '')).toEqual([]);
+    });
+
+    it('finds nothing for a query of only spaces', () => {
+        expect(searchChores([chore({ name: 'Trash' })], '   ')).toEqual([]);
+    });
+
+    it('matches anywhere in the name, ignoring case', () => {
+        const chores = [
+            chore({ id: 1, name: 'Take out Trash' }),
+            chore({ id: 2, name: 'Water Plants' }),
+        ];
+        expect(names(searchChores(chores, 'TRASH'))).toEqual(['Take out Trash']);
+    });
+
+    it('does not match on the description', () => {
+        const chores = [chore({ name: 'Water Plants', description: '<p>trash day too</p>' })];
+        expect(searchChores(chores, 'trash')).toEqual([]);
+    });
+
+    it('includes chores the board leaves out', () => {
+        const chores = [
+            chore({ id: 1, name: 'Filter far out', nextDueDate: '2026-12-01T12:00:00Z' }),
+            chore({ id: 2, name: 'Filter undated', nextDueDate: null }),
+            chore({
+                id: 3,
+                name: 'Filter windowed',
+                nextDueDate: '2026-08-15T18:00:00Z',
+                completionWindow: 1,
+            }),
+        ];
+        expect(searchChores(chores, 'filter')).toHaveLength(3);
+    });
+
+    it('leaves out an inactive chore', () => {
+        expect(searchChores([chore({ name: 'Trash', isActive: false })], 'trash')).toEqual([]);
+    });
+
+    it('puts names that start with the query first, each group soonest due', () => {
+        const chores = [
+            chore({ id: 1, name: 'Empty the bins', nextDueDate: '2026-08-14T12:00:00Z' }),
+            chore({ id: 2, name: 'Bins out late', nextDueDate: '2026-09-01T12:00:00Z' }),
+            chore({ id: 3, name: 'Wash the bins', nextDueDate: '2026-08-20T12:00:00Z' }),
+            chore({ id: 4, name: 'Bins out early', nextDueDate: '2026-08-16T12:00:00Z' }),
+        ];
+        expect(names(searchChores(chores, 'bins'))).toEqual([
+            'Bins out early',
+            'Bins out late',
+            'Empty the bins',
+            'Wash the bins',
+        ]);
+    });
+
+    it('puts an undated chore after the dated ones in its group', () => {
+        const chores = [
+            chore({ id: 1, name: 'Bins undated', nextDueDate: null }),
+            chore({ id: 2, name: 'Bins dated', nextDueDate: '2026-12-01T12:00:00Z' }),
+        ];
+        expect(names(searchChores(chores, 'bins'))).toEqual(['Bins dated', 'Bins undated']);
+    });
+});
+
+describe('opensAt', () => {
+    it('is the due time less the window', () => {
+        expect(
+            opensAt(chore({ nextDueDate: '2026-08-20T12:00:00Z', completionWindow: 24 })),
+        ).toBe('2026-08-19T12:00:00.000Z');
+    });
+
+    it('is null for a chore with no window', () => {
+        expect(opensAt(chore({ nextDueDate: '2026-08-20T12:00:00Z' }))).toBeNull();
+    });
+
+    it('is null for a chore with no due date', () => {
+        expect(opensAt(chore({ nextDueDate: null, completionWindow: 24 }))).toBeNull();
     });
 });

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { completeChore, getChores } from '../api/donetick';
-import { dueChores } from '../lib/chores';
+import { selectDue } from '../lib/chores';
 import { SessionExpiredError } from '../lib/errors';
 import type { Chore, RowStatus, User } from '../types';
 
 const defaultClock = () => new Date();
 
 export function useChores(now: () => Date = defaultClock) {
-    const [chores, setChores] = useState<Chore[]>([]);
+    const [dueChores, setDueChores] = useState<Chore[]>([]);
+    const [allChores, setAllChores] = useState<Chore[]>([]);
     const [rowStatus, setRowStatus] = useState<Record<number, RowStatus>>({});
     const [rowError, setRowError] = useState<Record<number, string>>({});
     // Who each finished row was credited to. Separate from rowStatus, which
@@ -23,7 +24,8 @@ export function useChores(now: () => Date = defaultClock) {
 
         try {
             const fetched = await getChores();
-            setChores(dueChores(fetched, now()));
+            setDueChores(selectDue(fetched, now()));
+            setAllChores(fetched);
             // Cleared only once the replacement data is in hand. Clearing up
             // front would un-strike completed rows while the stale list is
             // still on screen.
@@ -70,9 +72,11 @@ export function useChores(now: () => Date = defaultClock) {
     /*
      * The due date goes out with the completion so the API client can refuse
      * one whose chore has moved on since the board was drawn. It is read from
-     * this hook's own `chores` — the same array the row rendered from — rather
-     * than passed in by the row, so what gets checked is by construction what
-     * the person tapping was looking at.
+     * this hook's own copy of the fetch — the same data the row rendered from,
+     * on the board or in search — rather than passed in by the row, so what
+     * gets checked is by construction what the person tapping was looking at.
+     * The full list rather than the due one, since search can complete a
+     * chore the board is not showing.
      */
     const complete = useCallback(
         async (id: number, user?: User) => {
@@ -84,7 +88,7 @@ export function useChores(now: () => Date = defaultClock) {
             });
 
             try {
-                const dueDate = chores.find((chore) => chore.id === id)?.nextDueDate ?? null;
+                const dueDate = allChores.find((chore) => chore.id === id)?.nextDueDate ?? null;
                 await completeChore({ id, dueDate, completedBy: user?.id });
                 setRowStatus((current) => ({ ...current, [id]: 'done' }));
                 if (user) {
@@ -104,11 +108,12 @@ export function useChores(now: () => Date = defaultClock) {
                 setRowError((current) => ({ ...current, [id]: (caught as Error).message }));
             }
         },
-        [chores],
+        [allChores],
     );
 
     return {
-        chores,
+        dueChores,
+        allChores,
         rowStatus,
         rowError,
         rowCompletedBy,

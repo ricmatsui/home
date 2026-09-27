@@ -11,8 +11,8 @@ type ChoreListProps = {
     // the row does. See ChoreRow.
     asksWhoDidIt: boolean;
     now: Date;
-    // What an empty list means depends on what was filtered out of it, and
-    // only the caller knows that.
+    // The board and search say different things when empty, and only the
+    // caller knows which one this is.
     emptyMessage: string;
     onBeginComplete: (id: number) => void;
     onCancelComplete: (id: number) => void;

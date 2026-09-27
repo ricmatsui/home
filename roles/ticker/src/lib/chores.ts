@@ -70,29 +70,40 @@ function plural(count: number, unit: string): string {
     return `${count} ${unit}${count === 1 ? '' : 's'}`;
 }
 
+/*
+ * The same units either side of the due time. The board alone never needed
+ * more than hours counting forward — nothing on it is due further out than a
+ * day — but search lists every chore, and a quarterly one would otherwise
+ * read "in 2000 hours".
+ */
+function span(ms: number): string {
+    if (ms < HOUR) {
+        return plural(Math.max(1, Math.floor(ms / MINUTE)), 'minute');
+    }
+    if (ms < DAY) {
+        return plural(Math.floor(ms / HOUR), 'hour');
+    }
+    if (ms < 60 * DAY) {
+        return plural(Math.floor(ms / DAY), 'day');
+    }
+    return plural(Math.floor(ms / (30 * DAY)), 'month');
+}
+
 export function formatDue(nextDueDate: string, now: Date): string {
     const elapsed = now.getTime() - new Date(nextDueDate).getTime();
+    return elapsed < 0 ? `in ${span(-elapsed)}` : `${span(elapsed)} ago`;
+}
 
-    // Not due yet. The window caps at a day, so this never needs a unit
-    // larger than hours.
-    if (elapsed < 0) {
-        const remaining = -elapsed;
-        if (remaining < HOUR) {
-            return `in ${plural(Math.max(1, Math.floor(remaining / MINUTE)), 'minute')}`;
-        }
-        return `in ${plural(Math.floor(remaining / HOUR), 'hour')}`;
+/*
+ * When a chore's completion window opens, for a chore whose window is still
+ * shut. The board never lists one of those; search does, and a disabled Done
+ * button has to say when it stops being disabled.
+ */
+export function opensAt(chore: Chore): string | null {
+    if (chore.completionWindow == null || !chore.nextDueDate) {
+        return null;
     }
-
-    if (elapsed < HOUR) {
-        return `${plural(Math.max(1, Math.floor(elapsed / MINUTE)), 'minute')} ago`;
-    }
-    if (elapsed < DAY) {
-        return `${plural(Math.floor(elapsed / HOUR), 'hour')} ago`;
-    }
-    if (elapsed < 60 * DAY) {
-        return `${plural(Math.floor(elapsed / DAY), 'day')} ago`;
-    }
-    return `${plural(Math.floor(elapsed / (30 * DAY)), 'month')} ago`;
+    return new Date(dueTime(chore) - chore.completionWindow * HOUR).toISOString();
 }
 
 /*
@@ -119,6 +130,42 @@ export function isDueTomorrow(nextDueDate: string, now: Date): boolean {
     );
 }
 
-export function dueChores(chores: Chore[], now: Date): Chore[] {
+export function selectDue(chores: Chore[], now: Date): Chore[] {
     return sortChores(filterDue(chores, now));
+}
+
+/*
+ * Every active chore whose name contains the query, due or not. Names that
+ * start with it come first — typing the first few letters of a chore is how
+ * it gets looked up — and each group runs soonest-due first, with undated
+ * chores at the end. Case-insensitive; an empty query finds nothing rather
+ * than everything, so the search opens blank.
+ */
+export function searchChores(chores: Chore[], query: string): Chore[] {
+    const needle = query.trim().toLowerCase();
+    if (!needle) {
+        return [];
+    }
+    const starting: Chore[] = [];
+    const containing: Chore[] = [];
+    for (const chore of chores) {
+        if (!chore.isActive) {
+            continue;
+        }
+        const at = chore.name.toLowerCase().indexOf(needle);
+        if (at === 0) {
+            starting.push(chore);
+        } else if (at > 0) {
+            containing.push(chore);
+        }
+    }
+    return [...sortByDue(starting), ...sortByDue(containing)];
+}
+
+function sortByDue(chores: Chore[]): Chore[] {
+    const undatedLast = (chore: Chore) => {
+        const due = dueTime(chore);
+        return Number.isFinite(due) ? due : Number.MAX_SAFE_INTEGER;
+    };
+    return [...chores].sort((a, b) => undatedLast(a) - undatedLast(b));
 }

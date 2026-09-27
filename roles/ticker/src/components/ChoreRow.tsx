@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { formatDue, isDueTomorrow } from '../lib/chores';
+import { formatDue, isCompletable, isDueTomorrow, opensAt } from '../lib/chores';
 import { sanitizeDescription } from '../lib/description';
 import type { Chore, RowStatus, User } from '../types';
 
@@ -108,6 +108,7 @@ export function ChoreRow({
     const done = status === 'done';
     const pending = status === 'pending';
     const picking = status === 'picking';
+    const opens = isCompletable(chore, now) ? null : opensAt(chore);
 
     const description = useMemo(
         () => sanitizeDescription(chore.description),
@@ -140,6 +141,7 @@ export function ChoreRow({
                                 </>
                             ) : null}
                             {formatDue(chore.nextDueDate, now)}
+                            {opens ? ` · Opens ${formatDue(opens, now)}` : null}
                         </>
                     ) : null}
                 </span>
@@ -200,7 +202,7 @@ export function ChoreRow({
                     // The glyph change is invisible to a screen reader, so the
                     // in-flight state has to be stated rather than drawn.
                     aria-busy={pending}
-                    disabled={pending || done}
+                    disabled={pending || done || opens !== null}
                     onClick={() =>
                         asksWhoDidIt ? onBeginComplete(chore.id) : onComplete(chore.id)
                     }

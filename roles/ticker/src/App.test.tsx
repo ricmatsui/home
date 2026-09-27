@@ -441,7 +441,7 @@ describe('App', () => {
 
             expect(
                 screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
-            ).toEqual(['Show only public tasks', 'Refresh']);
+            ).toEqual(['Search tasks', 'Show only public tasks', 'Refresh']);
         });
 
         it('hides private chores once it is on', async () => {
@@ -499,22 +499,6 @@ describe('App', () => {
             );
         });
 
-        // Same rule as everywhere else on this board: say only what is true.
-        // A filtered-out chore is still due.
-        it('does not claim nothing is due when the filter is what emptied the list', async () => {
-            const user = userEvent.setup();
-            vi.mocked(api.getChores).mockResolvedValue([
-                chore({ id: 2, name: 'Plants', isPrivate: true }),
-            ]);
-
-            render(<App />);
-            await screen.findByText('Plants');
-            await user.click(screen.getByRole('button', { name: /public/i }));
-
-            expect(screen.getByText(/nothing public due/i)).toBeInTheDocument();
-            expect(screen.queryByText(/^nothing due$/i)).not.toBeInTheDocument();
-        });
-
         // A wall tablet in a locked-down kiosk profile can refuse storage
         // outright. Losing the preference across reloads is survivable;
         // taking the board down with it is not.
@@ -560,11 +544,11 @@ describe('App', () => {
         // anything is worse than no control.
         it('offers no way back to the whole board', async () => {
             render(<App lockedPublic />);
-            await screen.findByText(/nothing public due/i);
+            await screen.findByText(/nothing due/i);
 
             expect(
                 screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')),
-            ).toEqual(['Refresh']);
+            ).toEqual(['Search tasks', 'Refresh']);
         });
 
         // Nothing wrote this; a tablet that ran the ordinary board before the
@@ -659,6 +643,202 @@ describe('App', () => {
      * time — the 24-hour window, "in 3 hours", the tomorrow badge — is frozen
      * at the last fetch. The rollover is what un-freezes it.
      */
+    describe('search', () => {
+        async function openSearch() {
+            await userEvent.click(await screen.findByRole('button', { name: 'Search tasks' }));
+            return screen.getByRole('dialog', { name: 'Search tasks' });
+        }
+
+        it('sits to the left of the public filter', async () => {
+            render(<App />);
+            await screen.findByText(/nothing due/i);
+
+            const labels = screen
+                .getAllByRole('button')
+                .map((button) => button.getAttribute('aria-label'));
+            expect(labels.indexOf('Search tasks')).toBe(
+                labels.indexOf('Show only public tasks') - 1,
+            );
+        });
+
+        it('opens with the input focused and nothing listed', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+            render(<App />);
+            await screen.findByRole('listitem');
+
+            const dialog = await openSearch();
+
+            expect(within(dialog).getByRole('searchbox', { name: 'Task name' })).toHaveFocus();
+            expect(within(dialog).queryByRole('listitem')).not.toBeInTheDocument();
+            expect(within(dialog).queryByText(/match/i)).not.toBeInTheDocument();
+        });
+
+        it('finds a chore the board leaves out', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({
+                    id: 1,
+                    name: 'Change Filter',
+                    // Slack so the render clock still lands inside day two.
+                    nextDueDate: new Date(Date.now() + 48 * HOUR + 60_000).toISOString(),
+                }),
+            ]);
+            render(<App />);
+            await screen.findByText(/nothing due/i);
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('filter');
+
+            expect(within(dialog).getByText('Change Filter')).toBeInTheDocument();
+            expect(within(dialog).getByText('in 2 days')).toBeInTheDocument();
+        });
+
+        it('says so when nothing matches', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+            render(<App />);
+            await screen.findByRole('listitem');
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('plants');
+
+            expect(within(dialog).getByText('No tasks match')).toBeInTheDocument();
+        });
+
+        it('completes from the results and strikes the row on the board too', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 42, name: 'Trash' })]);
+            render(<App />);
+            const boardRow = await screen.findByRole('listitem');
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('tra');
+            const found = within(dialog).getByRole('listitem');
+            await userEvent.click(within(found).getByRole('button', { name: 'Mark Trash done' }));
+
+            await waitFor(() => expect(found).toHaveAttribute('data-status', 'done'));
+            expect(api.completeChore).toHaveBeenCalledWith(
+                expect.objectContaining({ id: 42, dueDate: '2026-08-10T12:00:00Z' }),
+            );
+
+            await userEvent.click(within(dialog).getByRole('button', { name: 'Close search' }));
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+            expect(boardRow).toHaveAttribute('data-status', 'done');
+        });
+
+        // The completion goes out with the due date the row was drawn from,
+        // which for a chore only search lists has to come from the full fetch.
+        it('sends the due date of a chore the board does not list', async () => {
+            const due = new Date(Date.now() + 48 * HOUR).toISOString();
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({ id: 7, name: 'Change Filter', nextDueDate: due }),
+            ]);
+            render(<App />);
+            await screen.findByText(/nothing due/i);
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('filter');
+            await userEvent.click(
+                within(dialog).getByRole('button', { name: 'Mark Change Filter done' }),
+            );
+
+            await waitFor(() =>
+                expect(api.completeChore).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: 7, dueDate: due }),
+                ),
+            );
+        });
+
+        // Donetick would refuse it with a 400, so the row refuses it first.
+        it('holds Done shut until the completion window opens, and says when', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({
+                    id: 1,
+                    name: 'Weekly Finances',
+                    nextDueDate: new Date(Date.now() + 5 * 24 * HOUR + 60_000).toISOString(),
+                    completionWindow: 48,
+                }),
+            ]);
+            render(<App />);
+            await screen.findByText(/nothing due/i);
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('finances');
+
+            expect(
+                within(dialog).getByRole('button', { name: 'Mark Weekly Finances done' }),
+            ).toBeDisabled();
+            expect(within(dialog).getByText(/Opens in 3 days/)).toBeInTheDocument();
+        });
+
+        it('starts blank again after being closed', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+            render(<App />);
+            await screen.findByRole('listitem');
+
+            let dialog = await openSearch();
+            await userEvent.keyboard('trash');
+            await userEvent.click(within(dialog).getByRole('button', { name: 'Close search' }));
+
+            dialog = await openSearch();
+            expect(within(dialog).getByRole('searchbox')).toHaveValue('');
+        });
+
+        // Escape is the browser's: it closes the dialog natively, and the app
+        // only hears about it through the close event.
+        it('follows a close the browser made on its own', async () => {
+            render(<App />);
+            const dialog = await openSearch();
+
+            act(() => (dialog as HTMLDialogElement).close());
+
+            expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+        });
+
+        it('shows loading rather than "no matches" before the first fetch lands', async () => {
+            vi.mocked(api.getChores).mockReturnValue(new Promise(() => {}));
+            render(<App />);
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('trash');
+
+            expect(within(dialog).getByText('Loading…')).toBeInTheDocument();
+            expect(within(dialog).queryByText(/match/i)).not.toBeInTheDocument();
+        });
+
+        it('keeps private chores out on the public board', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([
+                chore({ id: 1, name: 'Water Plants', isPrivate: false }),
+                chore({ id: 2, name: 'Plant Journal', isPrivate: true }),
+            ]);
+            render(<App lockedPublic />);
+            await screen.findByText('Water Plants');
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('plant');
+
+            expect(within(dialog).getByText('Water Plants')).toBeInTheDocument();
+            expect(within(dialog).queryByText('Plant Journal')).not.toBeInTheDocument();
+        });
+
+        it('asks who did it on the public board, as the board does', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
+            render(<App users={[JANE, JOHN]} lockedPublic />);
+            await screen.findByRole('listitem');
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('trash');
+            await userEvent.click(within(dialog).getByRole('button', { name: 'Mark Trash done' }));
+            await userEvent.click(
+                within(dialog).getByRole('button', { name: 'Mark Trash done as Jane' }),
+            );
+
+            await waitFor(() =>
+                expect(api.completeChore).toHaveBeenCalledWith(
+                    expect.objectContaining({ id: 1, completedBy: JANE.id }),
+                ),
+            );
+            expect(within(dialog).getByText('Done · Jane')).toBeInTheDocument();
+        });
+    });
+
     describe('day rollover', () => {
         it('reloads the page when the local date turns over', async () => {
             vi.useFakeTimers({ shouldAdvanceTime: true });

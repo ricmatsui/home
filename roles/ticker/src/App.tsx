@@ -1,15 +1,18 @@
+import { useState } from 'react';
 import { ChoreList } from './components/ChoreList';
 import { ErrorBanner } from './components/ErrorBanner';
 import { PublicFilterButton } from './components/PublicFilterButton';
 import { RefreshButton } from './components/RefreshButton';
+import { SearchButton } from './components/SearchButton';
+import { SearchDialog } from './components/SearchDialog';
 import { useChores } from './hooks/useChores';
 import { useDayRollover } from './hooks/useDayRollover';
 import { useHourlyRender } from './hooks/useHourlyRender';
 import { usePublicOnly } from './hooks/usePublicOnly';
-import { filterPublic } from './lib/chores';
+import { filterPublic, searchChores } from './lib/chores';
 import { LOCKED_PUBLIC } from './lib/config';
 import { USERS } from './lib/users';
-import type { User } from './types';
+import type { Chore, User } from './types';
 
 type AppProps = {
     // Injected the same way the clock is, so the tests can hand the board a
@@ -29,7 +32,8 @@ export default function App({
     lockedPublic = LOCKED_PUBLIC,
 }: AppProps = {}) {
     const {
-        chores,
+        dueChores,
+        allChores,
         rowStatus,
         rowError,
         rowCompletedBy,
@@ -45,13 +49,16 @@ export default function App({
     // kitchen one existed still has a preference sitting in its storage, and
     // it has no business deciding what a wall board shows.
     const publicOnly = lockedPublic || publicOnlyPreferred;
+    // Null while the dialog is shut. The query lives here rather than in the
+    // dialog because the results are rendered here.
+    const [query, setQuery] = useState<string | null>(null);
 
     useDayRollover(() => window.location.reload());
     useHourlyRender();
 
     // Applied here rather than in useChores: the filter changes what is on
     // screen, not what was fetched, so toggling it must not cost a round trip.
-    const visible = publicOnly ? filterPublic(chores) : chores;
+    const visible = publicOnly ? filterPublic(dueChores) : dueChores;
 
     /*
      * Whether Done opens a choice, decided here because this is the only place
@@ -70,11 +77,41 @@ export default function App({
      */
     const asksWhoDidIt = publicOnly && users.length > 1;
 
+    /*
+     * Search draws its results with the board's own list, against the same
+     * row state, so a chore marked done in search is marked done on the board
+     * behind it.
+     */
+    const renderList = ({ chores, emptyMessage }: { chores: Chore[]; emptyMessage: string }) => (
+        <ChoreList
+            chores={chores}
+            rowStatus={rowStatus}
+            rowError={rowError}
+            rowCompletedBy={rowCompletedBy}
+            users={users}
+            asksWhoDidIt={asksWhoDidIt}
+            now={new Date()}
+            emptyMessage={emptyMessage}
+            onBeginComplete={beginComplete}
+            onCancelComplete={cancelComplete}
+            onComplete={(id, user) => void complete(id, user)}
+        />
+    );
+
+    const errorBanner = error ? (
+        <ErrorBanner
+            error={error}
+            onReload={() => window.location.reload()}
+            onRetry={() => void refresh()}
+        />
+    ) : null;
+
     return (
         <main className="app">
             <header className="header">
                 <h1 className="header__title">Tasks</h1>
                 <div className="header__actions">
+                    <SearchButton onOpen={() => setQuery('')} />
                     {lockedPublic ? null : (
                         <PublicFilterButton
                             publicOnly={publicOnly}
@@ -85,13 +122,7 @@ export default function App({
                 </div>
             </header>
 
-            {error ? (
-                <ErrorBanner
-                    error={error}
-                    onReload={() => window.location.reload()}
-                    onRetry={() => void refresh()}
-                />
-            ) : null}
+            {errorBanner}
 
             {/*
               * Only render the list once there is something true to say. An
@@ -100,22 +131,40 @@ export default function App({
               */}
             {loading ? (
                 <p className="loading">Loading…</p>
-            ) : error && chores.length === 0 ? null : (
-                <ChoreList
-                    chores={visible}
-                    rowStatus={rowStatus}
-                    rowError={rowError}
-                    rowCompletedBy={rowCompletedBy}
-                    users={users}
-                    asksWhoDidIt={asksWhoDidIt}
-                    now={new Date()}
-                    // A chore the filter removed is still due, so the empty
-                    // list has to say which of the two things it means.
-                    emptyMessage={publicOnly ? 'Nothing public due' : 'Nothing due'}
-                    onBeginComplete={beginComplete}
-                    onCancelComplete={cancelComplete}
-                    onComplete={(id, user) => void complete(id, user)}
-                />
+            ) : error && dueChores.length === 0 ? null : (
+                renderList({ chores: visible, emptyMessage: 'Nothing due' })
+            )}
+
+            {query === null ? null : (
+                <SearchDialog
+                    query={query}
+                    onQueryChange={setQuery}
+                    onClose={() => setQuery(null)}
+                >
+                    {/*
+                      * The board's banner is under the modal, so the dialog
+                      * repeats it: a completion that fails on a lapsed session
+                      * reports there, and would otherwise just go quiet.
+                      */}
+                    {errorBanner}
+                    {/*
+                      * The same rules as the board: nothing until there is
+                      * something true to say. An empty query says nothing at
+                      * all, and "no matches" before the first fetch lands
+                      * would be a guess.
+                      */}
+                    {loading ? (
+                        <p className="loading">Loading…</p>
+                    ) : (error && allChores.length === 0) || !query.trim() ? null : (
+                        renderList({
+                            chores: searchChores(
+                                publicOnly ? filterPublic(allChores) : allChores,
+                                query,
+                            ),
+                            emptyMessage: 'No tasks match',
+                        })
+                    )}
+                </SearchDialog>
             )}
         </main>
     );
