@@ -23,9 +23,9 @@
   vars:
     fact: home_assistant_image
     name: home-assistant
-    # https://github.com/home-assistant/core/pkgs/container/home-assistant/520919619?tag=2025.9.4
-    source: ghcr.io/home-assistant/home-assistant:2025.9.4
-    image_id: sha256:89ec0583c7f47c8a150204f6b5ed48b5432026012bebe1226cf72775a795a5e1
+    # https://github.com/home-assistant/core/pkgs/container/home-assistant/1300800009?tag=2026.9.4
+    source: ghcr.io/home-assistant/home-assistant:2026.9.4
+    image_id: sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76
 
 - name: deploy stack
   community.general.docker_stack:
@@ -71,7 +71,7 @@
               resources:
                 limits:
                   cpus: '1.00'
-                  memory: 600M
+                  memory: 800M
               restart_policy:
                 delay: 10m
               update_config:
