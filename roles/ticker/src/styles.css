@@ -213,10 +213,33 @@ body {
     transition: background-color 120ms ease, color 120ms ease;
 }
 
-.control:hover:not(:disabled),
-.control:focus-visible {
-    background-color: var(--ink);
-    color: var(--paper);
+/*
+ * Only where hover is real. A touchscreen keeps :hover on whatever was last
+ * tapped, so turning the public filter off would leave it looking on until
+ * the next tap landed somewhere else.
+ */
+@media (hover: hover) {
+    .control:hover:not(:disabled) {
+        background-color: var(--ink);
+        color: var(--paper);
+    }
+}
+
+/*
+ * Focus thickens the border instead of filling in: filling is what "on" looks
+ * like — a toggle in force, a chore done or moved — and a focused tile must
+ * not read as one. Drawn inside the tile rather than as the global ring,
+ * which in dark mode is the same amber as the fill and fused with it.
+ *
+ * Every button on the board, whatever its shape, so no two can drift apart —
+ * they all carry a 2px border for this to thicken. currentColor is what makes
+ * one rule do: on an outline button it is the border's own colour, so the
+ * border just thickens; on a filled one it is paper, so a line is cut inside
+ * the fill instead.
+ */
+button:focus-visible {
+    outline: none;
+    box-shadow: inset 0 0 0 2px currentColor;
 }
 
 /*
@@ -616,8 +639,7 @@ body {
     transition: transform 90ms ease, background-color 120ms ease, color 120ms ease;
 }
 
-.row__choice:hover,
-.row__choice:focus-visible {
+.row__choice:hover {
     background-color: var(--ink);
     color: var(--paper);
 }
@@ -662,8 +684,7 @@ body {
 
 /* The picker's two kinds of control invert alike on hover, whatever their
  * shape. */
-.row__cancel:hover,
-.row__cancel:focus-visible {
+.row__cancel:hover {
     background-color: var(--ink);
     color: var(--paper);
 }

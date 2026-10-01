@@ -28,6 +28,7 @@
         push: true
   delegate_to: localhost
   register: build_result
+  tags: ticker_app
 
 - name: deploy stack
   community.general.docker_stack:
@@ -105,3 +106,4 @@
             external: true
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: ticker_app
