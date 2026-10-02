@@ -86,7 +86,17 @@
       #!/bin/bash
       set -o errexit -o nounset -o verbose -o pipefail
 
-      export BACKUP_DATE=$(date +"%Y-01-02")
+      state=/mnt/gluster/rclone/backup-date
+
+      if [ ! -f "$state" ]; then
+        date +%F > "$state.tmp"
+        mv "$state.tmp" "$state"
+      elif [ -n "$(find "$state" -mtime +30)" ]; then
+        echo "Unfinished backup from $(<"$state"); rm $state to start a new one" >&2
+        exit 1
+      fi
+
+      export BACKUP_DATE=$(<"$state")
 
       for script in /mnt/gluster/rclone/scripts/*; do
         [ -f "$script" ] || continue
@@ -95,6 +105,8 @@
           printf '%s: %s\n' "$(basename "$script")" "$line"
         done
       done
+
+      rm "$state"
 
 - name: configure rclone gluster service
   ansible.builtin.copy:
@@ -129,7 +141,7 @@
       Description=Rclone Gluster
 
       [Timer]
-      OnCalendar=*-01-02 00:00:00
+      OnCalendar=*-01,07-02 00:00:00
       RandomizedDelaySec=1h
       Persistent=true
 
