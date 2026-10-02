@@ -1,4 +1,4 @@
-import { Section, TodoItem, DueCounts } from './types.js';
+import { DueCounts } from './types.js';
 import { describeError } from './errors.js';
 
 // The day a completion or a due date belongs to is the one it reads as on the
@@ -11,54 +11,40 @@ export function isSameLocalDay(instant: Date, day: Date): boolean {
 }
 
 // Written when the day is opened, a midnight snapshot of what it starts out
-// carrying. The completed count joins it when the day is closed.
-export function formatDueCountsSection(name: string, counts: DueCounts): Section {
-    return {
-        name,
-        items: [
-            { status: 'note', text: `${counts.overdue} overdue`, children: [] },
-            { status: 'note', text: `${counts.dueToday} due today`, children: [] },
-        ],
-    };
+// carrying. The completed count joins the end of the line when the day is closed.
+export function formatDueCountsLine(label: string, counts: DueCounts): string {
+    return `${label}: ${counts.overdue} overdue, ${counts.dueToday} due`;
 }
 
 // Written in the counts' place rather than left out, so a day that opened
 // without them says why instead of reading as a day with nothing due
-export function formatDueCountsUnavailable(name: string, error: unknown): Section {
-    return {
-        name,
-        items: [{
-            status: 'note',
-            text: `Due counts unavailable: ${describeError(error)}`,
-            children: [],
-        }],
-    };
+export function formatDueCountsUnavailable(label: string, error: unknown): string {
+    return `${label}: due counts unavailable: ${describeError(error)}`;
 }
 
-const COMPLETED_PATTERN = /^\d+ completed$/;
-const COMPLETED_UNAVAILABLE_PREFIX = 'Completed count unavailable: ';
+// Whatever an earlier close appended, so closing the same day twice replaces it
+// rather than stacking a second one after it
+const CLOSING_PATTERN = /(?:^|, )(?:\d+ completed|completed count unavailable: .*)$/;
 
-// What the day was opened with: whatever an earlier close left behind is
-// dropped, so closing the same day twice replaces that line rather than
-// stacking a second one under it
-function openedItems(section: Section | undefined): TodoItem[] {
-    return (section?.items ?? []).filter(item =>
-        !COMPLETED_PATTERN.test(item.text) && !item.text.startsWith(COMPLETED_UNAVAILABLE_PREFIX));
+// What the day was opened with, from the source's line in the Status section
+function openedPart(label: string, line: string | undefined): string {
+    const prefix = `${label}: `;
+    if (!line?.startsWith(prefix)) return '';
+    return line.slice(prefix.length).replace(CLOSING_PATTERN, '');
+}
+
+function withClosing(label: string, line: string | undefined, closing: string): string {
+    const opened = openedPart(label, line);
+    return `${label}: ${opened ? `${opened}, ` : ''}${closing}`;
 }
 
 /*
- * The other half of the day: recorded onto the section already in the file
- * rather than over it, so the counts the day was opened with survive alongside
- * what came of them. Closing the same day twice replaces the completed count
- * instead of leaving a second one behind.
+ * The other half of the day: appended to the line already in the file rather
+ * than written over it, so the counts the day was opened with survive alongside
+ * what came of them.
  */
-export function withSectionCompletedCount(name: string, section: Section | undefined, count: number): Section {
-    const opened = openedItems(section);
-
-    return {
-        name,
-        items: [...opened, { status: 'note', text: `${count} completed`, children: [] }],
-    };
+export function withCompletedCount(label: string, line: string | undefined, count: number): string {
+    return withClosing(label, line, `${count} completed`);
 }
 
 /*
@@ -66,15 +52,6 @@ export function withSectionCompletedCount(name: string, section: Section | undef
  * counts the day opened with are kept — and so is a note saying they were
  * never read, which is a different fact about the day than this one.
  */
-export function withSectionCompletedUnavailable(name: string, section: Section | undefined, error: unknown): Section {
-    const opened = openedItems(section);
-
-    return {
-        name,
-        items: [...opened, {
-            status: 'note',
-            text: `${COMPLETED_UNAVAILABLE_PREFIX}${describeError(error)}`,
-            children: [],
-        }],
-    };
+export function withCompletedUnavailable(label: string, line: string | undefined, error: unknown): string {
+    return withClosing(label, line, `completed count unavailable: ${describeError(error)}`);
 }

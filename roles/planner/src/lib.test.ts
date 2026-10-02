@@ -825,32 +825,19 @@ describe('partitionSections', () => {
         assert.deepEqual(nextData.map(s => s.name), ['Work']);
     });
 
-    it('leaves the Weather section behind instead of carrying it forward', () => {
+    // A re-run parses the counts back off the day file they were written to;
+    // they describe that day and must not follow the unfinished work forward
+    it('leaves the Status section behind instead of carrying it forward', () => {
         const sections: Section[] = [
-            { name: 'Weather', items: [{ status: 'note', text: 'Overcast - 74°/58°F', children: [] }] },
+            { name: 'Status', items: [{ status: 'note', text: 'Donetick: 3 overdue, 5 due, 7 completed', children: [] }] },
             { name: 'Dates', items: [{ status: 'incomplete', text: '03-15 - Wedding', children: [] }] },
         ];
 
         const { lastData, nextData } = partitionSections(sections);
 
-        assert.deepEqual(lastData.map(s => s.name), ['Weather', 'Dates']);
-        assert.deepEqual(lastData[0].items.map(i => i.text), ['Overcast - 74°/58°F']);
+        assert.deepEqual(lastData.map(s => s.name), ['Status', 'Dates']);
+        assert.deepEqual(lastData[0].items.map(i => i.text), ['Donetick: 3 overdue, 5 due, 7 completed']);
         assert.deepEqual(nextData.map(s => s.name), ['Dates']);
-    });
-
-    // A re-run parses the count back off the day file it was written to; it
-    // describes that day and must not follow the unfinished work forward
-    it('leaves the Donetick section behind instead of carrying it forward', () => {
-        const sections: Section[] = [
-            { name: 'Donetick', items: [{ status: 'note', text: '7 completed', children: [] }] },
-            { name: 'Work', items: [{ status: 'incomplete', text: 'Todo', children: [] }] },
-        ];
-
-        const { lastData, nextData } = partitionSections(sections);
-
-        assert.deepEqual(lastData.map(s => s.name), ['Donetick', 'Work']);
-        assert.deepEqual(lastData[0].items.map(i => i.text), ['7 completed']);
-        assert.deepEqual(nextData.map(s => s.name), ['Work']);
     });
 });
 

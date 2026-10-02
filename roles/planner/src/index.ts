@@ -3,10 +3,11 @@ import fs from 'fs';
 import readline from 'readline';
 import { Section, Action } from './types.js';
 import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink, linkAdjacentDays } from './lib.js';
-import { fetchDailyForecast, formatWeatherSection, formatWeatherUnavailable, WEATHER_SECTION } from './weather.js';
-import { DONETICK_SECTION, fetchChoreHistory, fetchChores, countCompletedOn, countDueOn, formatDonetickSection, formatDonetickUnavailable, withCompletedCount, withCompletedUnavailable } from './donetick.js';
+import { fetchDailyForecast, formatWeatherLine, formatWeatherUnavailable } from './weather.js';
+import * as donetick from './donetick.js';
 import { seedJournalSection } from './journal.js';
 import * as googleTasks from './googleTasks.js';
+import { STATUS_SECTION, findStatusLine, foldLegacySections, formatStatusSection, withStatusLine } from './status.js';
 
 const { PLANNER_DEBUG, PLANNER_RUN_DATE } = process.env;
 
@@ -35,7 +36,7 @@ const wikiFunction = async (nextDate: Date) => {
         }
 
         const content = await fs.promises.readFile(dayFilePath, 'utf-8');
-        return { sections: parseDayFile(content) };
+        return { sections: foldLegacySections(parseDayFile(content)) };
     });
 
     const { processedSections, actions } = await DBOS.runStep(async () => {
@@ -81,7 +82,7 @@ const wikiFunction = async (nextDate: Date) => {
 
     const { existingNextData } = await DBOS.runStep(async () => {
         const content = await fs.promises.readFile(nextDayFilePath, 'utf-8');
-        return { existingNextData: parseDayFile(content) };
+        return { existingNextData: foldLegacySections(parseDayFile(content)) };
     });
 
     const { mergedNextData } = await DBOS.runStep(async () => {
@@ -115,147 +116,99 @@ const wikiFunction = async (nextDate: Date) => {
         return { mergedNextData: merged };
     });
 
-    const { nextDataWithWeather } = await DBOS.runStep(async () => {
+    const { weatherLine } = await DBOS.runStep(async () => {
         try {
-            const daily = await fetchDailyForecast(formatDateStr(nextDate));
-            return {
-                nextDataWithWeather: upsertSection(
-                    mergedNextData,
-                    formatWeatherSection(daily),
-                    { before: 'Dates' },
-                ),
-            };
+            return { weatherLine: formatWeatherLine(await fetchDailyForecast(formatDateStr(nextDate))) };
         } catch (error) {
             // A missing forecast is not worth failing the day's planning over,
-            // but the day is opened saying so rather than silently short a section
+            // but the day is opened saying so rather than silently short a line
             console.warn('Recording weather as unavailable', error);
-            return {
-                nextDataWithWeather: upsertSection(
-                    mergedNextData,
-                    formatWeatherUnavailable(error),
-                    { before: 'Dates' },
-                ),
-            };
+            return { weatherLine: formatWeatherUnavailable(error) };
         }
     });
 
-    const { nextDataWithJournal } = await DBOS.runStep(async () => {
-        return { nextDataWithJournal: seedJournalSection(nextDataWithWeather) };
-    });
-
-    const { nextDataWithDonetick } = await DBOS.runStep(async () => {
+    const { donetickLine } = await DBOS.runStep(async () => {
         try {
-            const chores = await fetchChores();
-            return {
-                nextDataWithDonetick: upsertSection(
-                    nextDataWithJournal,
-                    formatDonetickSection(countDueOn(chores, nextDate)),
-                    { after: WEATHER_SECTION },
-                ),
-            };
+            const chores = await donetick.fetchChores();
+            return { donetickLine: donetick.formatDonetickLine(donetick.countDueOn(chores, nextDate)) };
         } catch (error) {
             // Counts that cannot be fetched are not worth failing the day over
             console.warn('Recording Donetick due counts as unavailable', error);
-            return {
-                nextDataWithDonetick: upsertSection(
-                    nextDataWithJournal,
-                    formatDonetickUnavailable(error),
-                    { after: WEATHER_SECTION },
-                ),
-            };
+            return { donetickLine: donetick.formatDonetickUnavailable(error) };
         }
     });
 
-    const { nextDataWithGoogleTasks } = await DBOS.runStep(async () => {
+    const { googleTasksLine } = await DBOS.runStep(async () => {
         try {
             const tasks = await googleTasks.fetchOpenTasks();
-            return {
-                nextDataWithGoogleTasks: upsertSection(
-                    nextDataWithDonetick,
-                    googleTasks.formatGoogleTasksSection(googleTasks.countDueOn(tasks, nextDate)),
-                    { after: DONETICK_SECTION },
-                ),
-            };
+            return { googleTasksLine: googleTasks.formatGoogleTasksLine(googleTasks.countDueOn(tasks, nextDate)) };
         } catch (error) {
             console.warn('Recording Google Tasks due counts as unavailable', error);
-            return {
-                nextDataWithGoogleTasks: upsertSection(
-                    nextDataWithDonetick,
-                    googleTasks.formatGoogleTasksUnavailable(error),
-                    { after: DONETICK_SECTION },
-                ),
-            };
+            return { googleTasksLine: googleTasks.formatGoogleTasksUnavailable(error) };
         }
+    });
+
+    const { nextDataWithStatus } = await DBOS.runStep(async () => {
+        const status = formatStatusSection([weatherLine, donetickLine, googleTasksLine]);
+        return {
+            nextDataWithStatus: seedJournalSection(upsertSection(mergedNextData, status, { before: 'Dates' })),
+        };
     });
 
     await DBOS.runStep(async () => {
-        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithGoogleTasks));
+        await writeDayFile(nextDayFilePath, sortSectionItems(nextDataWithStatus));
     });
 
-    const { lastDataWithDonetick } = await DBOS.runStep(async () => {
-        if (!lastData) {
-            return { lastDataWithDonetick: null as Section[] | null };
-        }
+    // Recorded onto the line the day was opened with, so its overdue and due
+    // counts stay alongside what came of them
+    const opened = lastData?.find(section => section.name === STATUS_SECTION);
 
-        // Recorded onto the section the day was opened with, so its overdue and
-        // due counts stay alongside what came of them
-        const opened = lastData.find(section => section.name === DONETICK_SECTION);
+    const { donetickClosed } = await DBOS.runStep(async () => {
+        if (!lastData) return { donetickClosed: null };
+
+        const line = findStatusLine(opened, donetick.DONETICK_LABEL);
 
         try {
-            const history = await fetchChoreHistory();
-
-            return {
-                lastDataWithDonetick: upsertSection(
-                    lastData,
-                    withCompletedCount(opened, countCompletedOn(history, date)),
-                    { after: WEATHER_SECTION },
-                ),
-            };
+            const history = await donetick.fetchChoreHistory();
+            return { donetickClosed: donetick.withCompletedCount(line, donetick.countCompletedOn(history, date)) };
         } catch (error) {
             // A count that cannot be fetched is not worth failing the day over
             console.warn('Recording Donetick completions as unavailable', error);
-            return {
-                lastDataWithDonetick: upsertSection(
-                    lastData,
-                    withCompletedUnavailable(opened, error),
-                    { after: WEATHER_SECTION },
-                ),
-            };
+            return { donetickClosed: donetick.withCompletedUnavailable(line, error) };
         }
     });
 
-    const { lastDataWithGoogleTasks } = await DBOS.runStep(async () => {
-        if (!lastDataWithDonetick) {
-            return { lastDataWithGoogleTasks: null as Section[] | null };
-        }
+    const { googleTasksClosed } = await DBOS.runStep(async () => {
+        if (!lastData) return { googleTasksClosed: null };
 
-        const opened = lastDataWithDonetick.find(section => section.name === googleTasks.GOOGLE_TASKS_SECTION);
+        const line = findStatusLine(opened, googleTasks.GOOGLE_TASKS_LABEL);
 
         try {
             const tasks = await googleTasks.fetchTasksCompletedOn(date);
-
-            return {
-                lastDataWithGoogleTasks: upsertSection(
-                    lastDataWithDonetick,
-                    googleTasks.withCompletedCount(opened, googleTasks.countCompletedOn(tasks, date)),
-                    { after: DONETICK_SECTION },
-                ),
-            };
+            return { googleTasksClosed: googleTasks.withCompletedCount(line, googleTasks.countCompletedOn(tasks, date)) };
         } catch (error) {
             console.warn('Recording Google Tasks completions as unavailable', error);
-            return {
-                lastDataWithGoogleTasks: upsertSection(
-                    lastDataWithDonetick,
-                    googleTasks.withCompletedUnavailable(opened, error),
-                    { after: DONETICK_SECTION },
-                ),
-            };
+            return { googleTasksClosed: googleTasks.withCompletedUnavailable(line, error) };
         }
     });
 
+    const { lastDataWithStatus } = await DBOS.runStep(async () => {
+        if (!lastData || !donetickClosed || !googleTasksClosed) {
+            return { lastDataWithStatus: null as Section[] | null };
+        }
+
+        const status = withStatusLine(
+            withStatusLine(opened, donetick.DONETICK_LABEL, donetickClosed),
+            googleTasks.GOOGLE_TASKS_LABEL,
+            googleTasksClosed,
+        );
+
+        return { lastDataWithStatus: upsertSection(lastData, status, { before: 'Dates' }) };
+    });
+
     await DBOS.runStep(async () => {
-        if (!lastDataWithGoogleTasks || !dayFilePath) return;
-        await writeDayFile(dayFilePath, sortSectionItems(lastDataWithGoogleTasks));
+        if (!lastDataWithStatus || !dayFilePath) return;
+        await writeDayFile(dayFilePath, sortSectionItems(lastDataWithStatus));
     });
 
     await DBOS.runStep(async () => {

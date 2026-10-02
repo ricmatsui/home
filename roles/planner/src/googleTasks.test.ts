@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { countCompletedOn, countDueOn, fetchOpenTasks, fetchTasksCompletedOn, formatGoogleTasksSection, formatGoogleTasksUnavailable, withCompletedCount, withCompletedUnavailable } from './googleTasks.js';
-import { parseDayFile, serializeSections } from './lib.js';
-import { GoogleTask, Section } from './types.js';
+import { countCompletedOn, countDueOn, fetchOpenTasks, fetchTasksCompletedOn, formatGoogleTasksLine, formatGoogleTasksUnavailable, withCompletedCount, withCompletedUnavailable } from './googleTasks.js';
+import { GoogleTask } from './types.js';
 
 function task(overrides: Partial<GoogleTask> = {}): GoogleTask {
     return {
@@ -14,67 +13,39 @@ function task(overrides: Partial<GoogleTask> = {}): GoogleTask {
     };
 }
 
-function note(text: string) {
-    return { status: 'note' as const, text, children: [] };
-}
-
-describe('formatGoogleTasksSection', () => {
-    it('opens the day with the overdue and due counts under its own name', () => {
-        assert.deepEqual(formatGoogleTasksSection({ overdue: 1, dueToday: 3 }), {
-            name: 'Google Tasks',
-            items: [note('1 overdue'), note('3 due today')],
-        });
-    });
-
-    it('survives a round trip through the day file format', () => {
-        const section = formatGoogleTasksSection({ overdue: 1, dueToday: 3 });
-
-        assert.deepEqual(parseDayFile(serializeSections([section])), [section]);
+describe('formatGoogleTasksLine', () => {
+    it('opens the day with the overdue and due counts under its own label', () => {
+        assert.equal(formatGoogleTasksLine({ overdue: 1, dueToday: 3 }), 'Google Tasks: 1 overdue, 3 due');
     });
 });
 
 describe('formatGoogleTasksUnavailable', () => {
     it('records the failure where the day\'s counts would have gone', () => {
-        assert.deepEqual(formatGoogleTasksUnavailable(new Error('Token request failed (400 invalid_grant)')), {
-            name: 'Google Tasks',
-            items: [note('Due counts unavailable: Token request failed (400 invalid_grant)')],
-        });
+        assert.equal(
+            formatGoogleTasksUnavailable(new Error('Token request failed (400 invalid_grant)')),
+            'Google Tasks: due counts unavailable: Token request failed (400 invalid_grant)',
+        );
     });
 });
 
 describe('withCompletedCount', () => {
-    const opened: Section = {
-        name: 'Google Tasks',
-        items: [note('1 overdue'), note('3 due today')],
-    };
+    const opened = 'Google Tasks: 1 overdue, 3 due';
 
-    it('records the completed count below the counts the day opened with', () => {
-        assert.deepEqual(withCompletedCount(opened, 2), {
-            name: 'Google Tasks',
-            items: [note('1 overdue'), note('3 due today'), note('2 completed')],
-        });
+    it('appends the completed count to the counts the day opened with', () => {
+        assert.equal(withCompletedCount(opened, 2), 'Google Tasks: 1 overdue, 3 due, 2 completed');
     });
 
     it('replaces a completed count already recorded on the day', () => {
-        assert.deepEqual(withCompletedCount(withCompletedCount(opened, 2), 4).items, [
-            note('1 overdue'),
-            note('3 due today'),
-            note('4 completed'),
-        ]);
+        assert.equal(withCompletedCount(withCompletedCount(opened, 2), 4), 'Google Tasks: 1 overdue, 3 due, 4 completed');
     });
 });
 
 describe('withCompletedUnavailable', () => {
-    it('records the failure below the counts the day opened with', () => {
-        const opened: Section = {
-            name: 'Google Tasks',
-            items: [note('1 overdue'), note('3 due today')],
-        };
-
-        assert.deepEqual(withCompletedUnavailable(opened, new Error('fetch failed')), {
-            name: 'Google Tasks',
-            items: [note('1 overdue'), note('3 due today'), note('Completed count unavailable: fetch failed')],
-        });
+    it('appends the failure to the counts the day opened with', () => {
+        assert.equal(
+            withCompletedUnavailable('Google Tasks: 1 overdue, 3 due', new Error('fetch failed')),
+            'Google Tasks: 1 overdue, 3 due, completed count unavailable: fetch failed',
+        );
     });
 });
 

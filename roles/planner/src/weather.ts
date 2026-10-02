@@ -1,8 +1,6 @@
-import { Section, DailyForecast } from './types.js';
+import { DailyForecast } from './types.js';
 import { requireEnv } from './env.js';
 import { describeError } from './errors.js';
-
-export const WEATHER_SECTION = 'Weather';
 
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -78,7 +76,7 @@ function compassPoint(degrees: number): string {
     return COMPASS[Math.round(degrees / 22.5) % 16];
 }
 
-export function formatWeatherSection(daily: DailyForecast): Section {
+export function formatWeatherLine(daily: DailyForecast): string {
     const parts = [
         `${describeCode(daily.weather_code[0])} ${Math.round(daily.temperature_2m_max[0])}°/${Math.round(daily.temperature_2m_min[0])}°F`,
         `${compassPoint(daily.wind_direction_10m_dominant[0])} ${Math.round(daily.wind_speed_10m_max[0])}/${Math.round(daily.wind_gusts_10m_max[0])} mph`,
@@ -90,22 +88,14 @@ export function formatWeatherSection(daily: DailyForecast): Section {
         parts.push(`rain ${daily.precipitation_probability_max[0]}% ${daily.precipitation_sum[0].toFixed(2)} in`);
     }
 
-    const text = parts.join(', ');
-
-    return {
-        name: WEATHER_SECTION,
-        items: [{ status: 'note', text, children: [] }],
-    };
+    return parts.join(', ');
 }
 
 // Written in the forecast's place rather than left out, so a day with no
 // weather line says why, instead of reading as a day the forecast was never
 // asked for
-export function formatWeatherUnavailable(error: unknown): Section {
-    return {
-        name: WEATHER_SECTION,
-        items: [{ status: 'note', text: `Unavailable: ${describeError(error)}`, children: [] }],
-    };
+export function formatWeatherUnavailable(error: unknown): string {
+    return `Weather unavailable: ${describeError(error)}`;
 }
 
 export async function fetchDailyForecast(dateStr: string): Promise<DailyForecast> {

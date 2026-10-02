@@ -1,14 +1,14 @@
-import { Section, GoogleTask, DueCounts } from './types.js';
+import { GoogleTask, DueCounts } from './types.js';
 import { requireEnv } from './env.js';
 import {
     isSameLocalDay,
-    formatDueCountsSection,
+    formatDueCountsLine,
     formatDueCountsUnavailable,
-    withSectionCompletedCount,
-    withSectionCompletedUnavailable,
+    withCompletedCount as withLineCompletedCount,
+    withCompletedUnavailable as withLineCompletedUnavailable,
 } from './dueCounts.js';
 
-export const GOOGLE_TASKS_SECTION = 'Google Tasks';
+export const GOOGLE_TASKS_LABEL = 'Google Tasks';
 
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const API_URL = 'https://tasks.googleapis.com/tasks/v1';
@@ -72,20 +72,20 @@ export function countCompletedOn(tasks: GoogleTask[], day: Date): number {
     }).length;
 }
 
-export function formatGoogleTasksSection(counts: DueCounts): Section {
-    return formatDueCountsSection(GOOGLE_TASKS_SECTION, counts);
+export function formatGoogleTasksLine(counts: DueCounts): string {
+    return formatDueCountsLine(GOOGLE_TASKS_LABEL, counts);
 }
 
-export function formatGoogleTasksUnavailable(error: unknown): Section {
-    return formatDueCountsUnavailable(GOOGLE_TASKS_SECTION, error);
+export function formatGoogleTasksUnavailable(error: unknown): string {
+    return formatDueCountsUnavailable(GOOGLE_TASKS_LABEL, error);
 }
 
-export function withCompletedCount(section: Section | undefined, count: number): Section {
-    return withSectionCompletedCount(GOOGLE_TASKS_SECTION, section, count);
+export function withCompletedCount(line: string | undefined, count: number): string {
+    return withLineCompletedCount(GOOGLE_TASKS_LABEL, line, count);
 }
 
-export function withCompletedUnavailable(section: Section | undefined, error: unknown): Section {
-    return withSectionCompletedUnavailable(GOOGLE_TASKS_SECTION, section, error);
+export function withCompletedUnavailable(line: string | undefined, error: unknown): string {
+    return withLineCompletedUnavailable(GOOGLE_TASKS_LABEL, line, error);
 }
 
 /*

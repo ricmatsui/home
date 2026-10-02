@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatWeatherSection, formatWeatherUnavailable, fetchDailyForecast } from './weather.js';
+import { formatWeatherLine, formatWeatherUnavailable, fetchDailyForecast } from './weather.js';
 import { DailyForecast } from './types.js';
 
 const daily: DailyForecast = {
@@ -18,57 +18,46 @@ const daily: DailyForecast = {
     sunset: ['2026-09-04T19:38'],
 };
 
-describe('formatWeatherSection', () => {
-    it('renders a forecast as a single note item', () => {
-        assert.deepEqual(formatWeatherSection(daily), {
-            name: 'Weather',
-            items: [{
-                status: 'note',
-                text: 'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm UV 7, rain 16% 0.00 in',
-                children: [],
-            }],
-        });
+describe('formatWeatherLine', () => {
+    it('renders a forecast as a single line', () => {
+        assert.equal(
+            formatWeatherLine(daily),
+            'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm UV 7, rain 16% 0.00 in',
+        );
     });
 
     it('drops the rain segment when none is expected', () => {
         const dry = { ...daily, precipitation_probability_max: [0], precipitation_sum: [0] };
 
-        assert.equal(
-            formatWeatherSection(dry).items[0].text,
-            'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm UV 7',
-        );
+        assert.equal(formatWeatherLine(dry), 'Overcast 74°/58°F, N 14/21 mph, 6:46am - 7:38pm UV 7');
     });
 
     it('keeps the rain segment when only the amount is zero', () => {
         const chance = { ...daily, precipitation_probability_max: [20], precipitation_sum: [0] };
 
-        assert.match(formatWeatherSection(chance).items[0].text, /, rain 20% 0\.00 in$/);
+        assert.match(formatWeatherLine(chance), /, rain 20% 0\.00 in$/);
     });
 });
 
 describe('formatWeatherUnavailable', () => {
     it('records the failure where the forecast would have gone', () => {
-        assert.deepEqual(formatWeatherUnavailable(new Error('Forecast request failed (503)')), {
-            name: 'Weather',
-            items: [{
-                status: 'note',
-                text: 'Unavailable: Forecast request failed (503)',
-                children: [],
-            }],
-        });
+        assert.equal(
+            formatWeatherUnavailable(new Error('Forecast request failed (503)')),
+            'Weather unavailable: Forecast request failed (503)',
+        );
     });
 
     it('keeps a failure that spans lines on one line', () => {
         assert.equal(
-            formatWeatherUnavailable(new Error('fetch failed\n  cause: ECONNREFUSED')).items[0].text,
-            'Unavailable: fetch failed cause: ECONNREFUSED',
+            formatWeatherUnavailable(new Error('fetch failed\n  cause: ECONNREFUSED')),
+            'Weather unavailable: fetch failed cause: ECONNREFUSED',
         );
     });
 });
 
-describe('formatWeatherSection conditions', () => {
+describe('formatWeatherLine conditions', () => {
     function conditionFor(code: number): string {
-        return formatWeatherSection({ ...daily, weather_code: [code] }).items[0].text.split(', ')[0];
+        return formatWeatherLine({ ...daily, weather_code: [code] }).split(', ')[0];
     }
 
     it('names every WMO code Open-Meteo reports', () => {
@@ -95,9 +84,9 @@ describe('formatWeatherSection conditions', () => {
     });
 });
 
-describe('formatWeatherSection sun times', () => {
+describe('formatWeatherLine sun times', () => {
     function sunFor(sunrise: string, sunset: string): string {
-        return formatWeatherSection({ ...daily, sunrise: [sunrise], sunset: [sunset] }).items[0].text.split(', ')[2];
+        return formatWeatherLine({ ...daily, sunrise: [sunrise], sunset: [sunset] }).split(', ')[2];
     }
 
     it('reads the times as the location reports them, without a timezone round-trip', () => {
@@ -109,9 +98,9 @@ describe('formatWeatherSection sun times', () => {
     });
 });
 
-describe('formatWeatherSection wind', () => {
+describe('formatWeatherLine wind', () => {
     function windFor(degrees: number): string {
-        return formatWeatherSection({ ...daily, wind_direction_10m_dominant: [degrees] }).items[0].text.split(', ')[1];
+        return formatWeatherLine({ ...daily, wind_direction_10m_dominant: [degrees] }).split(', ')[1];
     }
 
     it('maps dominant direction to a 16-point compass', () => {

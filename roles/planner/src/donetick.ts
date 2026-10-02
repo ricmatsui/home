@@ -1,14 +1,14 @@
-import { Section, Chore, ChoreHistory, DueCounts } from './types.js';
+import { Chore, ChoreHistory, DueCounts } from './types.js';
 import { requireEnv } from './env.js';
 import {
     isSameLocalDay,
-    formatDueCountsSection,
+    formatDueCountsLine,
     formatDueCountsUnavailable,
-    withSectionCompletedCount,
-    withSectionCompletedUnavailable,
+    withCompletedCount as withLineCompletedCount,
+    withCompletedUnavailable as withLineCompletedUnavailable,
 } from './dueCounts.js';
 
-export const DONETICK_SECTION = 'Donetick';
+export const DONETICK_LABEL = 'Donetick';
 
 const BASE_PATH = '/api/v1';
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -95,20 +95,20 @@ export function countDueOn(chores: Chore[], day: Date): DueCounts {
     return counts;
 }
 
-export function formatDonetickSection(counts: DueCounts): Section {
-    return formatDueCountsSection(DONETICK_SECTION, counts);
+export function formatDonetickLine(counts: DueCounts): string {
+    return formatDueCountsLine(DONETICK_LABEL, counts);
 }
 
-export function formatDonetickUnavailable(error: unknown): Section {
-    return formatDueCountsUnavailable(DONETICK_SECTION, error);
+export function formatDonetickUnavailable(error: unknown): string {
+    return formatDueCountsUnavailable(DONETICK_LABEL, error);
 }
 
-export function withCompletedCount(section: Section | undefined, count: number): Section {
-    return withSectionCompletedCount(DONETICK_SECTION, section, count);
+export function withCompletedCount(line: string | undefined, count: number): string {
+    return withLineCompletedCount(DONETICK_LABEL, line, count);
 }
 
-export function withCompletedUnavailable(section: Section | undefined, error: unknown): Section {
-    return withSectionCompletedUnavailable(DONETICK_SECTION, section, error);
+export function withCompletedUnavailable(line: string | undefined, error: unknown): string {
+    return withLineCompletedUnavailable(DONETICK_LABEL, line, error);
 }
 
 /*
