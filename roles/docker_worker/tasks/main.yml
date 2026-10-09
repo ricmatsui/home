@@ -25,3 +25,4 @@
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
   delegate_to: "{{ groups['docker_managers']|first }}"
+  tags: docker_labels

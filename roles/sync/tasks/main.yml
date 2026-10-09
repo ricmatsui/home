@@ -97,3 +97,4 @@
     dest: /mnt/gluster/rclone/scripts/sync.sh
     mode: u=rwx,g=rx,o=rx
     content: "{{ config.sync.backup_script }}"
+  tags: sync_backup

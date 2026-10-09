@@ -11,6 +11,7 @@ import {
     loadLabels,
     mergeLabels,
     pendingLabels,
+    selectKeys,
     walkImages,
     writeLabels,
 } from './corpus.js';
@@ -157,4 +158,23 @@ test('the labels sha ignores notes', () => {
 test('image and labels paths sit under the corpus directory', () => {
     assert.equal(imagesDir('/c'), path.join('/c', 'images'));
     assert.equal(labelsPath('/c'), path.join('/c', 'labels.json'));
+});
+
+test('no patterns selects every key', () => {
+    assert.deepEqual(selectKeys(['a.jpg', 'b/c.jpg'], []), { selected: ['a.jpg', 'b/c.jpg'], unmatched: [] });
+});
+
+test('selects by exact path or glob, keeping corpus order', () => {
+    const keys = ['2026-09-11/a.raw.jpg', '2026-09-25/b.raw.jpg', '2026-09-25/c.raw.jpg', 'night/d.jpg'];
+
+    assert.deepEqual(selectKeys(keys, ['night/d.jpg', '2026-09-25/*']).selected,
+        ['2026-09-25/b.raw.jpg', '2026-09-25/c.raw.jpg', 'night/d.jpg']);
+});
+
+test('a key matched by two patterns is selected once', () => {
+    assert.deepEqual(selectKeys(['x/a.jpg'], ['x/*', 'x/a.jpg']).selected, ['x/a.jpg']);
+});
+
+test('reports patterns that match nothing', () => {
+    assert.deepEqual(selectKeys(['x/a.jpg'], ['x/*', 'y/*']).unmatched, ['y/*']);
 });

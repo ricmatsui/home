@@ -117,6 +117,21 @@ export function pendingLabels(labels: Labels): string[] {
 }
 
 /**
+ * Narrows the corpus to the keys matching any of the patterns — globs or exact
+ * paths, relative to images/. No patterns keeps everything. A pattern that
+ * matches nothing is reported rather than ignored: it is almost always a typo.
+ */
+export function selectKeys(keys: string[], patterns: string[]): { selected: string[]; unmatched: string[] } {
+    if (patterns.length === 0) return { selected: keys, unmatched: [] };
+
+    const matches = (key: string, pattern: string) => key === pattern || path.posix.matchesGlob(key, pattern);
+    return {
+        selected: keys.filter((key) => patterns.some((pattern) => matches(key, pattern))),
+        unmatched: patterns.filter((pattern) => !keys.some((key) => matches(key, pattern))),
+    };
+}
+
+/**
  * Fingerprints the ground truth so a comparison across re-labelled corpora can be
  * caught. Notes are excluded: re-wording one must not invalidate an old run.
  */

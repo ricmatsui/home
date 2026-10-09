@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { annotate } from '../annotate.js';
 import { createVisionClient, promptFor } from '../vision.js';
-import { imagesDir, labelsSha, loadLabels, mergeLabels, pendingLabels, walkImages, writeLabels } from './corpus.js';
+import { imagesDir, labelsSha, loadLabels, mergeLabels, pendingLabels, selectKeys, walkImages, writeLabels } from './corpus.js';
 import { loadDotEnv } from './env.js';
 import { ImageResult, RunFile, byDirectory, diffRuns, mcnemarExact, outcomeFor, score, sha } from './metrics.js';
 import { mapWithConcurrency } from './pool.js';
@@ -61,11 +61,14 @@ const DEFAULT_CONCURRENCY = 2;
 const USAGE = `usage:
   yarn eval bootstrap [--dir <corpus>]
   yarn eval run       [--dir <corpus>] [--model <name>] [--url <ws://…>] [--prompt-file <f>]
-                      [--limit <n>] [--concurrency <n>]
+                      [--only <path|glob>]... [--limit <n>] [--concurrency <n>]
   yarn eval compare   <runA.json> <runB.json> [--beta <n>]
 
 --url defaults to LM_STUDIO_URL, which may be set in the environment or in a .env
 file next to package.json, and falls back to ws://localhost:1234.
+
+--only narrows a run to the images matching a path or glob relative to images/,
+e.g. --only '2026-09-25/*' --only night/porch-ir-03.jpg. Repeatable.
 
 --model defaults the same way from LM_STUDIO_MODEL, falling back to the model the
 service is deployed with (${DEFAULT_MODEL}).
@@ -111,13 +114,20 @@ async function run(options: {
     baseUrl: string;
     concurrency: number;
     promptFile?: string;
+    only: string[];
     limit?: number;
 }): Promise<void> {
     const labels = await loadLabels(options.corpusDir);
-    const keys = Object.keys(labels).sort();
-    if (keys.length === 0) fail(`no labels in ${options.corpusDir}; run "yarn eval bootstrap" first`);
+    if (Object.keys(labels).length === 0) fail(`no labels in ${options.corpusDir}; run "yarn eval bootstrap" first`);
 
-    const pending = pendingLabels(labels);
+    const { selected: keys, unmatched } = selectKeys(Object.keys(labels).sort(), options.only);
+    if (unmatched.length > 0) {
+        fail(`--only matched no labelled images:\n` + unmatched.map((pattern) => `  ${pattern}`).join('\n'));
+    }
+
+    // Only the frames about to run need a verdict: an unlabelled one elsewhere in
+    // the corpus says nothing about this run.
+    const pending = pendingLabels(labels).filter((key) => keys.includes(key));
     if (pending.length > 0) {
         fail(`${pending.length} images have no cat label; set "cat" to true or false in labels.json:\n` +
             pending.map((key) => `  ${key}`).join('\n'));
@@ -208,6 +218,7 @@ async function run(options: {
         model: options.model,
         baseUrl: options.baseUrl,
         concurrency: options.concurrency,
+        ...(options.only.length > 0 && { only: options.only }),
         prompt,
         promptSha: sha(prompt),
         labelsSha: labelsSha(labels),
@@ -226,14 +237,15 @@ async function run(options: {
 
     const artifactPath = path.join(options.corpusDir, 'runs', `${name}.json`);
     await fs.promises.writeFile(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
-    await fs.promises.writeFile(path.join(runDir, 'index.html'), renderReport(artifact));
+    const reportPath = path.join(options.corpusDir, 'runs', `${name}.html`);
+    await fs.promises.writeFile(reportPath, renderReport(artifact, name));
 
     console.log('');
     console.log(`tp=${scores.tp} fp=${scores.fp} fn=${scores.fn} tn=${scores.tn} err=${scores.errors}`);
     console.log(`P=${scores.precision.toFixed(3)} R=${scores.recall.toFixed(3)} ` +
         `F1=${scores.f1.toFixed(3)} F${DEFAULT_BETA}=${scores.fbeta.toFixed(3)}`);
     console.log(artifactPath);
-    console.log(path.join(runDir, 'index.html'));
+    console.log(reportPath);
 }
 
 async function readRun(file: string): Promise<RunFile> {
@@ -282,6 +294,7 @@ const { values, positionals } = parseArgs({
         model: { type: 'string' },
         url: { type: 'string' },
         'prompt-file': { type: 'string' },
+        only: { type: 'string', multiple: true },
         limit: { type: 'string' },
         concurrency: { type: 'string' },
         beta: { type: 'string' },
@@ -299,6 +312,7 @@ if (command === 'bootstrap') {
         model: values.model ?? DEFAULT_MODEL,
         baseUrl: values.url ?? DEFAULT_URL,
         promptFile: values['prompt-file'],
+        only: values.only ?? [],
         limit: values.limit ? Number(values.limit) : undefined,
         concurrency: values.concurrency ? Number(values.concurrency) : DEFAULT_CONCURRENCY,
     });

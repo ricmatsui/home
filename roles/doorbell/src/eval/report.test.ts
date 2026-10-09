@@ -65,7 +65,7 @@ test('the report leads with false positives and false negatives', () => {
         result('fp.jpg', false, true),
         result('fn.jpg', true, false),
         result('tn.jpg', false, false),
-    ]));
+    ]), 'r');
 
     const order = ['False positives', 'False negatives', 'True positives', 'True negatives']
         .map((heading) => html.indexOf(heading));
@@ -74,22 +74,34 @@ test('the report leads with false positives and false negatives', () => {
     assert.deepEqual(order, [...order].sort((x, y) => x - y), 'sections should be in review order');
 });
 
-test('the report points at the annotated copy when there is one and the source otherwise', () => {
-    const html = renderReport(run([result('night/fp.jpg', false, true), result('tn.jpg', false, false)]));
+test('the report shows the full prompt, escaped', () => {
+    const html = renderReport({ ...run([result('tn.jpg', false, false)]), prompt: 'Find <cats>\nOutput JSON' }, 'r');
 
-    assert.match(html, /night__fp\.jpg/);
-    assert.match(html, /\.\.\/\.\.\/images\/tn\.jpg/);
+    assert.match(html, /<pre>Find &lt;cats&gt;\nOutput JSON<\/pre>/);
+});
+
+test('the report names the patterns a subset run was narrowed by', () => {
+    const html = renderReport({ ...run([result('tn.jpg', false, false)]), only: ['2026-09-25/*'] }, 'r');
+
+    assert.match(html, /only <code>2026-09-25\/\*<\/code>/);
+});
+
+test('the report points at the annotated copy when there is one and the source otherwise', () => {
+    const html = renderReport(run([result('night/fp.jpg', false, true), result('tn.jpg', false, false)]), 'r');
+
+    assert.match(html, /src="r\/night__fp\.jpg"/);
+    assert.match(html, /src="\.\.\/images\/tn\.jpg"/);
 });
 
 test('the report renders a run with no failures at all', () => {
-    const html = renderReport(run([result('a.jpg', false, false)]));
+    const html = renderReport(run([result('a.jpg', false, false)]), 'r');
 
     assert.match(html, /True negatives/);
     assert.match(html, /<!doctype html>/i);
 });
 
 test('the report carries the per-directory table and the shas', () => {
-    const html = renderReport(run([result('night/a.jpg', true, false), result('day/b.jpg', true, true)]));
+    const html = renderReport(run([result('night/a.jpg', true, false), result('day/b.jpg', true, true)]), 'r');
 
     assert.match(html, /night/);
     assert.match(html, /day/);
@@ -176,13 +188,13 @@ test('the winner comes from the flips when the f-beta delta is degenerate', () =
 });
 
 test('the report says how many frames were in flight, so timings can be read', () => {
-    const html = renderReport({ ...run([result('a.jpg', false, false)]), concurrency: 4 });
+    const html = renderReport({ ...run([result('a.jpg', false, false)]), concurrency: 4 }, 'r');
 
     assert.match(html, /4 at a time/);
 });
 
 test('a run from before concurrency was settable says nothing about it', () => {
-    const html = renderReport(run([result('a.jpg', false, false)]));
+    const html = renderReport(run([result('a.jpg', false, false)]), 'r');
 
     assert.doesNotMatch(html, /at a time/);
 });

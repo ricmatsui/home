@@ -25,6 +25,7 @@
         push: true
   delegate_to: localhost
   register: build_result
+  tags: doorbell_stack
 
 - name: deploy stack
   community.general.docker_stack:
@@ -41,6 +42,7 @@
               - mosquitto_mosquitto
             volumes:
               - /mnt/gluster/doorbell/frames:/frames
+              - /opt/datadog-agent/run:/opt/datadog-agent/run
             environment:
               TZ: America/Los_Angeles
               GOOGLE_CREDENTIALS_BASE64: "{{ config.doorbell.google_credentials | b64encode }}"
@@ -85,6 +87,7 @@
             external: true
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: doorbell_stack
 
 - name: configure backup
   ansible.builtin.copy:

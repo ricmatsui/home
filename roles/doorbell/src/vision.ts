@@ -17,9 +17,11 @@ names the animal. The species does not matter and does not need to be
 right: anything animal-shaped and black counts, so report it rather than
 leaving it out because you are unsure what it is. People are not animals
 here: ignore humans completely, including anyone dressed in black, and
-never report a person as an animal. Include one entry per distinct animal,
-including partially visible or occluded ones. If the image contains only
-people, or no black animals at all, output [].`;
+never report a person as an animal. Also ignore any animal being walked
+by a person — on a leash, held, or walking alongside someone — and leave
+it out entirely. Include one entry per distinct animal, including partially
+visible or occluded ones. If the image contains only people, only animals
+with people, or no black animals at all, output [].`;
 
 /** An empty string is a mistake, not an instruction, so it falls back. */
 export function promptFor(prompt: string | undefined): string {

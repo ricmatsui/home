@@ -116,13 +116,15 @@
               labels:
                 - "home.scheduler.replicas=1"
                 - "home.scheduler.priority=30"
-                - "home.scheduler.restart=true"
                 - "traefik.enable=true"
                 - "traefik.http.routers.remote.rule=Host(`remote.{{ config.domain }}`)"
                 - "traefik.http.routers.remote.middlewares=traefik-internal"
                 - "traefik.http.routers.remote.entrypoints=websecure"
                 - "traefik.http.routers.remote.tls.certresolver=letsencrypt"
                 - "traefik.http.services.remote.loadbalancer.server.port=5002"
+              placement:
+                constraints:
+                  - 'node.labels.home.remote == enabled'
               resources:
                 limits:
                   cpus: '0.25'

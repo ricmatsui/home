@@ -35,6 +35,8 @@ export interface RunFile {
     baseUrl: string;
     /** Frames in flight at once. Absent on runs written before it was settable. */
     concurrency?: number;
+    /** The --only patterns a subset run was narrowed by. Absent on full-corpus runs. */
+    only?: string[];
     prompt: string;
     promptSha: string;
     labelsSha: string;

@@ -9,6 +9,7 @@ import { annotate, writeResult } from './annotate.js';
 import { connectMqtt } from './mqtt.js';
 import { createFrigateEvents } from './frigate.js';
 import { createLogger, elapsedMs } from './log.js';
+import { metrics } from './metrics.js';
 
 const log = createLogger('doorbell');
 
@@ -60,6 +61,7 @@ const presence = new CatPresence({
     onChange: (present) => {
         log.info(`cat ${present ? 'present' : 'absent'}`);
         broker.setCatPresent(present);
+        metrics.gauge('cat.present', present ? 1 : 0);
         if (present) frigateEvents.recordCat();
     },
 });
@@ -67,11 +69,14 @@ const presence = new CatPresence({
 const queue = new SerialQueue<Frame>({
     warnDepth: config.queueWarnDepth,
     onBacklog: (depth) => log.warn('queue is backed up', { depth, warn_depth: config.queueWarnDepth }),
-    onError: (error, frame) => log.error('failed to process frame', {
-        path: frame.rawPath,
-        code: errorCode(error),
-        error,
-    }),
+    onError: (error, frame) => {
+        log.error('failed to process frame', {
+            path: frame.rawPath,
+            code: errorCode(error),
+            error,
+        });
+        metrics.increment('frame.error', { code: errorCode(error) ?? 'unknown' });
+    },
     worker: async (frame) => {
         const started = performance.now();
         log.debug('processing frame', { path: frame.rawPath, age_ms: Date.now() - frame.at.getTime() });
@@ -105,6 +110,7 @@ const queue = new SerialQueue<Frame>({
 
         broker.publishDetection(buffer, frame.at);
         presence.recordDetection(cat);
+        metrics.increment('frame.processed', { verdict: cat ? 'cat' : 'nocat' });
 
         log.info('frame processed', {
             path: frame.rawPath,
@@ -123,12 +129,16 @@ async function tick(signal: AbortSignal): Promise<void> {
             framesPath: config.framesPath,
             signal,
         }));
+        metrics.increment('frame.grab', { result: 'ok' });
     } catch (error) {
         // A grab cut short by the window expiring is how a quiet window ends, not
         // something to page about. Anything else: same reasoning as an inference
         // failure, no frame means no evidence.
         if (signal.aborted) log.debug('frame grab abandoned, window closed');
-        else log.error('frame grab failed', { error });
+        else {
+            log.error('frame grab failed', { error });
+            metrics.increment('frame.grab', { result: 'error' });
+        }
     }
 }
 
@@ -154,7 +164,10 @@ const subscription = subscribeToDoorbellEvents({
     subscription: config.pubsubSubscription,
     credentials: config.googleCredentials,
     deviceId: config.nestDeviceId,
-    onEvent: () => activityWindow.onEvent(),
+    onEvent: () => {
+        metrics.increment('event');
+        activityWindow.onEvent();
+    },
     onFatal: (error) => {
         log.error('pubsub subscription failed', { error });
         void shutdown(1);
@@ -182,6 +195,7 @@ async function shutdown(code: number): Promise<void> {
         await queue.drain();
         await frigateEvents.drain();
         await broker.end();
+        await new Promise<void>((resolve) => metrics.close(() => resolve()));
     } catch (error) {
         log.error('shutdown failed', { error });
     }

@@ -24,6 +24,7 @@ figcaption { font-size: 0.75rem; color: #aaa; word-break: break-all; margin-top:
 table { border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
 th, td { border: 1px solid #444; padding: 0.25rem 0.6rem; text-align: right; }
 th:first-child, td:first-child { text-align: left; }
+pre { white-space: pre-wrap; background: #1a1a1a; border: 1px solid #333; border-radius: 4px; padding: 0.75rem; font-size: 0.8rem; max-width: 60rem; }
 `;
 
 function page(title: string, body: string): string {
@@ -72,13 +73,13 @@ function scoreRow(name: string, scores: Scores): string {
         `<td>${scores.recall.toFixed(3)}</td><td>${scores.f1.toFixed(3)}</td><td>${scores.fbeta.toFixed(3)}</td></tr>`;
 }
 
-function section(title: string, results: ImageResult[]): string {
+function section(title: string, results: ImageResult[], runDir: string): string {
     if (results.length === 0) return `<h2>${escapeHtml(title)} (0)</h2>`;
 
     const figures = results.map((item) => {
         // Annotated copies exist only where there were boxes to draw; everything else
         // points back at the untouched source image.
-        const src = item.annotated ?? `../../images/${item.image}`;
+        const src = item.annotated ? `${runDir}/${item.annotated}` : `../images/${item.image}`;
         const labels = item.detections.map((detection) => detection.label).join(', ') || '—';
         const error = item.error ? `<br>${escapeHtml(item.error)}` : '';
         return `<figure>
@@ -93,7 +94,11 @@ ${figures.join('\n')}
 </div>`;
 }
 
-export function renderReport(run: RunFile): string {
+/**
+ * Written beside the run's JSON in runs/, so `runDir` — the run's own folder of
+ * annotated copies — is the sibling directory images are linked through.
+ */
+export function renderReport(run: RunFile, runDir: string): string {
     const of = (outcome: ImageResult['outcome']) => run.results.filter((item) => item.outcome === outcome);
 
     const directories = Object.entries(run.summary.byDirectory)
@@ -104,23 +109,25 @@ export function renderReport(run: RunFile): string {
     // Without it, a per-image ms is unreadable: frames in flight together each take
     // longer in wall clock than they would alone.
     const inFlight = run.concurrency ? ` (${run.concurrency} at a time)` : '';
+    const subset = run.only ? ` · only ${run.only.map((pattern) => `<code>${escapeHtml(pattern)}</code>`).join(', ')}` : '';
 
     const body = `<h1>${escapeHtml(run.model)}</h1>
-<p>${escapeHtml(run.startedAt)} · ${run.corpus.images} images, ${run.corpus.positives} cat ·
+<p>${escapeHtml(run.startedAt)} · ${run.corpus.images} images, ${run.corpus.positives} cat${subset} ·
 ${(run.summary.totalMs / 1000).toFixed(1)}s${inFlight}<br>
 prompt <code>${escapeHtml(run.promptSha.slice(0, 12))}</code> ·
 labels <code>${escapeHtml(run.labelsSha.slice(0, 12))}</code></p>
+<pre>${escapeHtml(run.prompt)}</pre>
 <table>
 <tr><th>scope</th><th>tp</th><th>fp</th><th>fn</th><th>tn</th><th>err</th>
 <th>precision</th><th>recall</th><th>f1</th><th>f${run.summary.beta}</th></tr>
 ${scoreRow('all', run.summary)}
 ${directories}
 </table>
-${section('False positives', of('fp'))}
-${section('False negatives', of('fn'))}
-${section('True positives', of('tp'))}
-${section('True negatives', of('tn'))}
-${section('Errors', of('error'))}`;
+${section('False positives', of('fp'), runDir)}
+${section('False negatives', of('fn'), runDir)}
+${section('True positives', of('tp'), runDir)}
+${section('True negatives', of('tn'), runDir)}
+${section('Errors', of('error'), runDir)}`;
 
     return page(`${run.model} — doorbell eval`, body);
 }
