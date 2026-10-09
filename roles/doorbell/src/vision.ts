@@ -279,15 +279,20 @@ export function scaleBox(box: [number, number, number, number], width: number, h
 /**
  * Gemma spends soft tokens in proportion to the image's pixels, and a 512x384 frame
  * earns only ~90 of them — about 47 source pixels per token, too coarse for a cat at
- * the far end of the porch. Sending it at twice the size earns ~338 instead.
+ * the far end of the porch. Sending it at 912x684 earns ~266 instead.
+ *
+ * Where the boxes land is not size-independent, though: on the same frame Gemma 4
+ * 12B puts the cat ~40px high at 1024x768 (~336 tokens) and on it at 912x684,
+ * deterministically, so the factor is a setting the eval can vary rather than a
+ * constant. 912x684 also stays under the 280-token default Hugging Face ships.
  */
-const UPSCALE = 2;
+export const DEFAULT_UPSCALE = 1.78125;
 
-/** Resample by `factor`. Boxes are unaffected: they come back on a 0-1000 scale. */
+/** Resample by `factor`, rounding to whole pixels so a fractional factor still resizes. */
 export async function upscale(raw: Buffer, factor: number): Promise<Buffer> {
     const image = await Jimp.fromBuffer(raw);
 
-    image.resize({ w: image.width * factor, h: image.height * factor });
+    image.resize({ w: Math.round(image.width * factor), h: Math.round(image.height * factor) });
 
     return image.getBuffer('image/jpeg', { quality: 90 });
 }
@@ -381,12 +386,14 @@ export function createVisionClient(options: {
     baseUrl: string;
     model: string;
     prompt?: string;
+    upscale?: number;
     attempts?: number;
     deadlineMs?: number;
     loadDeadlineMs?: number;
 }): VisionClient {
     const client = new LMStudioClient({ baseUrl: options.baseUrl });
     const prompt = promptFor(options.prompt);
+    const factor = options.upscale ?? DEFAULT_UPSCALE;
     const attempts = options.attempts ?? ATTEMPTS;
     const deadlineMs = options.deadlineMs ?? DEADLINE_MS;
     const loadDeadlineMs = options.loadDeadlineMs ?? LOAD_DEADLINE_MS;
@@ -416,7 +423,7 @@ export function createVisionClient(options: {
             // Resampling is pure CPU and identical every time, so it happens once
             // rather than per attempt. Everything the server holds is redone inside
             // one: a reload invalidates the handle *and* the uploaded file.
-            const enlarged = await upscale(await fs.promises.readFile(imagePath), UPSCALE);
+            const enlarged = await upscale(await fs.promises.readFile(imagePath), factor);
 
             const attemptOnce = async (attempt: number): Promise<Detection[]> => {
                 // Bounded on its own clock: see LOAD_DEADLINE_MS. Once the model is up
@@ -432,7 +439,7 @@ export function createVisionClient(options: {
                         enlarged.toString('base64'),
                     );
                     const prepared = performance.now();
-                    log.debug('image prepared', { path: imagePath, upscale: UPSCALE, attempt });
+                    log.debug('image prepared', { path: imagePath, upscale: factor, attempt });
 
                     // Unconstrained on purpose: a grammar would forbid the model from
                     // thinking before it answers, so the JSON is parsed out of the text

@@ -7,6 +7,7 @@ import { createLogger, elapsedMs } from './log.js';
 const log = createLogger('annotate');
 
 const BOX_COLOR = 0xff0000ff; // opaque red, RGBA
+const TRUTH_COLOR = 0x00ff00ff; // opaque green: the labelled box, drawn only by the eval
 const BOX_THICKNESS = 2;
 
 export type Verdict = 'cat' | 'nocat';
@@ -42,8 +43,15 @@ export function resultPaths(framesPath: string, at: Date, verdict: Verdict): { a
     };
 }
 
-export function drawBoxes(image: DrawableImage, boxes: Box[]): void {
-    for (const box of boxes) {
+export function drawBoxes(image: DrawableImage, boxes: Box[], color = BOX_COLOR): void {
+    for (const unclamped of boxes) {
+        // A hand-drawn box may run to the far edge, one past the last pixel.
+        const box = {
+            xMin: Math.min(unclamped.xMin, image.width - 1),
+            yMin: Math.min(unclamped.yMin, image.height - 1),
+            xMax: Math.min(unclamped.xMax, image.width - 1),
+            yMax: Math.min(unclamped.yMax, image.height - 1),
+        };
         for (let thickness = 0; thickness < BOX_THICKNESS; thickness += 1) {
             const top = Math.min(box.yMin + thickness, image.height - 1);
             const bottom = Math.max(box.yMax - thickness, 0);
@@ -51,23 +59,32 @@ export function drawBoxes(image: DrawableImage, boxes: Box[]): void {
             const right = Math.max(box.xMax - thickness, 0);
 
             for (let x = box.xMin; x <= box.xMax; x += 1) {
-                image.setPixelColor(BOX_COLOR, x, top);
-                image.setPixelColor(BOX_COLOR, x, bottom);
+                image.setPixelColor(color, x, top);
+                image.setPixelColor(color, x, bottom);
             }
             for (let y = box.yMin; y <= box.yMax; y += 1) {
-                image.setPixelColor(BOX_COLOR, left, y);
-                image.setPixelColor(BOX_COLOR, right, y);
+                image.setPixelColor(color, left, y);
+                image.setPixelColor(color, right, y);
             }
         }
     }
 }
 
-/** Decode once: the frame's real size is what the 0-1000 coordinates scale against. */
-export async function annotate(raw: Buffer, detections: Detection[]): Promise<{ buffer: Buffer; boxes: Box[] }> {
+/**
+ * Decode once: the frame's real size is what the 0-1000 coordinates scale against.
+ * `truth` is the labelled box, which the eval draws underneath so a drifting box
+ * shows as the gap between the two.
+ */
+export async function annotate(
+    raw: Buffer,
+    detections: Detection[],
+    truth?: Box | null,
+): Promise<{ buffer: Buffer; boxes: Box[] }> {
     const started = performance.now();
     const image = await Jimp.fromBuffer(raw);
     const boxes = detections.map((detection) => scaleBox(detection.box_2d, image.width, image.height));
 
+    if (truth) drawBoxes(image, [truth], TRUTH_COLOR);
     drawBoxes(image, boxes);
 
     const buffer = await image.getBuffer('image/jpeg', { quality: 90 });

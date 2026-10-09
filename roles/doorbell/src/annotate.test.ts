@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Jimp } from 'jimp';
+import { Jimp, intToRGBA } from 'jimp';
 import { annotate, drawBoxes, rawFramePath, resultPaths, writeResult } from './annotate.js';
 
 // Tests run under TZ=America/Los_Angeles, so local components are deterministic.
@@ -60,6 +60,42 @@ test('annotate scales detections against the real frame size and returns a jpeg'
     assert.deepEqual(boxes, [{ xMin: 0, yMin: 0, xMax: 50, yMax: 50 }]);
     assert.equal(buffer[0], 0xff);
     assert.equal(buffer[1], 0xd8);
+});
+
+test('drawBoxes paints in the colour it is given', () => {
+    const colours = new Set<number>();
+    const image = { width: 50, height: 50, setPixelColor: (hex: number) => { colours.add(hex); } };
+
+    drawBoxes(image, [{ xMin: 10, yMin: 10, xMax: 20, yMax: 20 }], 0x00ff00ff);
+
+    assert.deepEqual([...colours], [0x00ff00ff]);
+});
+
+// A hand-drawn box can run to the image's far edge, one past the last pixel.
+test('drawBoxes clamps a box that reaches the full width and height', () => {
+    const image = {
+        width: 10,
+        height: 10,
+        setPixelColor: (_hex: number, x: number, y: number) => {
+            assert.ok(x >= 0 && x < 10, `x out of bounds: ${x}`);
+            assert.ok(y >= 0 && y < 10, `y out of bounds: ${y}`);
+        },
+    };
+
+    drawBoxes(image, [{ xMin: 0, yMin: 0, xMax: 10, yMax: 10 }]);
+});
+
+test('annotate draws a labelled box beside the detections without returning it', async () => {
+    const blank = new Jimp({ width: 100, height: 100, color: 0x000000ff });
+    const raw = await blank.getBuffer('image/jpeg', { quality: 90 });
+
+    const { buffer, boxes } = await annotate(raw, [{ label: 'cat', box_2d: [0, 0, 500, 500] }],
+        { xMin: 0, yMin: 0, xMax: 100, yMax: 100 });
+    const drawn = await Jimp.fromBuffer(buffer);
+    const { r, g } = intToRGBA(drawn.getPixelColor(99, 70));
+
+    assert.deepEqual(boxes, [{ xMin: 0, yMin: 0, xMax: 50, yMax: 50 }]);
+    assert.ok(g > 150 && r < 100, `the labelled edge should be green, got r=${r} g=${g}`);
 });
 
 test('writeResult creates the day directory and both files', async () => {

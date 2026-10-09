@@ -3,10 +3,32 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { annotate } from '../annotate.js';
-import { createVisionClient, promptFor } from '../vision.js';
-import { imagesDir, labelsSha, loadLabels, mergeLabels, pendingLabels, selectKeys, walkImages, writeLabels } from './corpus.js';
+import { DEFAULT_UPSCALE, createVisionClient, promptFor } from '../vision.js';
+import { createAnnotatorServer } from './annotator.js';
+import {
+    hasCat,
+    imagesDir,
+    labelsSha,
+    loadLabels,
+    mergeLabels,
+    pendingLabels,
+    selectKeys,
+    walkImages,
+    writeLabels,
+} from './corpus.js';
 import { loadDotEnv } from './env.js';
-import { ImageResult, RunFile, byDirectory, diffRuns, mcnemarExact, outcomeFor, score, sha } from './metrics.js';
+import {
+    ImageResult,
+    RunFile,
+    byDirectory,
+    diffHits,
+    diffRuns,
+    localize,
+    mcnemarExact,
+    outcomeFor,
+    score,
+    sha,
+} from './metrics.js';
 import { mapWithConcurrency } from './pool.js';
 import { renderCompare, renderReport, renderSheet } from './report.js';
 
@@ -57,18 +79,27 @@ const EVAL_LOAD_DEADLINE_MS = 600_000;
 // eight no more than that. Decode is memory-bandwidth bound, so the extra lanes
 // mostly slow each other down; two collects the bulk of it.
 const DEFAULT_CONCURRENCY = 2;
+// Fixed rather than random, so a tab left open across a restart reconnects.
+const DEFAULT_ANNOTATE_PORT = 7357;
 
 const USAGE = `usage:
   yarn eval bootstrap [--dir <corpus>]
+  yarn eval annotate  [--dir <corpus>] [--only <path|glob>]... [--port <n>]
   yarn eval run       [--dir <corpus>] [--model <name>] [--url <ws://…>] [--prompt-file <f>]
-                      [--only <path|glob>]... [--limit <n>] [--concurrency <n>]
+                      [--only <path|glob>]... [--limit <n>] [--concurrency <n>] [--upscale <factor>]
   yarn eval compare   <runA.json> <runB.json> [--beta <n>]
 
 --url defaults to LM_STUDIO_URL, which may be set in the environment or in a .env
 file next to package.json, and falls back to ws://localhost:1234.
 
---only narrows a run to the images matching a path or glob relative to images/,
+annotate serves a page on localhost for drawing the box around each cat. Save
+writes only the frames you brought up, so the rest keep whatever they had.
+
+--only narrows a run (or an annotate session) to the images matching a path or glob relative to images/,
 e.g. --only '2026-09-25/*' --only night/porch-ir-03.jpg. Repeatable.
+
+--upscale resamples each frame by <factor> before sending (default ${DEFAULT_UPSCALE}, what the
+service deploys). Box placement varies with it: 1.78125 sends a 512x384 frame as 912x684.
 
 --model defaults the same way from LM_STUDIO_MODEL, falling back to the model the
 service is deployed with (${DEFAULT_MODEL}).
@@ -89,15 +120,34 @@ async function bootstrap(corpusDir: string): Promise<void> {
     await writeLabels(corpusDir, labels);
     await fs.promises.writeFile(path.join(corpusDir, 'sheet.html'), renderSheet(labels));
 
-    const positives = Object.values(labels).filter((label) => label.cat === true).length;
-    const negatives = Object.values(labels).filter((label) => label.cat === false).length;
     const pending = pendingLabels(labels).length;
+    const positives = Object.values(labels).filter(hasCat).length;
+    const negatives = Object.keys(labels).length - positives - pending;
 
     console.log(`found ${found.length} images in ${images}`);
     console.log(`added ${added.length} as unlabelled`);
     if (orphaned.length > 0) console.log(`orphaned ${orphaned.length} labels with no image (kept)`);
     console.log(`labels: ${positives} cat / ${negatives} nocat / ${pending} unlabelled`);
-    console.log(`open ${path.join(corpusDir, 'sheet.html')} and correct ${path.join(corpusDir, 'labels.json')}`);
+    console.log(`open ${path.join(corpusDir, 'sheet.html')} to review, and run "yarn eval annotate" to label`);
+}
+
+async function annotateCorpus(options: { corpusDir: string; only: string[]; port: number }): Promise<void> {
+    const labels = await loadLabels(options.corpusDir);
+    if (Object.keys(labels).length === 0) fail(`no labels in ${options.corpusDir}; run "yarn eval bootstrap" first`);
+
+    const { selected: keys, unmatched } = selectKeys(Object.keys(labels).sort(), options.only);
+    if (unmatched.length > 0) {
+        fail(`--only matched no labelled images:\n` + unmatched.map((pattern) => `  ${pattern}`).join('\n'));
+    }
+
+    const server = createAnnotatorServer({ corpusDir: options.corpusDir, keys });
+    // Loopback only: the server writes labels.json for anyone who can reach it.
+    server.listen(options.port, '127.0.0.1', () => {
+        const pending = pendingLabels(labels).filter((key) => keys.includes(key)).length;
+        console.log(`${keys.length} frames, ${pending} without a box or a no-cat verdict`);
+        console.log(`open http://127.0.0.1:${options.port}/  (ctrl-c to stop)`);
+    });
+    server.on('error', (error) => fail(`annotate: ${error.message}`));
 }
 
 function stamp(at: Date): string {
@@ -113,6 +163,7 @@ async function run(options: {
     model: string;
     baseUrl: string;
     concurrency: number;
+    upscale: number;
     promptFile?: string;
     only: string[];
     limit?: number;
@@ -129,7 +180,7 @@ async function run(options: {
     // the corpus says nothing about this run.
     const pending = pendingLabels(labels).filter((key) => keys.includes(key));
     if (pending.length > 0) {
-        fail(`${pending.length} images have no cat label; set "cat" to true or false in labels.json:\n` +
+        fail(`${pending.length} images have no box yet; run "yarn eval annotate" to draw one, or clear it for no cat:\n` +
             pending.map((key) => `  ${key}`).join('\n'));
     }
 
@@ -148,6 +199,7 @@ async function run(options: {
         baseUrl: options.baseUrl,
         model: options.model,
         prompt,
+        upscale: options.upscale,
         attempts: EVAL_ATTEMPTS,
         deadlineMs: EVAL_DEADLINE_MS,
         loadDeadlineMs: EVAL_LOAD_DEADLINE_MS,
@@ -163,7 +215,8 @@ async function run(options: {
     let completed = 0;
 
     const results = await mapWithConcurrency(scored, options.concurrency, async (key): Promise<ImageResult> => {
-        const expected = labels[key]?.cat ?? false;
+        const expected = hasCat(labels[key]);
+        const truth = labels[key]?.box ?? null;
         const imagePath = path.join(images, key);
         const started = performance.now();
 
@@ -183,7 +236,7 @@ async function run(options: {
             let annotated: string | null = null;
 
             const raw = await fs.promises.readFile(imagePath);
-            const drawn = await annotate(raw, detections);
+            const drawn = await annotate(raw, detections, truth);
             annotated = `${key.replace(/\//g, '__')}`;
             await fs.promises.writeFile(path.join(runDir, annotated), drawn.buffer);
 
@@ -193,6 +246,8 @@ async function run(options: {
                 verdict,
                 outcome: outcomeFor(expected, verdict),
                 detections,
+                truth,
+                boxes: drawn.boxes,
                 annotated,
                 ms: Math.round(performance.now() - started),
                 error: null,
@@ -205,6 +260,8 @@ async function run(options: {
                 verdict: null,
                 outcome: 'error',
                 detections: [],
+                truth,
+                boxes: [],
                 annotated: null,
                 ms: Math.round(performance.now() - started),
                 error: error instanceof Error ? error.message : String(error),
@@ -218,6 +275,7 @@ async function run(options: {
         model: options.model,
         baseUrl: options.baseUrl,
         concurrency: options.concurrency,
+        upscale: options.upscale,
         ...(options.only.length > 0 && { only: options.only }),
         prompt,
         promptSha: sha(prompt),
@@ -225,12 +283,13 @@ async function run(options: {
         corpus: {
             dir: options.corpusDir,
             images: scored.length,
-            positives: scored.filter((key) => labels[key]?.cat).length,
+            positives: scored.filter((key) => hasCat(labels[key])).length,
         },
         summary: {
             ...scores,
             totalMs: Math.round(performance.now() - began),
             byDirectory: byDirectory(results, DEFAULT_BETA),
+            localization: localize(results),
         },
         results,
     };
@@ -244,6 +303,11 @@ async function run(options: {
     console.log(`tp=${scores.tp} fp=${scores.fp} fn=${scores.fn} tn=${scores.tn} err=${scores.errors}`);
     console.log(`P=${scores.precision.toFixed(3)} R=${scores.recall.toFixed(3)} ` +
         `F1=${scores.f1.toFixed(3)} F${DEFAULT_BETA}=${scores.fbeta.toFixed(3)}`);
+    const located = artifact.summary.localization;
+    if (located) {
+        console.log(`hit@${located.threshold}=${located.hits}/${located.frames} meanIoU=${located.meanIou.toFixed(3)} ` +
+            `dx=${located.meanDx.toFixed(1)} dy=${located.meanDy.toFixed(1)}px`);
+    }
     console.log(artifactPath);
     console.log(reportPath);
 }
@@ -278,12 +342,15 @@ async function compare(fileA: string, fileB: string, beta: number): Promise<void
     if (b.summary.beta !== beta) b.summary = { ...b.summary, ...score(b.results, beta) };
 
     const diff = diffRuns(a.results, b.results);
+    // Localization pairs only between runs that both kept boxes.
+    const hits = a.summary.localization && b.summary.localization ? diffHits(a.results, b.results) : undefined;
     process.stdout.write(renderCompare({
         a,
         b,
         diff,
         beta,
         p: mcnemarExact(diff.fixed.length, diff.broke.length),
+        ...(hits && { hits: { ...hits, p: mcnemarExact(hits.fixed.length, hits.broke.length) } }),
     }));
 }
 
@@ -297,7 +364,9 @@ const { values, positionals } = parseArgs({
         only: { type: 'string', multiple: true },
         limit: { type: 'string' },
         concurrency: { type: 'string' },
+        upscale: { type: 'string' },
         beta: { type: 'string' },
+        port: { type: 'string' },
     },
 });
 
@@ -306,6 +375,12 @@ const corpusDir = path.resolve(values.dir ?? DEFAULT_DIR);
 
 if (command === 'bootstrap') {
     await bootstrap(corpusDir);
+} else if (command === 'annotate') {
+    await annotateCorpus({
+        corpusDir,
+        only: values.only ?? [],
+        port: values.port ? Number(values.port) : DEFAULT_ANNOTATE_PORT,
+    });
 } else if (command === 'run') {
     await run({
         corpusDir,
@@ -315,6 +390,7 @@ if (command === 'bootstrap') {
         only: values.only ?? [],
         limit: values.limit ? Number(values.limit) : undefined,
         concurrency: values.concurrency ? Number(values.concurrency) : DEFAULT_CONCURRENCY,
+        upscale: values.upscale ? Number(values.upscale) : DEFAULT_UPSCALE,
     });
 } else if (command === 'compare') {
     const [, fileA, fileB] = positionals;

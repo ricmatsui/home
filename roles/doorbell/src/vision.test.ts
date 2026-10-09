@@ -145,6 +145,14 @@ test('upscale multiplies both dimensions', async () => {
     assert.equal(bigger.height, 12);
 });
 
+test('upscale rounds a fractional factor to whole pixels', async () => {
+    const source = await new Jimp({ width: 512, height: 387, color: 0xff0000ff }).getBuffer('image/jpeg');
+    const bigger = await Jimp.fromBuffer(await upscale(source, 1.78125));
+
+    assert.equal(bigger.width, 912);
+    assert.equal(bigger.height, 689);
+});
+
 test('upscale leaves the image readable', async () => {
     const source = await new Jimp({ width: 8, height: 6, color: 0xff0000ff }).getBuffer('image/jpeg');
     const bigger = await Jimp.fromBuffer(await upscale(source, 2));

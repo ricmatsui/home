@@ -1,10 +1,21 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Box } from '../vision.js';
 
 export interface Label {
-    /** `null` until a human has looked at the frame; `run` refuses a corpus holding any. */
-    cat: boolean | null;
+    /**
+     * Where the cat is, in the source image's own pixels; `null` means no cat. Absent
+     * until a human has looked at the frame, and `run` refuses a corpus holding any.
+     * Anything that compares against it — model output included — converts into
+     * source pixels first, so the truth never depends on how a frame was resized.
+     */
+    box?: Box | null;
+    /**
+     * The verdict from before frames were boxed. Read only to hint the annotator,
+     * and dropped once a box (or null) is saved; it is never ground truth.
+     */
+    cat?: boolean | null;
     /** Free text for a human reviewing a failure months later. Not ground truth. */
     note?: string;
 }
@@ -99,7 +110,7 @@ export function mergeLabels(existing: Labels, found: string[]): {
 
     for (const key of found) {
         if (labels[key]) continue;
-        labels[key] = { cat: null };
+        labels[key] = {};
         added.push(key);
     }
 
@@ -109,11 +120,58 @@ export function mergeLabels(existing: Labels, found: string[]): {
     return { labels: sortKeys(labels), added, orphaned };
 }
 
-/** Keys still waiting on a human. Anything but a boolean counts, so a hand-edit typo is caught too. */
+/** A well-formed box: whole non-negative pixels, with a positive width and height. */
+export function isBox(value: unknown): value is Box {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const { xMin, yMin, xMax, yMax } = value as Record<string, unknown>;
+    const coordinates = [xMin, yMin, xMax, yMax];
+    if (!coordinates.every((coordinate) => Number.isInteger(coordinate) && (coordinate as number) >= 0)) return false;
+    return (xMin as number) < (xMax as number) && (yMin as number) < (yMax as number);
+}
+
+export function hasCat(label: Label | undefined): boolean {
+    return label?.box != null;
+}
+
+/** Keys still waiting on a human. Anything but a box or null counts, so a hand-edit typo is caught too. */
 export function pendingLabels(labels: Labels): string[] {
     return Object.keys(labels)
-        .filter((key) => typeof labels[key]?.cat !== 'boolean')
+        .filter((key) => {
+            const box = labels[key]?.box;
+            return box !== null && !isBox(box);
+        })
         .sort();
+}
+
+/**
+ * Folds boxes drawn in the annotator into the labels on disk. Only the keys sent
+ * are touched — a frame the annotator never showed keeps whatever it had — and
+ * the note survives, since it is the one field a human writes by hand.
+ */
+export function applyBoxes(labels: Labels, boxes: Record<string, Box | null>): Labels {
+    const applied: Labels = { ...labels };
+
+    for (const [key, box] of Object.entries(boxes)) {
+        const label = labels[key];
+        if (!label) throw new Error(`no label for ${key}; run "yarn eval bootstrap" first`);
+
+        // The page measures in CSS pixels scaled to the image, so fractions are expected;
+        // anything that is not four numbers is left as it came, for isBox to refuse.
+        const numeric = box !== null && typeof box === 'object' &&
+            [box.xMin, box.yMin, box.xMax, box.yMax].every((value) => typeof value === 'number');
+        const rounded = !numeric ? box : {
+            xMin: Math.round(box.xMin),
+            yMin: Math.round(box.yMin),
+            xMax: Math.round(box.xMax),
+            yMax: Math.round(box.yMax),
+        };
+        if (rounded !== null && !isBox(rounded)) throw new Error(`malformed box for ${key}: ${JSON.stringify(box)}`);
+
+        const { cat: _legacy, ...rest } = label;
+        applied[key] = { ...rest, box: rounded };
+    }
+
+    return sortKeys(applied);
 }
 
 /**
@@ -138,7 +196,10 @@ export function selectKeys(keys: string[], patterns: string[]): { selected: stri
 export function labelsSha(labels: Labels): string {
     const canonical = Object.keys(labels)
         .sort()
-        .map((key) => `${key}:${labels[key]?.cat ? 1 : 0}`)
+        .map((key) => {
+            const box = labels[key]?.box;
+            return `${key}:${box ? `${box.xMin},${box.yMin},${box.xMax},${box.yMax}` : '-'}`;
+        })
         .join('\n');
 
     return crypto.createHash('sha256').update(canonical).digest('hex');

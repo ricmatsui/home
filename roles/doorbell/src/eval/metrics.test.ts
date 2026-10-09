@@ -2,8 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     ImageResult,
+    bestMatch,
     byDirectory,
+    diffHits,
     diffRuns,
+    iou,
+    localize,
     mcnemarExact,
     outcomeFor,
     score,
@@ -146,4 +150,104 @@ test('sha is stable and differs on different input', () => {
     assert.equal(sha('a'), sha('a'));
     assert.notEqual(sha('a'), sha('b'));
     assert.equal(sha('a').length, 64);
+});
+
+const TRUTH = { xMin: 100, yMin: 100, xMax: 200, yMax: 200 };
+
+function located(image: string, truth: typeof TRUTH | null, boxes: (typeof TRUTH)[] | null): ImageResult {
+    const verdict = boxes === null ? null : boxes.length > 0;
+    return { ...result(image, truth !== null, verdict), truth, boxes: boxes ?? [] };
+}
+
+test('iou is one for the same box and zero for disjoint ones', () => {
+    assert.equal(iou(TRUTH, TRUTH), 1);
+    assert.equal(iou(TRUTH, { xMin: 300, yMin: 300, xMax: 400, yMax: 400 }), 0);
+    assert.equal(iou(TRUTH, { xMin: 200, yMin: 100, xMax: 300, yMax: 200 }), 0, 'touching edges share no area');
+});
+
+test('iou of a box shifted by half its width is a third', () => {
+    // Overlap 50x100 = 5000; union 2 * 10000 - 5000 = 15000.
+    assert.equal(iou(TRUTH, { xMin: 150, yMin: 100, xMax: 250, yMax: 200 }), 1 / 3);
+});
+
+test('the best match is the highest-overlap box, with its centre offset signed', () => {
+    const above = { xMin: 100, yMin: 60, xMax: 200, yMax: 160 };
+    const far = { xMin: 400, yMin: 400, xMax: 500, yMax: 500 };
+
+    const match = bestMatch(TRUTH, [far, above]);
+
+    assert.deepEqual(match, { iou: iou(TRUTH, above), dx: 0, dy: -40 });
+});
+
+test('there is no best match without a box', () => {
+    assert.equal(bestMatch(TRUTH, []), null);
+});
+
+test('localization scores hits over every cat frame and tightness over the found ones', () => {
+    const results = [
+        located('hit.jpg', TRUTH, [TRUTH]),
+        located('high.jpg', TRUTH, [{ xMin: 100, yMin: 80, xMax: 200, yMax: 180 }]),
+        located('missed.jpg', TRUTH, []),
+        located('nocat.jpg', null, []),
+        located('fp.jpg', null, [TRUTH]),
+        located('error.jpg', TRUTH, null),
+    ];
+
+    const scored = localize(results);
+    // 20px high on a 100px box: 8000 shared over a 12000 union.
+    const high = iou(TRUTH, { xMin: 100, yMin: 80, xMax: 200, yMax: 180 });
+
+    assert.ok(scored);
+    assert.equal(scored.frames, 3, 'cat frames that ran: errors and no-cat frames are out');
+    assert.equal(scored.hits, 2, `${high} clears 0.5`);
+    assert.equal(scored.hitRate, 2 / 3);
+    assert.equal(scored.found, 2);
+    assert.equal(scored.meanIou, (1 + high) / 2);
+    assert.equal(scored.meanDx, 0);
+    assert.equal(scored.meanDy, -10);
+});
+
+test('a box under the threshold is found but not a hit', () => {
+    const scored = localize([located('a.jpg', TRUTH, [{ xMin: 150, yMin: 100, xMax: 250, yMax: 200 }])]);
+
+    assert.equal(scored?.found, 1);
+    assert.equal(scored?.hits, 0);
+});
+
+// Runs from before boxes were labelled carry no truth; they score no localization
+// rather than a misleading zero.
+test('a run with no ground-truth boxes has no localization', () => {
+    assert.equal(localize([result('a.jpg', true, true), result('b.jpg', false, false)]), null);
+});
+
+test('localization on a corpus with no found cats is zero, not NaN', () => {
+    const scored = localize([located('a.jpg', TRUTH, [])]);
+
+    assert.deepEqual(scored, { frames: 1, hits: 0, hitRate: 0, found: 0, meanIou: 0, meanDx: 0, meanDy: 0, threshold: 0.5 });
+});
+
+test('the hit diff pairs cat frames across runs and averages the change in overlap', () => {
+    const shifted = { xMin: 150, yMin: 100, xMax: 250, yMax: 200 };
+    const a = [
+        located('fixed.jpg', TRUTH, [shifted]),
+        located('broke.jpg', TRUTH, [TRUTH]),
+        located('same.jpg', TRUTH, [TRUTH]),
+        located('nocat.jpg', null, []),
+        located('error.jpg', TRUTH, null),
+    ];
+    const b = [
+        located('fixed.jpg', TRUTH, [TRUTH]),
+        located('broke.jpg', TRUTH, []),
+        located('same.jpg', TRUTH, [TRUTH]),
+        located('nocat.jpg', null, []),
+        located('error.jpg', TRUTH, [TRUTH]),
+    ];
+
+    const diff = diffHits(a, b);
+
+    assert.deepEqual(diff.fixed, ['fixed.jpg']);
+    assert.deepEqual(diff.broke, ['broke.jpg']);
+    assert.equal(diff.unchanged, 1);
+    assert.equal(diff.excluded, 1);
+    assert.equal(diff.meanIouDelta, ((1 - 1 / 3) + (0 - 1) + 0) / 3);
 });

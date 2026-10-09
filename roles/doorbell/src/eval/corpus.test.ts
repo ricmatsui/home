@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import {
     Labels,
+    applyBoxes,
+    hasCat,
     imagesDir,
     labelsPath,
     labelsSha,
@@ -15,6 +17,8 @@ import {
     walkImages,
     writeLabels,
 } from './corpus.js';
+
+const BOX = { xMin: 120, yMin: 200, xMax: 260, yMax: 330 };
 
 async function corpus(): Promise<string> {
     return fs.promises.mkdtemp(path.join(os.tmpdir(), 'doorbell-'));
@@ -88,71 +92,124 @@ test('a broken symlink is skipped', async () => {
 });
 
 test('merge preserves existing labels and adds new files as unlabelled', () => {
-    const existing: Labels = { 'a.jpg': { cat: true, note: 'on the mat' } };
+    const existing: Labels = { 'a.jpg': { box: BOX, note: 'on the mat' } };
 
     const merged = mergeLabels(existing, ['a.jpg', 'b.jpg']);
 
     assert.deepEqual(merged.labels, {
-        'a.jpg': { cat: true, note: 'on the mat' },
-        'b.jpg': { cat: null },
+        'a.jpg': { box: BOX, note: 'on the mat' },
+        'b.jpg': {},
     });
     assert.deepEqual(merged.added, ['b.jpg']);
     assert.deepEqual(merged.orphaned, []);
 });
 
 test('merge keeps labels whose image is gone and reports them', () => {
-    const merged = mergeLabels({ 'gone.jpg': { cat: true }, 'a.jpg': { cat: false } }, ['a.jpg']);
+    const merged = mergeLabels({ 'gone.jpg': { box: BOX }, 'a.jpg': { box: null } }, ['a.jpg']);
 
     assert.deepEqual(merged.orphaned, ['gone.jpg']);
-    assert.equal(merged.labels['gone.jpg']?.cat, true);
+    assert.deepEqual(merged.labels['gone.jpg']?.box, BOX);
 });
 
 test('merge does not mutate the labels it was given', () => {
-    const existing: Labels = { 'a.jpg': { cat: true } };
+    const existing: Labels = { 'a.jpg': { box: BOX } };
 
     mergeLabels(existing, ['a.jpg', 'b.jpg']);
 
-    assert.deepEqual(existing, { 'a.jpg': { cat: true } });
+    assert.deepEqual(existing, { 'a.jpg': { box: BOX } });
 });
 
-test('pendingLabels lists every key without a boolean cat, and none that has one', () => {
-    const labels = {
-        'b.jpg': { cat: null },
-        'a.jpg': {} as Labels[string],
-        'c.jpg': { cat: false },
-        'd.jpg': { cat: true },
+// A legacy `cat` verdict is a hint for the annotator, not a label: until a box (or
+// null) is drawn, the frame has not been localised and cannot be scored.
+test('pendingLabels lists every key without a box or an explicit null, and none that has one', () => {
+    const labels: Labels = {
+        'b.jpg': { cat: true },
+        'a.jpg': {},
+        'c.jpg': { box: null },
+        'd.jpg': { box: BOX },
+        'e.jpg': { box: { xMin: 1 } as unknown as typeof BOX },
     };
 
-    assert.deepEqual(pendingLabels(labels), ['a.jpg', 'b.jpg']);
+    assert.deepEqual(pendingLabels(labels), ['a.jpg', 'b.jpg', 'e.jpg']);
+});
+
+test('a label has a cat exactly when it has a box', () => {
+    assert.equal(hasCat({ box: BOX }), true);
+    assert.equal(hasCat({ box: null }), false);
+    assert.equal(hasCat({ cat: true }), false);
 });
 
 test('labels round-trip through disk sorted by key', async () => {
     const dir = await corpus();
 
-    await writeLabels(dir, { 'b.jpg': { cat: false }, 'a.jpg': { cat: true, note: 'dusk' } });
+    await writeLabels(dir, { 'b.jpg': { box: null }, 'a.jpg': { box: BOX, note: 'dusk' } });
 
     const body = await fs.promises.readFile(labelsPath(dir), 'utf-8');
     assert.ok(body.indexOf('"a.jpg"') < body.indexOf('"b.jpg"'), 'keys should be sorted');
-    assert.deepEqual(await loadLabels(dir), { 'a.jpg': { cat: true, note: 'dusk' }, 'b.jpg': { cat: false } });
+    assert.deepEqual(await loadLabels(dir), { 'a.jpg': { box: BOX, note: 'dusk' }, 'b.jpg': { box: null } });
 });
 
 test('loading a corpus with no labels file yields an empty set', async () => {
     assert.deepEqual(await loadLabels(await corpus()), {});
 });
 
-test('the labels sha ignores key order but not values', () => {
-    const one = labelsSha({ 'a.jpg': { cat: true }, 'b.jpg': { cat: false } });
-    const two = labelsSha({ 'b.jpg': { cat: false }, 'a.jpg': { cat: true } });
-    const three = labelsSha({ 'a.jpg': { cat: false }, 'b.jpg': { cat: false } });
+test('the labels sha ignores key order but not boxes', () => {
+    const one = labelsSha({ 'a.jpg': { box: BOX }, 'b.jpg': { box: null } });
+    const two = labelsSha({ 'b.jpg': { box: null }, 'a.jpg': { box: BOX } });
+    const moved = labelsSha({ 'a.jpg': { box: { ...BOX, yMin: BOX.yMin + 1 } }, 'b.jpg': { box: null } });
+    const cleared = labelsSha({ 'a.jpg': { box: null }, 'b.jpg': { box: null } });
 
     assert.equal(one, two);
-    assert.notEqual(one, three);
+    assert.notEqual(one, moved);
+    assert.notEqual(one, cleared);
 });
 
 // The note is documentation for a human, not ground truth; a re-worded note must
 // not make an old run look like it scored against different labels.
 test('the labels sha ignores notes', () => {
-    assert.equal(labelsSha({ 'a.jpg': { cat: true } }), labelsSha({ 'a.jpg': { cat: true, note: 'dusk' } }));
+    assert.equal(labelsSha({ 'a.jpg': { box: BOX } }), labelsSha({ 'a.jpg': { box: BOX, note: 'dusk' } }));
+});
+
+test('applying boxes sets each one, drops the legacy verdict and keeps the note', () => {
+    const labels: Labels = {
+        'a.jpg': { cat: true, note: 'dusk' },
+        'b.jpg': { cat: true },
+        'c.jpg': { cat: false },
+    };
+
+    const applied = applyBoxes(labels, { 'a.jpg': BOX, 'b.jpg': null });
+
+    assert.deepEqual(applied, {
+        'a.jpg': { box: BOX, note: 'dusk' },
+        'b.jpg': { box: null },
+        'c.jpg': { cat: false },
+    });
+    assert.deepEqual(labels['a.jpg'], { cat: true, note: 'dusk' }, 'the input is not mutated');
+});
+
+test('applying boxes rounds coordinates to whole pixels', () => {
+    const applied = applyBoxes({ 'a.jpg': {} }, { 'a.jpg': { xMin: 10.4, yMin: 20.6, xMax: 30, yMax: 40 } });
+
+    assert.deepEqual(applied['a.jpg']?.box, { xMin: 10, yMin: 21, xMax: 30, yMax: 40 });
+});
+
+test('applying a box to a key with no label is refused', () => {
+    assert.throws(() => applyBoxes({}, { 'nope.jpg': BOX }), /nope\.jpg/);
+});
+
+test('applying a malformed box is refused', () => {
+    const labels: Labels = { 'a.jpg': {} };
+    const bad = [
+        { xMin: 10, yMin: 10, xMax: 5, yMax: 20 },
+        { xMin: -1, yMin: 0, xMax: 5, yMax: 5 },
+        { xMin: 0, yMin: 0, xMax: 5 },
+        { xMin: '0', yMin: 0, xMax: 5, yMax: 5 },
+        [0, 0, 5, 5],
+    ];
+
+    for (const box of bad) {
+        assert.throws(() => applyBoxes(labels, { 'a.jpg': box as unknown as typeof BOX }), /a\.jpg/, JSON.stringify(box));
+    }
 });
 
 test('image and labels paths sit under the corpus directory', () => {
