@@ -23,6 +23,7 @@
   ansible.builtin.set_fact:
     gitea_image_source: gitea/gitea:1.25.3
     gitea_image_id: sha256:fee0e5e55da6d2d11186bf39023a772fe63d9deffc0a83283e3d8e5d11c2716a
+  tags: gitea_stack
 
 - name: deploy stack
   community.general.docker_stack:
@@ -37,6 +38,8 @@
             environment:
               USER_UID: 1000
               USER_GID: 1000
+              GITEA__security__LOGIN_REMEMBER_DAYS: 365
+              GITEA__session__SESSION_LIFE_TIME: 604800
             networks:
               - traefik_traefik
             volumes:
@@ -72,6 +75,7 @@
             external: true
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: gitea_stack
 
 - name: configure backup
   ansible.builtin.copy:

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChoreList } from './components/ChoreList';
 import { ErrorBanner } from './components/ErrorBanner';
 import { PublicFilterButton } from './components/PublicFilterButton';
@@ -55,6 +55,24 @@ export default function App({
     // Null while the dialog is shut. The query lives here rather than in the
     // dialog because the results are rendered here.
     const [query, setQuery] = useState<string | null>(null);
+
+    /*
+     * Cmd+K opens search from anywhere on the board. A press while it is
+     * already open leaves the query alone: the dialog is modal, so this is the
+     * only listener still hearing keys, and resetting under someone mid-search
+     * would throw away what they typed.
+     */
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (!event.metaKey || event.key.toLowerCase() !== 'k') {
+                return;
+            }
+            event.preventDefault();
+            setQuery((current) => current ?? '');
+        };
+        document.addEventListener('keydown', onKeyDown);
+        return () => document.removeEventListener('keydown', onKeyDown);
+    }, []);
 
     useDayRollover(() => window.location.reload());
     useHourlyRender();

@@ -696,6 +696,27 @@ describe('App', () => {
             );
         });
 
+        it('opens on Cmd+K with the input focused', async () => {
+            render(<App />);
+            await screen.findByText(/nothing due/i);
+
+            await userEvent.keyboard('{Meta>}k{/Meta}');
+
+            const dialog = screen.getByRole('dialog', { name: 'Search tasks' });
+            expect(within(dialog).getByRole('searchbox', { name: 'Task name' })).toHaveFocus();
+        });
+
+        it('keeps the query when Cmd+K is pressed while open', async () => {
+            render(<App />);
+            await screen.findByText(/nothing due/i);
+
+            const dialog = await openSearch();
+            await userEvent.keyboard('tra');
+            await userEvent.keyboard('{Meta>}k{/Meta}');
+
+            expect(within(dialog).getByRole('searchbox', { name: 'Task name' })).toHaveValue('tra');
+        });
+
         it('opens with the input focused and nothing listed', async () => {
             vi.mocked(api.getChores).mockResolvedValue([chore({ id: 1, name: 'Trash' })]);
             render(<App />);
