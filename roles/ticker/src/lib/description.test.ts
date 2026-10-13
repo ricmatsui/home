@@ -6,6 +6,10 @@ describe('sanitizeDescription', () => {
         expect(sanitizeDescription('')).toBe('');
     });
 
+    it('returns nothing for a chore Donetick sent without the field', () => {
+        expect(sanitizeDescription(undefined)).toBe('');
+    });
+
     it('keeps a paragraph', () => {
         expect(sanitizeDescription('<p>Input numbers</p>')).toBe(
             '<p>Input numbers</p>',

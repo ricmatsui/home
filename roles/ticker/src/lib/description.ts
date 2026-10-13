@@ -139,8 +139,8 @@ function clean(node: Node): void {
     }
 }
 
-export function sanitizeDescription(html: string): string {
-    if (!html.trim()) {
+export function sanitizeDescription(html: string | undefined): string {
+    if (!html?.trim()) {
         return '';
     }
 

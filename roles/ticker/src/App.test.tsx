@@ -654,6 +654,18 @@ describe('App', () => {
             expect(container.querySelector('.row__description')).not.toBeInTheDocument();
         });
 
+        // Donetick leaves the field out altogether on a chore that has never
+        // had a description, rather than sending it empty.
+        it('draws the board when a chore arrives without a description field', async () => {
+            const { description: _, ...bare } = chore({ name: 'Trash' });
+            vi.mocked(api.getChores).mockResolvedValue([bare]);
+
+            const { container } = render(<App />);
+            await screen.findByText('Trash');
+
+            expect(container.querySelector('.row__description')).not.toBeInTheDocument();
+        });
+
         /*
          * The row is the app's only dangerouslySetInnerHTML, so this is the
          * test that says the sanitizer is actually wired to it rather than
