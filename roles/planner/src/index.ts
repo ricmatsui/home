@@ -149,7 +149,7 @@ const wikiFunction = async (nextDate: Date) => {
     });
 
     const { nextDataWithStatus } = await DBOS.runStep(async () => {
-        const status = formatStatusSection([weatherLine, donetickLine, googleTasksLine]);
+        const status = formatStatusSection({ forecast: weatherLine, counts: [donetickLine, googleTasksLine] });
         return {
             nextDataWithStatus: seedJournalSection(upsertSection(mergedNextData, status, { before: 'Dates' })),
         };

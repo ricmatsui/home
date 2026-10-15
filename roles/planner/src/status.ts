@@ -1,12 +1,18 @@
-import { Section } from './types.js';
+import { Section, TodoItem } from './types.js';
 
 export const STATUS_SECTION = 'Status';
 
-// The forecast and each source's counts, one line apiece, in the order given
-export function formatStatusSection(lines: string[]): Section {
+const forecastLine = (text: string): TodoItem => ({ status: 'note', text, children: [] });
+
+// Each source's counts are a todo to be checked off by hand. Whether they were
+// is never read back: closing the day rewrites the line unchecked.
+const countsLine = (text: string): TodoItem => ({ status: 'incomplete', text, children: [] });
+
+// The forecast leads, then each source's counts in the order given
+export function formatStatusSection({ forecast, counts }: { forecast?: string; counts: string[] }): Section {
     return {
         name: STATUS_SECTION,
-        items: lines.map(text => ({ status: 'note' as const, text, children: [] })),
+        items: [...(forecast === undefined ? [] : [forecastLine(forecast)]), ...counts.map(countsLine)],
     };
 }
 
@@ -20,7 +26,7 @@ export function findStatusLine(section: Section | undefined, label: string): str
 export function withStatusLine(section: Section | undefined, label: string, text: string): Section {
     const items = section?.items ?? [];
     const index = items.findIndex(item => item.text.startsWith(`${label}: `));
-    const line = { status: 'note' as const, text, children: [] };
+    const line = countsLine(text);
 
     return {
         name: STATUS_SECTION,
@@ -36,7 +42,8 @@ export function withStatusLine(section: Section | undefined, label: string, text
  * them, and once it has been closed this can go.
  */
 const LEGACY_WEATHER_SECTION = 'Weather';
-const LEGACY_SECTIONS = [LEGACY_WEATHER_SECTION, 'Donetick', 'Google Tasks'];
+const LEGACY_COUNTS_SECTIONS = ['Donetick', 'Google Tasks'];
+const LEGACY_SECTIONS = [LEGACY_WEATHER_SECTION, ...LEGACY_COUNTS_SECTIONS];
 
 export function foldLegacySections(sections: Section[]): Section[] {
     const first = sections.findIndex(section => LEGACY_SECTIONS.includes(section.name));
@@ -45,14 +52,19 @@ export function foldLegacySections(sections: Section[]): Section[] {
     const others = sections.filter(section => !LEGACY_SECTIONS.includes(section.name));
     if (others.some(section => section.name === STATUS_SECTION)) return others;
 
-    const lines = LEGACY_SECTIONS.flatMap(name => {
+    const joined = (name: string) => {
         const legacy = sections.find(section => section.name === name);
-        if (!legacy || legacy.items.length === 0) return [];
+        if (!legacy || legacy.items.length === 0) return undefined;
 
-        const text = legacy.items.map(item => item.text).join(', ');
-        return [name === LEGACY_WEATHER_SECTION ? text : `${name}: ${text}`];
+        return legacy.items.map(item => item.text).join(', ');
+    };
+
+    const forecast = joined(LEGACY_WEATHER_SECTION);
+    const counts = LEGACY_COUNTS_SECTIONS.flatMap(name => {
+        const text = joined(name);
+        return text === undefined ? [] : [`${name}: ${text}`];
     });
 
     // Nothing ahead of the first legacy section was dropped, so it lands there
-    return [...others.slice(0, first), formatStatusSection(lines), ...others.slice(first)];
+    return [...others.slice(0, first), formatStatusSection({ forecast, counts }), ...others.slice(first)];
 }
