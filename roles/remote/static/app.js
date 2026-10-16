@@ -98,9 +98,21 @@ document.querySelector('.delete-button').addEventListener('click', () => {
     });
 });
 
+// A gesture the deployed model has no class for yet needs samples before it
+// can be trained, so recording asks only for those while any exist.
+const untrainedIndices = roster
+    .map((gesture, index) => index)
+    .filter((index) => !labels.some((label) => label.name === roster[index].name));
+const recordableIndices = untrainedIndices.length
+    ? untrainedIndices
+    : roster.map((gesture, index) => index);
+
+const randomRecordableIndex = () =>
+    recordableIndices[Math.floor(Math.random() * recordableIndices.length)];
+
 let lastGestureIndex = null;
-let recordingGestureIndex = Math.floor(Math.random() * roster.length);
-let nextRecordingGestureIndex = Math.floor(Math.random() * roster.length);
+let recordingGestureIndex = randomRecordableIndex();
+let nextRecordingGestureIndex = randomRecordableIndex();
 
 const record = document.querySelector('.record');
 const recordInstructions = document.querySelector('.record-instructions');
@@ -110,10 +122,15 @@ const updateRecordState = () => {
         recordingGestureIndex = nextRecordingGestureIndex;
 
         do {
-            nextRecordingGestureIndex = Math.floor(Math.random() * roster.length);
-        } while (nextRecordingGestureIndex === recordingGestureIndex)
+            nextRecordingGestureIndex = randomRecordableIndex();
+        } while (
+            recordableIndices.length > 1
+            && nextRecordingGestureIndex === recordingGestureIndex
+        )
 
-        if (lastGestureIndex !== null) {
+        // A recognized gesture is always a trained one, so it can't stand in
+        // while untrained ones are waiting for samples.
+        if (lastGestureIndex !== null && !untrainedIndices.length) {
             recordingGestureIndex = lastGestureIndex;
             nextRecordingGestureIndex = lastGestureIndex;
         }
@@ -341,7 +358,7 @@ const handleInput = ({ name }) => {
     //  to: 'host',
     //},
 
-    if (name == 'netflix' || name == 'peacock') {
+    if (name == 'netflix' || name == 'peacock' || name == 'appleTV') {
         let appId;
 
         switch (name) {
@@ -350,6 +367,9 @@ const handleInput = ({ name }) => {
                 break;
             case 'peacock':
                 appId = '3202006020991';
+                break;
+            case 'appleTV':
+                appId = '3201807016597';
                 break;
         }
 

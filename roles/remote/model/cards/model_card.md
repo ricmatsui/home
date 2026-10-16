@@ -14,7 +14,7 @@ metrics:
 # Remote Gesture
 
 A small convolutional classifier that turns a single-stroke touch gesture into
-one of ten television remote actions. It runs in the browser via TensorFlow.js
+one of eleven television remote actions. It runs in the browser via TensorFlow.js
 on the phone that drew the gesture; no inference happens server-side.
 
 ## Files
@@ -38,7 +38,7 @@ part of the input**, not just shape.
 Input(32, 32, 1)
 Conv2D(32, 3, relu, padding=same) -> MaxPool2D(2)
 Conv2D(64, 3, relu, padding=same) -> MaxPool2D(2)
-Flatten -> Dense(128, relu) -> Dropout(0.4) -> Dense(10, softmax)
+Flatten -> Dense(128, relu) -> Dropout(0.4) -> Dense(11, softmax)
 ```
 
 ## Training
@@ -66,5 +66,5 @@ model has no reject class of its own.
 
 - One author's handwriting, one device, one screen geometry.
 - Sensitive to stroke direction by design.
-- Ten fixed classes; adding one requires retraining and republishing both the
+- Eleven fixed classes; adding one requires retraining and republishing both the
   dataset and the model.

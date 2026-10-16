@@ -8,5 +8,6 @@
   { "name": "n", "action": "netflix", "allowSlanted": true },
   { "name": "p", "action": "peacock", "allowSlanted": true },
   { "name": "v", "action": "back", "allowMirrorHorizontal": true, "allowSlanted": true },
-  { "name": "^", "action": "home", "allowMirrorHorizontal": true, "allowSlanted": true }
+  { "name": "^", "action": "home", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "at", "action": "appleTV", "allowSlanted": true }
 ]
