@@ -4,8 +4,7 @@ export const STATUS_SECTION = 'Status';
 
 const forecastLine = (text: string): TodoItem => ({ status: 'note', text, children: [] });
 
-// Each source's counts are a todo to be checked off by hand. Whether they were
-// is never read back: closing the day rewrites the line unchecked.
+// Each source's counts are a todo to be checked off by hand
 const countsLine = (text: string): TodoItem => ({ status: 'incomplete', text, children: [] });
 
 // The forecast leads, then each source's counts in the order given
@@ -22,17 +21,17 @@ export function findStatusLine(section: Section | undefined, label: string): str
 }
 
 // Replaced where it sits, so closing the day leaves the lines in the order the
-// day was opened with. A line the day never got is added at the end.
+// day was opened with, and only its text changes, so a line checked off stays
+// checked. A line the day never got is added at the end.
 export function withStatusLine(section: Section | undefined, label: string, text: string): Section {
     const items = section?.items ?? [];
     const index = items.findIndex(item => item.text.startsWith(`${label}: `));
-    const line = countsLine(text);
 
     return {
         name: STATUS_SECTION,
         items: index === -1
-            ? [...items, line]
-            : items.map((item, i) => i === index ? line : item),
+            ? [...items, countsLine(text)]
+            : items.map((item, i) => i === index ? { ...item, text } : item),
     };
 }
 

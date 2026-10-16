@@ -82,7 +82,7 @@ describe('withStatusLine', () => {
         });
     });
 
-    it('writes the line unchecked whether or not it was checked off', () => {
+    it('keeps whether the line was checked off', () => {
         const checked = {
             ...opened,
             items: opened.items.map(item => item.text.startsWith('Donetick: ') ? { ...item, status: 'completed' as const } : item),
@@ -90,7 +90,7 @@ describe('withStatusLine', () => {
 
         assert.deepEqual(
             withStatusLine(checked, 'Donetick', 'Donetick: 3 overdue, 5 due, 7 completed').items[1],
-            todo('Donetick: 3 overdue, 5 due, 7 completed'),
+            { ...todo('Donetick: 3 overdue, 5 due, 7 completed'), status: 'completed' },
         );
     });
 
