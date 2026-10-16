@@ -15,13 +15,18 @@ markdown fences, no explanation. Each element must be an object with keys
 "box_2d" and "label", where box_2d is [ymin, xmin, ymax, xmax] and label
 names the animal. The species does not matter and does not need to be
 right: anything animal-shaped and black counts, so report it rather than
-leaving it out because you are unsure what it is. People are not animals
+leaving it out because you are unsure what it is. A shadow is not an
+animal: shading cast on a wall, floor or doorway, the dark corner where a
+wall meets the ground, a door mat, and dark objects such as bags, boxes or
+planters are scenery, so leave them out. A dark shape lying by itself on
+open ground can be a cat, so still report it. People are not animals
 here: ignore humans completely, including anyone dressed in black, and
 never report a person as an animal. Also ignore any animal being walked
 by a person — on a leash, held, or walking alongside someone — and leave
 it out entirely. Include one entry per distinct animal, including partially
 visible or occluded ones. If the image contains only people, only animals
-with people, or no black animals at all, output [].`;
+with people, only shadows or dark objects, or no black animals at all,
+output [].`;
 
 /** An empty string is a mistake, not an instruction, so it falls back. */
 export function promptFor(prompt: string | undefined): string {

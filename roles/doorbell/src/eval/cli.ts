@@ -84,7 +84,7 @@ const DEFAULT_ANNOTATE_PORT = 7357;
 
 const USAGE = `usage:
   yarn eval bootstrap [--dir <corpus>]
-  yarn eval annotate  [--dir <corpus>] [--only <path|glob>]... [--port <n>]
+  yarn eval annotate  [--dir <corpus>] [--only <path|glob>]... [--pending] [--port <n>]
   yarn eval run       [--dir <corpus>] [--model <name>] [--url <ws://…>] [--prompt-file <f>]
                       [--only <path|glob>]... [--limit <n>] [--concurrency <n>] [--upscale <factor>]
   yarn eval compare   <runA.json> <runB.json> [--beta <n>]
@@ -94,6 +94,7 @@ file next to package.json, and falls back to ws://localhost:1234.
 
 annotate serves a page on localhost for drawing the box around each cat. Save
 writes only the frames you brought up, so the rest keep whatever they had.
+--pending brings up only the frames with neither a box nor a no-cat verdict yet.
 
 --only narrows a run (or an annotate session) to the images matching a path or glob relative to images/,
 e.g. --only '2026-09-25/*' --only night/porch-ir-03.jpg. Repeatable.
@@ -131,20 +132,26 @@ async function bootstrap(corpusDir: string): Promise<void> {
     console.log(`open ${path.join(corpusDir, 'sheet.html')} to review, and run "yarn eval annotate" to label`);
 }
 
-async function annotateCorpus(options: { corpusDir: string; only: string[]; port: number }): Promise<void> {
+async function annotateCorpus(options: { corpusDir: string; only: string[]; pending: boolean; port: number }): Promise<void> {
     const labels = await loadLabels(options.corpusDir);
     if (Object.keys(labels).length === 0) fail(`no labels in ${options.corpusDir}; run "yarn eval bootstrap" first`);
 
-    const { selected: keys, unmatched } = selectKeys(Object.keys(labels).sort(), options.only);
+    const { selected, unmatched } = selectKeys(Object.keys(labels).sort(), options.only);
     if (unmatched.length > 0) {
         fail(`--only matched no labelled images:\n` + unmatched.map((pattern) => `  ${pattern}`).join('\n'));
+    }
+
+    const pending = pendingLabels(labels);
+    const keys = options.pending ? selected.filter((key) => pending.includes(key)) : selected;
+    if (keys.length === 0) {
+        console.log('nothing to annotate: every selected frame has a box or a no-cat verdict');
+        return;
     }
 
     const server = createAnnotatorServer({ corpusDir: options.corpusDir, keys });
     // Loopback only: the server writes labels.json for anyone who can reach it.
     server.listen(options.port, '127.0.0.1', () => {
-        const pending = pendingLabels(labels).filter((key) => keys.includes(key)).length;
-        console.log(`${keys.length} frames, ${pending} without a box or a no-cat verdict`);
+        console.log(`${keys.length} frames, ${keys.filter((key) => pending.includes(key)).length} without a box or a no-cat verdict`);
         console.log(`open http://127.0.0.1:${options.port}/  (ctrl-c to stop)`);
     });
     server.on('error', (error) => fail(`annotate: ${error.message}`));
@@ -367,6 +374,7 @@ const { values, positionals } = parseArgs({
         upscale: { type: 'string' },
         beta: { type: 'string' },
         port: { type: 'string' },
+        pending: { type: 'boolean' },
     },
 });
 
@@ -379,6 +387,7 @@ if (command === 'bootstrap') {
     await annotateCorpus({
         corpusDir,
         only: values.only ?? [],
+        pending: values.pending ?? false,
         port: values.port ? Number(values.port) : DEFAULT_ANNOTATE_PORT,
     });
 } else if (command === 'run') {
