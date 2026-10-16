@@ -585,6 +585,110 @@ describe('extractActions', () => {
         });
     });
 
+    it('moves only unfinished siblings, leaving finished ones behind like the day rollover', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [{
+                status: 'incomplete',
+                text: 'Test',
+                children: [
+                    { status: 'completed', text: 'Done item', children: [] },
+                    { status: 'started', text: 'In progress item', children: [] },
+                    { status: 'incomplete', text: 'Not done item', children: [] },
+                    { status: 'incomplete', text: '-> 1 month', children: [] },
+                ],
+            }],
+        }];
+
+        assert.deepEqual(extractActions(sections, ref), {
+            sections: [{
+                name: 'Work',
+                items: [{
+                    status: 'completed',
+                    text: 'Test',
+                    children: [
+                        { status: 'completed', text: 'Done item', children: [] },
+                        { status: 'completed', text: 'In progress item', children: [] },
+                        { status: 'completed', text: '-> 1 month => 2026-04-30', children: [] },
+                    ],
+                }],
+            }],
+            actions: [{
+                kind: 'addItem',
+                targetDate: '2026-04-30',
+                sectionName: 'Work',
+                item: {
+                    status: 'incomplete',
+                    text: 'Test',
+                    children: [
+                        { status: 'started', text: 'In progress item', children: [] },
+                        { status: 'incomplete', text: 'Not done item', children: [] },
+                    ],
+                },
+            }],
+        });
+    });
+
+    it('resolves an action nested in a sibling before splitting, so its item moves only once', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [{
+                status: 'incomplete',
+                text: 'Test',
+                children: [
+                    {
+                        status: 'incomplete',
+                        text: 'Not done item',
+                        children: [
+                            { status: 'completed', text: 'Sub step done', children: [] },
+                            { status: 'incomplete', text: '-> 1 week', children: [] },
+                        ],
+                    },
+                    { status: 'incomplete', text: '-> 1 month', children: [] },
+                ],
+            }],
+        }];
+
+        assert.deepEqual(extractActions(sections, ref), {
+            sections: [{
+                name: 'Work',
+                items: [{
+                    status: 'completed',
+                    text: 'Test',
+                    children: [
+                        {
+                            status: 'completed',
+                            text: 'Not done item',
+                            children: [
+                                { status: 'completed', text: 'Sub step done', children: [] },
+                                { status: 'completed', text: '-> 1 week => 2026-04-06', children: [] },
+                            ],
+                        },
+                        { status: 'completed', text: '-> 1 month => 2026-04-30', children: [] },
+                    ],
+                }],
+            }],
+            actions: [
+                {
+                    kind: 'addItem',
+                    targetDate: '2026-04-06',
+                    sectionName: 'Work',
+                    item: {
+                        status: 'incomplete',
+                        text: 'Test',
+                        children: [{ status: 'incomplete', text: 'Not done item', children: [] }],
+                    },
+                },
+                {
+                    kind: 'addItem',
+                    targetDate: '2026-04-30',
+                    sectionName: 'Work',
+                    item: { status: 'incomplete', text: 'Test', children: [] },
+                },
+            ],
+        });
+    });
+
     it('leaves -> with unparseable text untouched', () => {
         const sections: Section[] = [{
             name: 'Work',

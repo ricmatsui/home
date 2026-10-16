@@ -101,24 +101,26 @@ function extractActionsFromItem(
     const actions: Action[] = [];
 
     const parsed = item.children.map(c => parseAction(c.text, referenceDate));
-    const siblings = item.children.filter((_, i) => !parsed[i]).map(s => ({ ...s, children: [...s.children] }));
 
-    for (let i = 0; i < item.children.length; i++) {
-        const child = item.children[i];
-        if (parsed[i]) {
-            const cloned = cloneAncestorChain(path, siblings);
-            actions.push({ kind: 'addItem', targetDate: parsed[i]!.targetDate, sectionName, item: cloned });
-            child.text = `${child.text} => ${parsed[i]!.targetDate}`;
-            child.status = 'completed';
-            item.status = 'completed';
-        } else {
-            actions.push(...extractActionsFromItem(child, path, sectionName, referenceDate));
-        }
-    }
+    item.children.forEach((child, i) => {
+        if (!parsed[i]) actions.push(...extractActionsFromItem(child, path, sectionName, referenceDate));
+    });
 
-    if (parsed.some(Boolean)) {
-        item.children = item.children.filter((_, i) => parsed[i]);
-    }
+    if (!parsed.some(Boolean)) return actions;
+
+    const partitions = item.children.map((c, i) => parsed[i] ? null : partitionItem(c, item));
+    const siblings = partitions.flatMap(p => p?.next ? [p.next] : []);
+
+    item.children.forEach((child, i) => {
+        const action = parsed[i];
+        if (!action) return;
+        actions.push({ kind: 'addItem', targetDate: action.targetDate, sectionName, item: cloneAncestorChain(path, siblings) });
+        child.text = `${child.text} => ${action.targetDate}`;
+        child.status = 'completed';
+    });
+
+    item.status = 'completed';
+    item.children = item.children.flatMap((c, i) => parsed[i] ? [c] : partitions[i]!.last ? [partitions[i]!.last] : []);
 
     return actions;
 }
