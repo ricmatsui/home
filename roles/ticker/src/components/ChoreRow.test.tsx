@@ -36,6 +36,7 @@ type RowOptions = {
     status?: RowStatus;
     users?: User[];
     asksWhoDidIt?: boolean;
+    donetickUrl?: string;
     completedBy?: User;
     onBeginComplete?: (id: number) => void;
     onCancelComplete?: (id: number) => void;
@@ -50,6 +51,7 @@ function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
         status = 'idle',
         users = [],
         asksWhoDidIt = false,
+        donetickUrl = '',
         completedBy,
         onBeginComplete = () => {},
         onCancelComplete = () => {},
@@ -66,6 +68,7 @@ function renderRow(overrides: Partial<Chore> = {}, options: RowOptions = {}) {
                 status={status}
                 users={users}
                 asksWhoDidIt={asksWhoDidIt}
+                donetickUrl={donetickUrl}
                 completedBy={completedBy}
                 now={NOW}
                 onBeginComplete={onBeginComplete}
@@ -106,6 +109,21 @@ describe('ChoreRow', () => {
         const badge = screen.getByText('Tomorrow');
         expect(badge.parentElement).toHaveClass('row__due');
         expect(badge.parentElement).toHaveTextContent(/^Tomorrow in 1 day$/);
+    });
+
+    it('links its name to the chore in Donetick, in the same tab', () => {
+        renderRow({ id: 7, name: 'Trash' }, { donetickUrl: 'https://donetick.example.com' });
+
+        const link = screen.getByRole('link', { name: 'Trash' });
+        expect(link).toHaveAttribute('href', 'https://donetick.example.com/chores/7');
+        expect(link).not.toHaveAttribute('target');
+    });
+
+    it('leaves its name plain text with nowhere to link to', () => {
+        renderRow({ name: 'Trash' });
+
+        expect(screen.queryByRole('link')).not.toBeInTheDocument();
+        expect(screen.getByText('Trash')).toBeInTheDocument();
     });
 
     describe('crediting a person', () => {

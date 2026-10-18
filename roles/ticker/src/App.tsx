@@ -10,7 +10,7 @@ import { useDayRollover } from './hooks/useDayRollover';
 import { useHourlyRender } from './hooks/useHourlyRender';
 import { usePublicOnly } from './hooks/usePublicOnly';
 import { filterPublic, searchChores } from './lib/chores';
-import { LOCKED_PUBLIC } from './lib/config';
+import { DONETICK_URL, LOCKED_PUBLIC } from './lib/config';
 import { USERS } from './lib/users';
 import type { Chore, User } from './types';
 
@@ -25,11 +25,14 @@ type AppProps = {
      * held on and the control that would turn it off is not offered.
      */
     lockedPublic?: boolean;
+    // Where a chore's name links to. Injected for the same reason as users.
+    donetickUrl?: string;
 };
 
 export default function App({
     users = USERS,
     lockedPublic = LOCKED_PUBLIC,
+    donetickUrl = DONETICK_URL,
 }: AppProps = {}) {
     const {
         dueChores,
@@ -99,6 +102,13 @@ export default function App({
     const asksWhoDidIt = publicOnly && users.length > 1;
 
     /*
+     * The wall tablet links nowhere. Donetick sits behind the login the
+     * kitchen board does without, so a tap there would strand the tablet on a
+     * sign-in page with no way back to the board.
+     */
+    const choreLinkBase = lockedPublic ? '' : donetickUrl;
+
+    /*
      * Search draws its results with the board's own list, against the same
      * row state, so a chore marked done or moved in search is marked so on
      * the board behind it.
@@ -111,6 +121,7 @@ export default function App({
             rowCompletedBy={rowCompletedBy}
             users={users}
             asksWhoDidIt={asksWhoDidIt}
+            donetickUrl={choreLinkBase}
             now={new Date()}
             emptyMessage={emptyMessage}
             onBeginComplete={beginComplete}

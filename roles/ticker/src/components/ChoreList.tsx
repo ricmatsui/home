@@ -10,6 +10,7 @@ type ChoreListProps = {
     // Passed straight through: the list has no more view of the filter than
     // the row does. See ChoreRow.
     asksWhoDidIt: boolean;
+    donetickUrl: string;
     now: Date;
     // The board and search say different things when empty, and only the
     // caller knows which one this is.
@@ -29,6 +30,7 @@ export function ChoreList({
     rowCompletedBy,
     users,
     asksWhoDidIt,
+    donetickUrl,
     now,
     emptyMessage,
     onBeginComplete,
@@ -53,6 +55,7 @@ export function ChoreList({
                     completedBy={rowCompletedBy[chore.id]}
                     users={users}
                     asksWhoDidIt={asksWhoDidIt}
+                    donetickUrl={donetickUrl}
                     now={now}
                     onBeginComplete={onBeginComplete}
                     onCancelComplete={onCancelComplete}

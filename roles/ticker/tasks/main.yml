@@ -20,6 +20,7 @@
     rebuild: always
     args:
       VITE_TICKER_USERS: "{{ config.ticker.users | to_json }}"
+      VITE_DONETICK_URL: "https://donetick.{{ config.domain }}"
     platform:
       - linux/amd64
       - linux/arm64/v8

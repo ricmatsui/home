@@ -17,3 +17,7 @@ export function parseLockedPublic(raw: string): boolean {
 }
 
 export const LOCKED_PUBLIC = parseLockedPublic(window.TICKER_LOCKED_PUBLIC ?? '');
+
+// Built in rather than read at runtime: both deployments share it, and the
+// kitchen one simply never draws the link. See App.
+export const DONETICK_URL = import.meta.env.VITE_DONETICK_URL ?? '';

@@ -381,6 +381,28 @@ describe('App', () => {
         });
     });
 
+    describe('linking to Donetick', () => {
+        it('links each chore name to its page', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 3, name: 'Trash' })]);
+
+            render(<App donetickUrl="https://donetick.example.com" />);
+
+            expect(await screen.findByRole('link', { name: 'Trash' })).toHaveAttribute(
+                'href',
+                'https://donetick.example.com/chores/3',
+            );
+        });
+
+        it('links nowhere on the locked public board', async () => {
+            vi.mocked(api.getChores).mockResolvedValue([chore({ id: 3, name: 'Trash' })]);
+
+            render(<App lockedPublic donetickUrl="https://donetick.example.com" />);
+
+            expect(await screen.findByText('Trash')).toBeInTheDocument();
+            expect(screen.queryByRole('link')).not.toBeInTheDocument();
+        });
+    });
+
     it('shows a session-expired banner with a reload action', async () => {
         vi.mocked(api.getChores).mockRejectedValue(new SessionExpiredError());
 

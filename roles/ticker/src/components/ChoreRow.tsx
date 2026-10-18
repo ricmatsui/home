@@ -12,6 +12,8 @@ type ChoreRowProps = {
     // it turns on the roster and on the public filter, and the row can see
     // neither. False means one tap, sent unattributed.
     asksWhoDidIt: boolean;
+    // Where the name links to, or empty for a name that links nowhere.
+    donetickUrl: string;
     completedBy?: User;
     error?: string;
     now: Date;
@@ -125,6 +127,7 @@ export function ChoreRow({
     status,
     users,
     asksWhoDidIt,
+    donetickUrl,
     completedBy,
     error,
     now,
@@ -159,7 +162,13 @@ export function ChoreRow({
               * on its way to the second tap.
               */}
             <div className="row__text" aria-hidden={picking || rescheduling || undefined}>
-                <span className="row__name">{chore.name}</span>
+                {donetickUrl ? (
+                    <a className="row__name" href={`${donetickUrl}/chores/${chore.id}`}>
+                        {chore.name}
+                    </a>
+                ) : (
+                    <span className="row__name">{chore.name}</span>
+                )}
                 <span className="row__due">
                     {done && completedBy ? (
                         // The due time is spent once the chore is done; who it
