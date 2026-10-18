@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { findStatusLine, foldLegacySections, formatStatusSection, withStatusLine } from './status.js';
+import { closeStatusSection, findStatusLine, foldLegacySections, formatStatusSection, withStatusLine } from './status.js';
 import { parseDayFile, serializeSections } from './lib.js';
 import { Section } from './types.js';
 
@@ -98,6 +98,53 @@ describe('withStatusLine', () => {
         withStatusLine(opened, 'Donetick', 'Donetick: 7 completed');
 
         assert.equal(opened.items[1].text, 'Donetick: 3 overdue, 5 due');
+    });
+});
+
+describe('closeStatusSection', () => {
+    const left: Section = {
+        name: 'Status',
+        items: [
+            note('Overcast'),
+            todo('Donetick: 3 overdue, 5 due'),
+            {
+                status: 'started',
+                text: 'Google Tasks: 1 overdue, 3 due',
+                children: [
+                    { status: 'started', text: 'Reply to landlord', children: [] },
+                    todo('Renew passport'),
+                ],
+            },
+            { status: 'completed', text: 'Finished', children: [] },
+            { status: 'rejected', text: 'Dropped', children: [] },
+        ],
+    };
+
+    it('completes what was started, nested lines included, and leaves the rest as it was', () => {
+        assert.deepEqual(closeStatusSection(left), {
+            name: 'Status',
+            items: [
+                note('Overcast'),
+                todo('Donetick: 3 overdue, 5 due'),
+                {
+                    status: 'completed',
+                    text: 'Google Tasks: 1 overdue, 3 due',
+                    children: [
+                        { status: 'completed', text: 'Reply to landlord', children: [] },
+                        todo('Renew passport'),
+                    ],
+                },
+                { status: 'completed', text: 'Finished', children: [] },
+                { status: 'rejected', text: 'Dropped', children: [] },
+            ],
+        });
+    });
+
+    it('leaves the section it was given untouched', () => {
+        closeStatusSection(left);
+
+        assert.equal(left.items[2].status, 'started');
+        assert.equal(left.items[2].children[0].status, 'started');
     });
 });
 

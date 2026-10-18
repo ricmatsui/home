@@ -5,7 +5,7 @@ import * as chrono from 'chrono-node';
 import { StatsD } from 'hot-shots';
 import { Status, TodoItem, Section, Action } from './types.js';
 import { JOURNAL_SECTION } from './journal.js';
-import { STATUS_SECTION } from './status.js';
+import { STATUS_SECTION, closeStatusSection } from './status.js';
 import { requireEnv } from './env.js';
 
 const dogstatsd = new StatsD({
@@ -339,8 +339,9 @@ const STATUS_SORT_ORDER: Record<Status, number> = {
     rejected: 4,
 };
 
+// Status keeps the order the day was opened with
 export function sortSectionItems(sections: Section[]): Section[] {
-    return sections.map(section => ({
+    return sections.map(section => section.name === STATUS_SECTION ? section : ({
         ...section,
         items: [...section.items].sort((a, b) => STATUS_SORT_ORDER[a.status] - STATUS_SORT_ORDER[b.status]),
     }));
@@ -437,7 +438,7 @@ export function partitionSections(sections: Section[]): { lastData: Section[]; n
 
     for (const section of sections) {
         if (EPHEMERAL_SECTIONS.includes(section.name)) {
-            lastData.push(section);
+            lastData.push(section.name === STATUS_SECTION ? closeStatusSection(section) : section);
             continue;
         }
 

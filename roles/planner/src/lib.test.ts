@@ -805,6 +805,19 @@ describe('sortSectionItems', () => {
             },
         ]);
     });
+    // Its lines stay in the order the day was opened with
+    it('leaves the Status section in the order it was written', () => {
+        const status: Section = {
+            name: 'Status',
+            items: [
+                { status: 'note', text: 'Overcast', children: [] },
+                { status: 'incomplete', text: 'Donetick: 3 overdue, 5 due', children: [] },
+                { status: 'completed', text: 'Google Tasks: 1 overdue, 3 due', children: [] },
+            ],
+        };
+
+        assert.deepEqual(sortSectionItems([status]), [status]);
+    });
 });
 
 describe('upsertSection', () => {
@@ -942,6 +955,20 @@ describe('partitionSections', () => {
         assert.deepEqual(lastData.map(s => s.name), ['Status', 'Dates']);
         assert.deepEqual(lastData[0].items.map(i => i.text), ['Donetick: 3 overdue, 5 due, 7 completed']);
         assert.deepEqual(nextData.map(s => s.name), ['Dates']);
+    });
+
+    it('completes what was started in the Status section it leaves behind', () => {
+        const sections: Section[] = [{
+            name: 'Status',
+            items: [
+                { status: 'incomplete', text: 'Donetick: 3 overdue, 5 due', children: [] },
+                { status: 'started', text: 'Google Tasks: 1 overdue, 3 due', children: [] },
+            ],
+        }];
+
+        const { lastData } = partitionSections(sections);
+
+        assert.deepEqual(lastData[0].items.map(i => i.status), ['incomplete', 'completed']);
     });
 });
 

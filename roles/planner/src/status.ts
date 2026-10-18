@@ -35,6 +35,18 @@ export function withStatusLine(section: Section | undefined, label: string, text
     };
 }
 
+// What was started that day is done as far as the day is concerned; the rest
+// is left as it was, so the closed day reads the way it was left
+const closedItem = (item: TodoItem): TodoItem => ({
+    ...item,
+    status: item.status === 'started' ? 'completed' : item.status,
+    children: item.children.map(closedItem),
+});
+
+export function closeStatusSection(section: Section): Section {
+    return { ...section, items: section.items.map(closedItem) };
+}
+
 /*
  * Days opened before the forecast and the due counts shared a section carry
  * them as three sections of their own. Only the day open at the changeover has
