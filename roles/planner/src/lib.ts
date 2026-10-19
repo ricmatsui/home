@@ -5,7 +5,7 @@ import * as chrono from 'chrono-node';
 import { StatsD } from 'hot-shots';
 import { Status, TodoItem, Section, Action } from './types.js';
 import { JOURNAL_SECTION } from './journal.js';
-import { STATUS_SECTION, closeStatusSection } from './status.js';
+import { STATUS_SECTION, closeStatusSection, closedItem } from './status.js';
 import { requireEnv } from './env.js';
 
 const dogstatsd = new StatsD({
@@ -379,11 +379,14 @@ export async function writeDayFile(filePath: string, sections: Section[]): Promi
 }
 
 function partitionItem(item: TodoItem, parent: TodoItem | null = null): { last: TodoItem | null; next: TodoItem | null } {
+    // Finishing or dropping an item closes everything under it, so the whole
+    // subtree stays with the day, as it was left but for what was started
+    if (item.status === 'completed' || item.status === 'rejected') {
+        return { last: closedItem(item), next: null };
+    }
+
     if (item.children.length === 0) {
         switch (item.status) {
-            case 'completed':
-            case 'rejected':
-                return { last: { ...item, children: [] }, next: null };
             case 'incomplete':
                 return { last: null, next: { ...item, children: [] } };
             case 'started':
@@ -392,7 +395,7 @@ function partitionItem(item: TodoItem, parent: TodoItem | null = null): { last: 
                     next: { ...item, children: [] },
                 };
             case 'note':
-                // Notes under a completed/rejected parent stay with last, not carried over
+                // Notes beside an action under a completed/rejected parent stay with last, not carried over
                 if (parent?.status === 'completed' || parent?.status === 'rejected') {
                     return { last: { ...item, children: [] }, next: null };
                 }
@@ -409,27 +412,17 @@ function partitionItem(item: TodoItem, parent: TodoItem | null = null): { last: 
         if (next) nextChildren.push(next);
     }
 
-    const isDone = item.status === 'completed' || item.status === 'rejected';
-    const lastStatus: Status = item.status === 'rejected' ? 'rejected' : 'completed';
-
     const last: TodoItem | null =
-        lastChildren.length > 0 || isDone
-            ? { status: lastStatus, text: item.text, children: lastChildren }
-            : item.status === 'started'
-                ? { status: 'completed', text: item.text, children: [] }
-                : null;
+        lastChildren.length > 0 || item.status === 'started'
+            ? { status: 'completed', text: item.text, children: lastChildren }
+            : null;
 
     const nextStatus: Status =
         item.status === 'note' ? 'note'
             : item.status === 'started' && nextChildren.some(c => c.status === 'started') ? 'started'
                 : 'incomplete';
 
-    const next: TodoItem | null =
-        nextChildren.length > 0 || !isDone
-            ? { status: nextStatus, text: item.text, children: nextChildren }
-            : null;
-
-    return { last, next };
+    return { last, next: { status: nextStatus, text: item.text, children: nextChildren } };
 }
 
 export function partitionSections(sections: Section[]): { lastData: Section[]; nextData: Section[] } {

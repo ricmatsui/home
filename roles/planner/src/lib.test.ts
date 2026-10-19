@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, upsertFrontmatterLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
-import { Section } from './types.js';
+import { Section, TodoItem } from './types.js';
 
 describe('parseAction', () => {
     const ref = new Date(2026, 3, 22);
@@ -927,6 +927,63 @@ describe('partitionSections', () => {
 
         assert.deepEqual(lastData[0].items.map(i => i.text), ['Done']);
         assert.deepEqual(nextData[0].items.map(i => i.text), ['Todo']);
+    });
+
+    it('leaves a finished item behind with every note nested under it', () => {
+        const fixSink: TodoItem = {
+            status: 'completed',
+            text: 'Fix sink',
+            children: [{
+                status: 'note',
+                text: 'parts list',
+                children: [{ status: 'note', text: 'P-trap 1.5in', children: [] }],
+            }],
+        };
+
+        const { lastData, nextData } = partitionSections([{ name: 'Work', items: [fixSink] }]);
+
+        assert.deepEqual(lastData[0].items, [fixSink]);
+        assert.deepEqual(nextData[0].items, []);
+    });
+
+    it('leaves a dropped item behind with what was still open under it', () => {
+        const callPlumber: TodoItem = {
+            status: 'rejected',
+            text: 'Call plumber',
+            children: [{ status: 'incomplete', text: 'get two quotes first', children: [] }],
+        };
+
+        const { lastData, nextData } = partitionSections([{ name: 'Work', items: [callPlumber] }]);
+
+        assert.deepEqual(lastData[0].items, [callPlumber]);
+        assert.deepEqual(nextData[0].items, []);
+    });
+
+    it('completes what was started under a finished item it leaves behind', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [{
+                status: 'completed',
+                text: 'Fix sink',
+                children: [{
+                    status: 'started',
+                    text: 'swap the P-trap',
+                    children: [{ status: 'started', text: 'loosen the slip nuts', children: [] }],
+                }],
+            }],
+        }];
+
+        const { lastData } = partitionSections(sections);
+
+        assert.deepEqual(lastData[0].items, [{
+            status: 'completed',
+            text: 'Fix sink',
+            children: [{
+                status: 'completed',
+                text: 'swap the P-trap',
+                children: [{ status: 'completed', text: 'loosen the slip nuts', children: [] }],
+            }],
+        }]);
     });
 
     it('leaves the Journal section behind instead of carrying it forward', () => {

@@ -37,7 +37,7 @@ export function withStatusLine(section: Section | undefined, label: string, text
 
 // What was started that day is done as far as the day is concerned; the rest
 // is left as it was, so the closed day reads the way it was left
-const closedItem = (item: TodoItem): TodoItem => ({
+export const closedItem = (item: TodoItem): TodoItem => ({
     ...item,
     status: item.status === 'started' ? 'completed' : item.status,
     children: item.children.map(closedItem),
