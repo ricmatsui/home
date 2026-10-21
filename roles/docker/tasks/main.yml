@@ -105,7 +105,8 @@
     config_only: true
     driver_options:
       parent: "{{ docker_ipvlan_parent }}"
-    ipam_config: "{{ config.docker.ipvlan_ipam_config }}"
+    ipam_config:
+      - "{{ config.docker.ipvlan_ipam_config | combine({'iprange': docker_ipvlan_iprange}) }}"
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
   tags: docker_ipvlan
