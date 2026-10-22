@@ -15,6 +15,8 @@ ROOT = Path(__file__).parent.parent
 
 def create_app(control=None, recordings=None, static=None):
     logging.basicConfig(format='%(message)s', level=logging.DEBUG)
+    # Every frame, keepalive pings included, is logged at DEBUG.
+    logging.getLogger('websockets').setLevel(logging.INFO)
 
     app = flask.Flask(__name__, root_path=str(ROOT))
     app.logger.setLevel(logging.DEBUG)

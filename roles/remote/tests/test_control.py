@@ -1,6 +1,9 @@
 import asyncio
 import base64
+import io
+import json
 import queue
+import time
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -85,6 +88,10 @@ class FakeWebsocket:
 
         message = self.incoming.pop(0)
         self.log.append(('recv', message))
+
+        if isinstance(message, Exception):
+            raise message
+
         return message
 
     async def send(self, data):
@@ -182,7 +189,9 @@ async def wait_until(predicate, timeout=2):
     await asyncio.wait_for(poll(), timeout)
 
 
-def drive(control, monkeypatch, predicate, websocket=None, connect=None):
+def drive(
+    control, monkeypatch, predicate, websocket=None, connect=None, gestures=(KEY_MESSAGE,)
+):
     """Run the message loop until predicate holds, then stop it."""
     if connect is None:
         def connect(*args, **keywords):
@@ -194,7 +203,10 @@ def drive(control, monkeypatch, predicate, websocket=None, connect=None):
         handoff = queue.Queue()
         task = asyncio.create_task(control._process_messages(handoff))
         await asyncio.sleep(0)
-        handoff.get().sync_q.put(KEY_MESSAGE)
+        message_queue = handoff.get()
+
+        for gesture in gestures:
+            message_queue.sync_q.put(gesture)
 
         try:
             await wait_until(predicate)
@@ -252,6 +264,42 @@ def test_a_refused_connection_still_wakes_the_tv(token_store, monkeypatch, wakes
     drive(make_control(token_store), monkeypatch, lambda: wakes, connect=refuse)
 
     assert wakes
+
+
+def test_a_dropped_channel_logs_connect_and_disconnect(
+    token_store, monkeypatch, wakes, caplog
+):
+    token_store.write('12345678')
+    websocket = FakeWebsocket([CONNECT, OSError('connection lost')])
+    caplog.set_level('INFO', logger=control_module.__name__)
+
+    drive(
+        make_control(token_store),
+        monkeypatch,
+        lambda: 'websocket disconnected' in caplog.messages,
+        websocket=websocket,
+    )
+
+    lifecycle = [
+        message for message in caplog.messages if message.startswith('websocket')
+    ]
+    assert lifecycle == ['websocket connected', 'websocket disconnected']
+
+
+def test_a_refused_connection_logs_no_disconnect(
+    token_store, monkeypatch, wakes, caplog
+):
+    """A socket that never opened was never connected."""
+    caplog.set_level('INFO', logger=control_module.__name__)
+
+    def refuse(*args, **keywords):
+        return FailingConnect()
+
+    drive(make_control(token_store), monkeypatch, lambda: wakes, connect=refuse)
+
+    assert not [
+        message for message in caplog.messages if message.startswith('websocket')
+    ]
 
 
 def capture_connect(control, monkeypatch, websocket, predicate):
@@ -336,3 +384,154 @@ def test_pairing_reconnects_so_keepalive_takes_effect(token_store, monkeypatch, 
 
     assert [keywords['ping_interval'] for keywords in captured[:2]] == [None, 5]
     assert [entry[0] for entry in pairing.log] == ['recv']
+
+
+def tv_power(monkeypatch, control, on):
+    probes = []
+
+    async def tv_is_on():
+        probes.append(on)
+        return on
+
+    monkeypatch.setattr(control, '_tv_is_on', tv_is_on)
+    monkeypatch.setattr(control_module, 'PRESENCE_INTERVAL', 0.01)
+    return probes
+
+
+def after(seconds):
+    deadline = time.monotonic() + seconds
+    return lambda: time.monotonic() > deadline
+
+
+def counting_connect(websockets):
+    """Hands out websockets in order, repeating the last one."""
+    remaining = list(websockets)
+    captured = []
+
+    def connect(*args, **keywords):
+        captured.append(keywords)
+        return FakeConnect(remaining.pop(0) if len(remaining) > 1 else remaining[0])
+
+    return connect, captured
+
+
+def test_a_paired_remote_connects_once_the_tv_is_on(token_store, monkeypatch, wakes):
+    """The channel is open before the gesture, so the gesture skips the
+    handshake."""
+    token_store.write('12345678')
+    control = make_control(token_store)
+    tv_power(monkeypatch, control, on=True)
+    connect, captured = counting_connect([FakeWebsocket([CONNECT])])
+
+    drive(control, monkeypatch, lambda: captured, connect=connect, gestures=())
+
+    assert wakes == []
+
+
+def test_a_gesture_reuses_the_preconnected_channel(token_store, monkeypatch, wakes):
+    token_store.write('12345678')
+    control = make_control(token_store)
+    tv_power(monkeypatch, control, on=True)
+    websocket = FakeWebsocket([CONNECT])
+    connect, captured = counting_connect([websocket])
+
+    async def scenario():
+        handoff = queue.Queue()
+        task = asyncio.create_task(control._process_messages(handoff))
+        await asyncio.sleep(0)
+        message_queue = handoff.get()
+
+        try:
+            await wait_until(lambda: websocket.log)
+            message_queue.sync_q.put(KEY_MESSAGE)
+            await wait_until(lambda: websocket.sent_something.is_set())
+        finally:
+            task.cancel()
+
+    monkeypatch.setattr(control_module.websockets, 'connect', connect)
+    asyncio.run(scenario())
+
+    assert len(captured) == 1
+    assert [entry[0] for entry in websocket.log] == ['recv', 'send']
+
+
+def test_an_unpaired_remote_never_preconnects(token_store, monkeypatch, wakes):
+    """Every unpaired connect puts the pairing prompt on the TV."""
+    control = make_control(token_store)
+    tv_power(monkeypatch, control, on=True)
+    connect, captured = counting_connect([FakeWebsocket([CONNECT])])
+
+    drive(control, monkeypatch, after(0.1), connect=connect, gestures=())
+
+    assert captured == []
+
+
+def test_a_tv_that_is_off_is_left_alone(token_store, monkeypatch, wakes):
+    token_store.write('12345678')
+    control = make_control(token_store)
+    probes = tv_power(monkeypatch, control, on=False)
+    connect, captured = counting_connect([FakeWebsocket([CONNECT])])
+
+    drive(control, monkeypatch, lambda: len(probes) >= 3, connect=connect, gestures=())
+
+    assert captured == []
+    assert wakes == []
+
+
+def test_a_failed_preconnect_never_wakes_the_tv(token_store, monkeypatch, wakes):
+    """Nobody asked for the TV; waking it is a gesture's call to make."""
+    token_store.write('12345678')
+    control = make_control(token_store)
+    tv_power(monkeypatch, control, on=True)
+    attempts = []
+
+    def refuse(*args, **keywords):
+        attempts.append(keywords)
+        return FailingConnect()
+
+    drive(control, monkeypatch, lambda: len(attempts) >= 3, connect=refuse, gestures=())
+
+    assert wakes == []
+
+
+def test_a_channel_that_closes_while_idle_goes_back_to_watching(
+    token_store, monkeypatch, wakes
+):
+    token_store.write('12345678')
+    control = make_control(token_store)
+    tv_power(monkeypatch, control, on=True)
+    connect, captured = counting_connect(
+        [
+            FakeWebsocket([CONNECT, ConnectionError('tv went away')]),
+            FakeWebsocket([CONNECT]),
+        ]
+    )
+
+    drive(control, monkeypatch, lambda: len(captured) >= 2, connect=connect, gestures=())
+
+    assert wakes == []
+
+
+def power_state_response(monkeypatch, state=None, error=None):
+    def urlopen(url, timeout):
+        if error is not None:
+            raise error
+
+        return io.BytesIO(json.dumps({'device': {'PowerState': state}}).encode())
+
+    monkeypatch.setattr(control_module.urllib.request, 'urlopen', urlopen)
+
+
+@pytest.mark.parametrize(
+    ('state', 'error', 'expected'),
+    [
+        ('on', None, True),
+        ('standby', None, False),
+        (None, None, False),
+        (None, OSError('no route to host'), False),
+    ],
+)
+def test_tv_is_on_reads_the_power_state(token_store, monkeypatch, state, error, expected):
+    power_state_response(monkeypatch, state=state, error=error)
+
+    assert asyncio.run(make_control(token_store)._tv_is_on()) is expected

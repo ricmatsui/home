@@ -9,7 +9,6 @@ const fetchJson = async (url) => (await fetch(url)).json();
 
 const modelRoot = '/model/'
     + document.querySelector("meta[name='model-revision']").content;
-const loadingModel = tf.loadLayersModel(`${modelRoot}/model.json`);
 
 const [roster, labels] = await Promise.all([
     fetchJson('gestures.json'),
@@ -17,7 +16,33 @@ const [roster, labels] = await Promise.all([
 ]);
 const actions = new Map(roster.map((gesture) => [gesture.name, gesture]));
 
-const modelPromise = loadingModel.then(async (model) => {
+const modelStatus = document.querySelector('.model-status');
+
+// A failed load or a lost WebGL context leaves no usable model, so the next
+// gesture starts over from a fresh backend instead of staying stuck.
+let model = null;
+let loadingModel = null;
+let isFirstModelLoad = true;
+
+// How long a gesture waits on a loading model before it's dropped; any
+// longer and the action lands well after the swipe that asked for it.
+const modelWaitMilliseconds = 2000;
+
+const showModelStatus = (text) => {
+    modelStatus.innerText = `model: ${text}`;
+};
+
+const loadModel = async () => {
+    showModelStatus('loading');
+
+    if (!isFirstModelLoad) {
+        tf.engine().reset();
+    }
+    isFirstModelLoad = false;
+    await tf.ready();
+
+    const model = await tf.loadLayersModel(`${modelRoot}/model.json`);
+
     if (labels.length !== model.outputs[0].shape[1]) {
         throw new Error(
             `model has ${model.outputs[0].shape[1]} outputs but `
@@ -41,7 +66,23 @@ const modelPromise = loadingModel.then(async (model) => {
     tf.dispose([input, output]);
 
     return model;
-});
+};
+
+const startLoadingModel = () =>
+    loadingModel ??= loadModel()
+        .then((loadedModel) => {
+            model = loadedModel;
+            showModelStatus(`ready (${tf.getBackend()})`);
+        })
+        .catch((error) => {
+            console.error(error);
+            showModelStatus(`failed: ${error.message}`);
+        })
+        .finally(() => {
+            loadingModel = null;
+        });
+
+startLoadingModel();
 
 class Point {
     constructor(x, y) {
@@ -181,6 +222,18 @@ page.addEventListener('pointermove', (event) => {
     }
 })
 
+const rejectGesture = (details) => {
+    document.querySelector('.gesture-debug').innerText = JSON.stringify(
+        { pointCount: points.length, ...details },
+        null,
+        4
+    );
+
+    if (navigator.vibrate) {
+        navigator.vibrate([2, 2, 2]);
+    }
+};
+
 page.addEventListener('pointerup', async (event) => {
     isDown = false;
 
@@ -284,45 +337,61 @@ page.addEventListener('pointerup', async (event) => {
         return;
     }
 
-    const model = await modelPromise;
+    if (!model) {
+        await Promise.race([
+            startLoadingModel(),
+            new Promise((resolve) => setTimeout(resolve, modelWaitMilliseconds)),
+        ]);
+    }
 
-    const result = tf.tidy(() => {
-        const probabilityTensor = model.predict(
-            tf.browser
-                .fromPixels(image, 1)
-                .toFloat()
-                .div(255.0)
-                .expandDims(0)
-        )
+    if (!model) {
+        rejectGesture({ gesture: null, model: 'not ready' });
+        return;
+    }
 
-        probabilityTensor.print();
+    let result;
 
-        const result = tf.topk(probabilityTensor, 1);
+    try {
+        result = tf.tidy(() => {
+            const probabilityTensor = model.predict(
+                tf.browser
+                    .fromPixels(image, 1)
+                    .toFloat()
+                    .div(255.0)
+                    .expandDims(0)
+            )
 
-        return {
-            index: result.indices.dataSync()[0],
-            value: result.values.dataSync()[0],
-        };
-    });
+            probabilityTensor.print();
+
+            const result = tf.topk(probabilityTensor, 1);
+
+            return {
+                index: result.indices.dataSync()[0],
+                value: result.values.dataSync()[0],
+                total: probabilityTensor.sum().dataSync()[0],
+            };
+        });
+
+        // Softmax output sums to 1; anything else is a broken backend (a lost
+        // WebGL context reads back zeros), not an unrecognized gesture.
+        if (!(Math.abs(result.total - 1) < 0.01)) {
+            throw new Error(`probabilities sum to ${result.total}`);
+        }
+    } catch (error) {
+        console.error(error);
+        model = null;
+        startLoadingModel();
+
+        rejectGesture({ gesture: null, model: `broken: ${error.message}` });
+        return;
+    }
 
     console.log(result);
 
     const gesture = actions.get(labels[result.index].name);
 
     if (result.value < 0.6) {
-        document.querySelector('.gesture-debug').innerText = JSON.stringify(
-            {
-                pointCount: points.length,
-                gesture: 'unknown',
-                result: result.value,
-            },
-            null,
-            4
-        );
-
-        if (navigator.vibrate) {
-            navigator.vibrate([2, 2, 2]);
-        }
+        rejectGesture({ gesture: 'unknown', result: result.value });
         return;
     }
 

@@ -5,6 +5,7 @@ import logging
 import queue
 import ssl
 import threading
+import urllib.request
 from urllib.parse import urlencode
 
 import janus
@@ -23,6 +24,11 @@ TIMED_OUT_EVENT = 'ms.channel.timeOut'
 PAIRING_TIMEOUT = 60
 PAIRED_TIMEOUT = 5
 PAIRED_OPEN_TIMEOUT = 2
+
+# How often an idle remote asks whether the TV is on, so that the channel is
+# already open when the next gesture lands.
+PRESENCE_INTERVAL = 5
+PRESENCE_TIMEOUT = 1
 
 
 class Unauthorized(Exception):
@@ -87,6 +93,42 @@ class TvControl:
             f'?{urlencode(query)}'
         )
 
+    async def _tv_is_on(self):
+        """Ask the REST API, which reports standby as such.
+
+        The channel itself is no use here: a TV in standby accepts the socket
+        and only times out the channel seconds later.
+        """
+
+        def power_state():
+            with urllib.request.urlopen(
+                f'http://{self.ip}:8001/api/v2/', timeout=PRESENCE_TIMEOUT
+            ) as response:
+                return json.load(response)['device'].get('PowerState')
+
+        try:
+            return await asyncio.to_thread(power_state) == 'on'
+        except Exception:
+            return False
+
+    async def _wait_for_work(self, message_queue, pending):
+        """Return once there is a gesture to send, or a paired TV that is on.
+
+        Unpaired, every connect puts the pairing prompt on screen, so only a
+        gesture may start one.
+        """
+        while len(pending) == 0:
+            try:
+                pending.append(
+                    await asyncio.wait_for(
+                        message_queue.async_q.get(), PRESENCE_INTERVAL
+                    )
+                )
+            except TimeoutError:
+                if self.token_store.read() is not None and await self._tv_is_on():
+                    logger.debug('tv on, preconnecting')
+                    return
+
     async def _open_channel(self, websocket, timeout):
         """Wait for the TV to admit us, and bank any token it hands over.
 
@@ -132,8 +174,7 @@ class TvControl:
         last_attempt_failed = False
 
         while True:
-            if len(pending) == 0:
-                pending.append(await message_queue.async_q.get())
+            await self._wait_for_work(message_queue, pending)
 
             ssl_context = ssl.SSLContext()
             ssl_context.verify_mode = ssl.CERT_NONE
@@ -151,57 +192,67 @@ class TvControl:
                     ping_timeout=2,
                     close_timeout=2,
                 ) as websocket:
-                    just_paired = await self._open_channel(
-                        websocket, PAIRED_TIMEOUT if paired else PAIRING_TIMEOUT
-                    )
+                    logger.info('websocket connected')
 
-                    if just_paired:
-                        # This socket was opened without keepalive so the
-                        # prompt could stay up. The library starts that task
-                        # once, at open, so the only way to get it is a new
-                        # connection. Pending survives, so the gesture that
-                        # triggered pairing still lands.
-                        logger.debug('paired, reconnecting with keepalive')
-                        continue
+                    try:
+                        just_paired = await self._open_channel(
+                            websocket, PAIRED_TIMEOUT if paired else PAIRING_TIMEOUT
+                        )
 
-                    while len(pending) > 0:
-                        if last_attempt_failed and pending[0]['kind'] == 'powerOn':
-                            pending.pop(0)
-                            logger.debug('! skipping powerOn')
-                        else:
-                            await websocket.send(json.dumps(pending[0]['data']))
-                            pending.pop(0)
-                            logger.debug('-> sent')
-
-                        last_attempt_failed = False
+                        if just_paired:
+                            # This socket was opened without keepalive so the
+                            # prompt could stay up. The library starts that task
+                            # once, at open, so the only way to get it is a new
+                            # connection. Pending survives, so the gesture that
+                            # triggered pairing still lands.
+                            logger.debug('paired, reconnecting with keepalive')
+                            continue
 
                         while True:
-                            next_message_task = asyncio.create_task(
-                                message_queue.async_q.get()
-                            )
-                            recv_task = asyncio.create_task(websocket.recv())
+                            while len(pending) > 0:
+                                if (
+                                    last_attempt_failed
+                                    and pending[0]['kind'] == 'powerOn'
+                                ):
+                                    pending.pop(0)
+                                    logger.debug('! skipping powerOn')
+                                else:
+                                    await websocket.send(json.dumps(pending[0]['data']))
+                                    pending.pop(0)
+                                    logger.debug('-> sent')
 
-                            done, incomplete = await asyncio.wait(
-                                [next_message_task, recv_task],
-                                timeout=3600,
-                                return_when=asyncio.FIRST_COMPLETED,
-                            )
+                                last_attempt_failed = False
 
-                            if next_message_task in done:
-                                logger.debug('next message done')
-                                pending.append(next_message_task.result())
-                            else:
-                                logger.debug('next message cancel')
-                                next_message_task.cancel()
+                            # Hold the channel for as long as the TV is up.
+                            # Keepalive notices it going away, which surfaces
+                            # here as recv raising, and sends us back to waiting.
+                            # No idle timeout: closing a channel to a TV that is
+                            # still on would only have the next presence check
+                            # reopen it.
+                            while len(pending) == 0:
+                                next_message_task = asyncio.create_task(
+                                    message_queue.async_q.get()
+                                )
+                                recv_task = asyncio.create_task(websocket.recv())
 
-                            if recv_task in done:
-                                logger.debug('<- recv: %s', recv_task.result())
-                            else:
-                                recv_task.cancel()
+                                done, incomplete = await asyncio.wait(
+                                    [next_message_task, recv_task],
+                                    return_when=asyncio.FIRST_COMPLETED,
+                                )
 
-                            if len(done) == 0 or next_message_task in done:
-                                logger.debug('exiting')
-                                break
+                                if next_message_task in done:
+                                    logger.debug('next message done')
+                                    pending.append(next_message_task.result())
+                                else:
+                                    logger.debug('next message cancel')
+                                    next_message_task.cancel()
+
+                                if recv_task in done:
+                                    logger.debug('<- recv: %s', recv_task.result())
+                                else:
+                                    recv_task.cancel()
+                    finally:
+                        logger.info('websocket disconnected')
             except Unauthorized as error:
                 # The TV is plainly awake, so waking it is pointless, and the
                 # token it just refused will be refused again. Dropping it
