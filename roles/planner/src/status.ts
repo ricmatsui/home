@@ -22,16 +22,23 @@ export function findStatusLine(section: Section | undefined, label: string): str
 
 // Replaced where it sits, so closing the day leaves the lines in the order the
 // day was opened with, and only its text changes, so a line checked off stays
-// checked. A line the day never got is added at the end.
-export function withStatusLine(section: Section | undefined, label: string, text: string): Section {
+// checked. A completed line is checked off whatever it was left as. A line the
+// day never got is added at the end.
+export function withStatusLine(
+    section: Section | undefined,
+    label: string,
+    text: string,
+    { completed = false }: { completed?: boolean } = {},
+): Section {
     const items = section?.items ?? [];
     const index = items.findIndex(item => item.text.startsWith(`${label}: `));
+    const checked = (item: TodoItem): TodoItem => completed ? { ...item, status: 'completed' } : item;
 
     return {
         name: STATUS_SECTION,
         items: index === -1
-            ? [...items, countsLine(text)]
-            : items.map((item, i) => i === index ? { ...item, text } : item),
+            ? [...items, checked(countsLine(text))]
+            : items.map((item, i) => i === index ? checked({ ...item, text }) : item),
     };
 }
 

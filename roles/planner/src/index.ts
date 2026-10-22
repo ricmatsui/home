@@ -170,11 +170,12 @@ const wikiFunction = async (nextDate: Date) => {
 
         try {
             const history = await donetick.fetchChoreHistory();
-            return { donetickClosed: donetick.withCompletedCount(line, donetick.countCompletedOn(history, date)) };
+            const count = donetick.countCompletedOn(history, date);
+            return { donetickClosed: { text: donetick.withCompletedCount(line, count), completed: count > 0 } };
         } catch (error) {
             // A count that cannot be fetched is not worth failing the day over
             console.warn('Recording Donetick completions as unavailable', error);
-            return { donetickClosed: donetick.withCompletedUnavailable(line, error) };
+            return { donetickClosed: { text: donetick.withCompletedUnavailable(line, error), completed: false } };
         }
     });
 
@@ -185,10 +186,11 @@ const wikiFunction = async (nextDate: Date) => {
 
         try {
             const tasks = await googleTasks.fetchTasksCompletedOn(date);
-            return { googleTasksClosed: googleTasks.withCompletedCount(line, googleTasks.countCompletedOn(tasks, date)) };
+            const count = googleTasks.countCompletedOn(tasks, date);
+            return { googleTasksClosed: { text: googleTasks.withCompletedCount(line, count), completed: count > 0 } };
         } catch (error) {
             console.warn('Recording Google Tasks completions as unavailable', error);
-            return { googleTasksClosed: googleTasks.withCompletedUnavailable(line, error) };
+            return { googleTasksClosed: { text: googleTasks.withCompletedUnavailable(line, error), completed: false } };
         }
     });
 
@@ -197,10 +199,13 @@ const wikiFunction = async (nextDate: Date) => {
             return { lastDataWithStatus: null as Section[] | null };
         }
 
+        // A source with anything completed that day is checked off, however
+        // its line was left
         const status = withStatusLine(
-            withStatusLine(opened, donetick.DONETICK_LABEL, donetickClosed),
+            withStatusLine(opened, donetick.DONETICK_LABEL, donetickClosed.text, { completed: donetickClosed.completed }),
             googleTasks.GOOGLE_TASKS_LABEL,
-            googleTasksClosed,
+            googleTasksClosed.text,
+            { completed: googleTasksClosed.completed },
         );
 
         return { lastDataWithStatus: upsertSection(lastData, status, { before: 'Dates' }) };

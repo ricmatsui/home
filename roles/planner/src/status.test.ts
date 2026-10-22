@@ -94,6 +94,25 @@ describe('withStatusLine', () => {
         );
     });
 
+    it('checks off a completed line whatever it was left as', () => {
+        const left = {
+            ...opened,
+            items: opened.items.map(item => item.text.startsWith('Donetick: ') ? { ...item, status: 'rejected' as const } : item),
+        };
+
+        assert.deepEqual(
+            withStatusLine(left, 'Donetick', 'Donetick: 3 overdue, 5 due, 7 completed', { completed: true }).items[1],
+            { ...todo('Donetick: 3 overdue, 5 due, 7 completed'), status: 'completed' },
+        );
+    });
+
+    it('adds a completed line the day never got checked off', () => {
+        assert.deepEqual(
+            withStatusLine(undefined, 'Donetick', 'Donetick: 7 completed', { completed: true }).items,
+            [{ ...todo('Donetick: 7 completed'), status: 'completed' }],
+        );
+    });
+
     it('leaves the section it was given untouched', () => {
         withStatusLine(opened, 'Donetick', 'Donetick: 7 completed');
 
