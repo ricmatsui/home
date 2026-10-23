@@ -28,6 +28,10 @@ let isFirstModelLoad = true;
 // longer and the action lands well after the swipe that asked for it.
 const modelWaitMilliseconds = 2000;
 
+// A broken backend gets a fresh model and another try at the same gesture,
+// up to this many predictions in all.
+const classifyAttempts = 3;
+
 const showModelStatus = (text) => {
     modelStatus.innerText = `model: ${text}`;
 };
@@ -83,6 +87,41 @@ const startLoadingModel = () =>
         });
 
 startLoadingModel();
+
+const waitForModel = () => Promise.race([
+    startLoadingModel(),
+    new Promise((resolve) => setTimeout(resolve, modelWaitMilliseconds)),
+]);
+
+const classify = (image) => {
+    const result = tf.tidy(() => {
+        const probabilityTensor = model.predict(
+            tf.browser
+                .fromPixels(image, 1)
+                .toFloat()
+                .div(255.0)
+                .expandDims(0)
+        )
+
+        probabilityTensor.print();
+
+        const result = tf.topk(probabilityTensor, 1);
+
+        return {
+            index: result.indices.dataSync()[0],
+            value: result.values.dataSync()[0],
+            total: probabilityTensor.sum().dataSync()[0],
+        };
+    });
+
+    // Softmax output sums to 1; anything else is a broken backend (a lost
+    // WebGL context reads back zeros), not an unrecognized gesture.
+    if (!(Math.abs(result.total - 1) < 0.01)) {
+        throw new Error(`probabilities sum to ${result.total}`);
+    }
+
+    return result;
+};
 
 class Point {
     constructor(x, y) {
@@ -337,52 +376,33 @@ page.addEventListener('pointerup', async (event) => {
         return;
     }
 
-    if (!model) {
-        await Promise.race([
-            startLoadingModel(),
-            new Promise((resolve) => setTimeout(resolve, modelWaitMilliseconds)),
-        ]);
-    }
-
-    if (!model) {
-        rejectGesture({ gesture: null, model: 'not ready' });
-        return;
-    }
-
     let result;
+    let brokenError = null;
 
-    try {
-        result = tf.tidy(() => {
-            const probabilityTensor = model.predict(
-                tf.browser
-                    .fromPixels(image, 1)
-                    .toFloat()
-                    .div(255.0)
-                    .expandDims(0)
-            )
-
-            probabilityTensor.print();
-
-            const result = tf.topk(probabilityTensor, 1);
-
-            return {
-                index: result.indices.dataSync()[0],
-                value: result.values.dataSync()[0],
-                total: probabilityTensor.sum().dataSync()[0],
-            };
-        });
-
-        // Softmax output sums to 1; anything else is a broken backend (a lost
-        // WebGL context reads back zeros), not an unrecognized gesture.
-        if (!(Math.abs(result.total - 1) < 0.01)) {
-            throw new Error(`probabilities sum to ${result.total}`);
+    for (let attempt = 0; attempt < classifyAttempts && !result; attempt++) {
+        if (!model) {
+            await waitForModel();
         }
-    } catch (error) {
-        console.error(error);
-        model = null;
-        startLoadingModel();
 
-        rejectGesture({ gesture: null, model: `broken: ${error.message}` });
+        if (!model) {
+            break;
+        }
+
+        try {
+            result = classify(image);
+        } catch (error) {
+            console.error(error);
+            brokenError = error;
+            model = null;
+            startLoadingModel();
+        }
+    }
+
+    if (!result) {
+        rejectGesture({
+            gesture: null,
+            model: brokenError ? `broken: ${brokenError.message}` : 'not ready',
+        });
         return;
     }
 
