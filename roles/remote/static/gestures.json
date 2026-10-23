@@ -1,13 +1,13 @@
 [
-  { "name": "up", "action": "up", "allowMirrorHorizontal": true, "allowSlanted": true },
-  { "name": "down", "action": "down", "allowMirrorHorizontal": true, "allowSlanted": true },
-  { "name": "left", "action": "left", "allowMirrorVertical": true, "allowSlanted": true },
-  { "name": "right", "action": "right", "allowMirrorVertical": true, "allowSlanted": true },
-  { "name": "circle", "action": "powerOn", "allowRotation": true },
-  { "name": "counterCircle", "action": "powerOff", "allowRotation": true },
-  { "name": "n", "action": "netflix", "allowSlanted": true },
-  { "name": "p", "action": "peacock", "allowSlanted": true },
-  { "name": "v", "action": "back", "allowMirrorHorizontal": true, "allowSlanted": true },
-  { "name": "^", "action": "home", "allowMirrorHorizontal": true, "allowSlanted": true },
-  { "name": "at", "action": "appleTV", "allowSlanted": true }
+  { "name": "up", "label": "Up", "action": "up", "stroke": "M20 34 V13", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "down", "label": "Down", "action": "down", "stroke": "M20 6 V27", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "left", "label": "Left", "action": "left", "stroke": "M34 20 H13", "allowMirrorVertical": true, "allowSlanted": true },
+  { "name": "right", "label": "Right", "action": "right", "stroke": "M6 20 H27", "allowMirrorVertical": true, "allowSlanted": true },
+  { "name": "circle", "label": "Power on", "action": "powerOn", "stroke": "M15.6 32.2 A13 13 0 1 1 28.4 30", "allowRotation": true },
+  { "name": "counterCircle", "label": "Power off", "action": "powerOff", "stroke": "M24.4 32.2 A13 13 0 1 0 11.6 30", "allowRotation": true },
+  { "name": "n", "label": "Netflix", "action": "netflix", "stroke": "M9 33 V8 L31 32 V13", "allowSlanted": true },
+  { "name": "p", "label": "Peacock", "action": "peacock", "stroke": "M9 7 V33 C10 22 16 7 24 7 C33 7 34 19 18 20", "allowSlanted": true },
+  { "name": "v", "label": "Back", "action": "back", "stroke": "M8 8 L20 32 L30 12", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "^", "label": "Home", "action": "home", "stroke": "M8 32 L20 8 L30 28", "allowMirrorHorizontal": true, "allowSlanted": true },
+  { "name": "at", "label": "Apple TV", "action": "appleTV", "stroke": "M4 27 L11.1 13 L20 27 H23.9 V15.6 L18.3 13.4 H30", "allowSlanted": true }
 ]

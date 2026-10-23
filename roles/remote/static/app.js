@@ -17,6 +17,8 @@ const [roster, labels] = await Promise.all([
 const actions = new Map(roster.map((gesture) => [gesture.name, gesture]));
 
 const modelStatus = document.querySelector('.model-status');
+const modelState = document.querySelector('.model-state');
+const modelDetail = document.querySelector('.model-detail');
 
 // A failed load or a lost WebGL context leaves no usable model, so the next
 // gesture starts over from a fresh backend instead of staying stuck.
@@ -32,9 +34,17 @@ const modelWaitMilliseconds = 2000;
 // up to this many predictions in all.
 const classifyAttempts = 3;
 
-const showModelStatus = (text) => {
-    modelStatus.innerText = `model: ${text}`;
+const modelStateNames = { loading: 'Loading', ready: 'Ready', failed: 'Failed' };
+
+const showModelStatus = (state, detail = state) => {
+    modelStatus.dataset.state = state;
+    modelState.innerText = modelStateNames[state];
+    modelDetail.innerText = `model: ${detail}`;
 };
+
+modelStatus.addEventListener('click', () => {
+    modelDetail.hidden = !modelDetail.hidden;
+});
 
 const loadModel = async () => {
     showModelStatus('loading');
@@ -76,11 +86,11 @@ const startLoadingModel = () =>
     loadingModel ??= loadModel()
         .then((loadedModel) => {
             model = loadedModel;
-            showModelStatus(`ready (${tf.getBackend()})`);
+            showModelStatus('ready', `ready (${tf.getBackend()})`);
         })
         .catch((error) => {
             console.error(error);
-            showModelStatus(`failed: ${error.message}`);
+            showModelStatus('failed', `failed: ${error.message}`);
         })
         .finally(() => {
             loadingModel = null;
@@ -155,23 +165,71 @@ ensureWakeLock();
 document.addEventListener('visibilitychange', ensureWakeLock);
 document.addEventListener('pointerdown', ensureWakeLock);
 
-document.querySelector('.help-button').addEventListener('click', () => {
-    const image = document.createElement('img');
-    image.src = 'help.jpg';
-    image.style.position = 'absolute';
-    image.style.top = '0';
-    image.style.left = '0';
-    image.style.width = '100%';
-    image.style.height = '100%';
-    image.style['object-fit'] = 'contain';
-    document.body.appendChild(image);
-    image.addEventListener('click', () => {
-        document.body.removeChild(image);
-    });
-})
+const svgNamespace = 'http://www.w3.org/2000/svg';
+
+// A roster stroke is only the line, in drawing order; the start dot and the
+// arrowhead come from shared markers so every gesture shows direction alike.
+const strokeIcon = (stroke, { isUntrained = false } = {}) => {
+    const tone = isUntrained ? 'untrained' : 'ink';
+    const svg = document.createElementNS(svgNamespace, 'svg');
+    svg.setAttribute('viewBox', '0 0 40 40');
+    const path = document.createElementNS(svgNamespace, 'path');
+    path.setAttribute('d', stroke);
+    path.setAttribute('class', isUntrained ? 'stroke untrained' : 'stroke');
+    path.setAttribute('marker-start', `url(#stroke-start-${tone})`);
+    path.setAttribute('marker-end', `url(#stroke-head-${tone})`);
+    svg.appendChild(path);
+    return svg;
+};
+
+const isTrained = (gesture) => labels.some((label) => label.name === gesture.name);
+
+const helpButton = document.querySelector('.help-button');
+const helpSheet = document.querySelector('.help-sheet');
+
+for (const gesture of roster) {
+    const isUntrained = !isTrained(gesture);
+    const tile = document.createElement('div');
+    tile.className = 'help-gesture';
+    const caption = document.createElement('span');
+    caption.innerText = gesture.label;
+    caption.classList.toggle('untrained', isUntrained);
+    tile.append(strokeIcon(gesture.stroke, { isUntrained }), caption);
+    document.querySelector('.help-gestures').appendChild(tile);
+}
+document.querySelector('.help-legend').hidden = roster.every(isTrained);
+
+const setHelpOpen = (isOpen) => {
+    helpSheet.hidden = !isOpen;
+    helpButton.setAttribute('aria-pressed', String(isOpen));
+};
+
+helpButton.addEventListener('click', () => setHelpOpen(helpSheet.hidden));
+document.querySelector('.help-close').addEventListener('click', () => setHelpOpen(false));
+
+// Newest first; a fresh Dev session starts empty, the saved samples stay saved.
+const recentSampleLimit = 5;
+let recentSamples = [];
+const recentSamplesStrip = document.querySelector('.recent-samples');
+
+const showRecentSamples = () => {
+    recentSamplesStrip.replaceChildren(...recentSamples.map(({ gesture, imageUrl }) => {
+        const sample = document.createElement('div');
+        sample.className = 'recent-sample';
+        const image = document.createElement('img');
+        image.src = imageUrl;
+        const caption = document.createElement('span');
+        caption.innerText = gesture;
+        sample.append(image, caption);
+        return sample;
+    }));
+};
 
 document.querySelector('.delete-button').addEventListener('click', () => {
     post('/delete').then(() => {
+        recentSamples = recentSamples.slice(1);
+        showRecentSamples();
+
         if (navigator.vibrate) {
             navigator.vibrate([2]);
         }
@@ -182,7 +240,7 @@ document.querySelector('.delete-button').addEventListener('click', () => {
 // can be trained, so recording asks only for those while any exist.
 const untrainedIndices = roster
     .map((gesture, index) => index)
-    .filter((index) => !labels.some((label) => label.name === roster[index].name));
+    .filter((index) => !isTrained(roster[index]));
 const recordableIndices = untrainedIndices.length
     ? untrainedIndices
     : roster.map((gesture, index) => index);
@@ -194,44 +252,110 @@ let lastGestureIndex = null;
 let recordingGestureIndex = randomRecordableIndex();
 let nextRecordingGestureIndex = randomRecordableIndex();
 
-const record = document.querySelector('.record');
-const recordInstructions = document.querySelector('.record-instructions');
+let isRecording = false;
+let isTesting = false;
+
+const devButton = document.querySelector('.dev-button');
+const devToolbar = document.querySelector('.dev-toolbar');
+const devDebug = document.querySelector('.dev-debug');
+const recordButton = document.querySelector('.record-button');
+const testButton = document.querySelector('.test-button');
+const recordPrompt = document.querySelector('.record-prompt');
+const lastGesture = document.querySelector('.last-gesture');
+
+const showPromptGesture = (element, gesture) => {
+    element.replaceChildren(strokeIcon(gesture.stroke), gesture.name);
+};
 
 const updateRecordState = () => {
-    if (record.checked) {
-        recordingGestureIndex = nextRecordingGestureIndex;
+    recordButton.setAttribute('aria-pressed', String(isRecording));
+    recordPrompt.hidden = !isRecording;
+    recentSamplesStrip.hidden = !isRecording;
+    lastGesture.hidden = isRecording;
 
-        do {
-            nextRecordingGestureIndex = randomRecordableIndex();
-        } while (
-            recordableIndices.length > 1
-            && nextRecordingGestureIndex === recordingGestureIndex
-        )
-
-        // A recognized gesture is always a trained one, so it can't stand in
-        // while untrained ones are waiting for samples.
-        if (lastGestureIndex !== null && !untrainedIndices.length) {
-            recordingGestureIndex = lastGestureIndex;
-            nextRecordingGestureIndex = lastGestureIndex;
-        }
-
-        recordInstructions.innerText = roster[recordingGestureIndex].name.padStart(15) + ', ' + roster[nextRecordingGestureIndex].name.padStart(15);
-    } else {
-        recordInstructions.innerText = '';
+    if (!isRecording) {
+        return;
     }
+
+    recordingGestureIndex = nextRecordingGestureIndex;
+
+    do {
+        nextRecordingGestureIndex = randomRecordableIndex();
+    } while (
+        recordableIndices.length > 1
+        && nextRecordingGestureIndex === recordingGestureIndex
+    )
+
+    // A recognized gesture is always a trained one, so it can't stand in
+    // while untrained ones are waiting for samples.
+    if (lastGestureIndex !== null && !untrainedIndices.length) {
+        recordingGestureIndex = lastGestureIndex;
+        nextRecordingGestureIndex = lastGestureIndex;
+    }
+
+    showPromptGesture(document.querySelector('.record-prompt-now'), roster[recordingGestureIndex]);
+    showPromptGesture(document.querySelector('.record-prompt-next'), roster[nextRecordingGestureIndex]);
 }
 
-record.addEventListener('change', () => {
+recordButton.addEventListener('click', () => {
+    isRecording = !isRecording;
     updateRecordState();
 });
 
-let test = document.querySelector('.test');
-let isTesting = false;
-
-test.addEventListener('change', () => {
-    isTesting = test.checked
+testButton.addEventListener('click', () => {
+    isTesting = !isTesting;
+    testButton.setAttribute('aria-pressed', String(isTesting));
 });
 
+// Leaving Dev always returns to a remote that sends to the TV.
+devButton.addEventListener('click', () => {
+    const isDev = devToolbar.hidden;
+    devButton.setAttribute('aria-pressed', String(isDev));
+    devToolbar.hidden = !isDev;
+    devDebug.hidden = !isDev;
+
+    if (!isDev) {
+        isRecording = false;
+        isTesting = false;
+        testButton.setAttribute('aria-pressed', 'false');
+        recentSamples = [];
+        showRecentSamples();
+        updateRecordState();
+    }
+});
+
+// Repeats of the same thing count up; anything else starts over. The count
+// outlives the fade, so a repeat after a pause still reads "x2".
+let lastGestureLabel = null;
+let lastGestureCount = 0;
+let lastGestureFade = null;
+
+const lastGestureIdleMilliseconds = 500;
+
+const showLastGesture = (label) => {
+    clearTimeout(lastGestureFade);
+    lastGesture.classList.remove('fading');
+    lastGestureFade = setTimeout(
+        () => lastGesture.classList.add('fading'),
+        lastGestureIdleMilliseconds
+    );
+
+    lastGestureCount = label === lastGestureLabel ? lastGestureCount + 1 : 1;
+    lastGestureLabel = label;
+
+    const nodes = [label];
+    if (lastGestureCount > 1) {
+        const count = document.createElement('small');
+        count.innerText = ` x${lastGestureCount}`;
+        nodes.push(count);
+    }
+    lastGesture.replaceChildren(...nodes);
+};
+
+const flashZone = (zone) => {
+    zone.classList.add('flash');
+    setTimeout(() => zone.classList.remove('flash'), 150);
+};
 
 const history = [];
 
@@ -239,6 +363,25 @@ let points = null;
 let isDown = false;
 
 const page = document.querySelector('.page');
+const trail = document.querySelector('.trail');
+const trailG = trail.getContext('2d');
+
+// The same dark-to-light ramp the model sees, lifted so the start shows on black.
+const drawTrail = () => {
+    trailG.clearRect(0, 0, trail.width, trail.height);
+    trailG.lineWidth = 4 * devicePixelRatio;
+    trailG.lineCap = 'round';
+    trailG.lineJoin = 'round';
+
+    for (let i = 1; i < points.length; i++) {
+        const t = i / (points.length - 1);
+        trailG.strokeStyle = `hsl(0, 0%, ${Math.round(25 + t * 70)}%)`;
+        trailG.beginPath();
+        trailG.moveTo(points[i - 1].X * devicePixelRatio, points[i - 1].Y * devicePixelRatio);
+        trailG.lineTo(points[i].X * devicePixelRatio, points[i].Y * devicePixelRatio);
+        trailG.stroke();
+    }
+};
 
 page.addEventListener('pointerdown', (event) => {
     if (navigator.vibrate) {
@@ -246,6 +389,10 @@ page.addEventListener('pointerdown', (event) => {
     }
     isDown = true;
     points = [new Point(event.clientX, event.clientY)];
+
+    trail.width = page.clientWidth * devicePixelRatio;
+    trail.height = page.clientHeight * devicePixelRatio;
+    trail.classList.remove('fading');
 });
 
 page.addEventListener('pointermove', (event) => {
@@ -258,15 +405,21 @@ page.addEventListener('pointermove', (event) => {
 
     if (distanceSquared > Math.pow(document.body.clientWidth / 100, 2)) {
         points.push(point);
+        drawTrail();
     }
 })
 
-const rejectGesture = (details) => {
+const showGestureDebug = (details) => {
     document.querySelector('.gesture-debug').innerText = JSON.stringify(
         { pointCount: points.length, ...details },
         null,
-        4
+        1
     );
+};
+
+const rejectGesture = (details) => {
+    showGestureDebug(details);
+    showLastGesture('?');
 
     if (navigator.vibrate) {
         navigator.vibrate([2, 2, 2]);
@@ -275,12 +428,15 @@ const rejectGesture = (details) => {
 
 page.addEventListener('pointerup', async (event) => {
     isDown = false;
+    trail.classList.add('fading');
 
     if (points.length < 3) {
         if (points[0].X < document.body.clientWidth * 0.2) {
             if (navigator.vibrate) {
                 navigator.vibrate([2]);
             }
+            flashZone(document.querySelector('.zone-left'));
+            showLastGesture('volumeDown');
             handleInput({ name: 'volumeDown' });
             return;
         }
@@ -289,6 +445,8 @@ page.addEventListener('pointerup', async (event) => {
             if (navigator.vibrate) {
                 navigator.vibrate([2]);
             }
+            flashZone(document.querySelector('.zone-right'));
+            showLastGesture('volumeUp');
             handleInput({ name: 'volumeUp' });
             return;
         }
@@ -296,6 +454,7 @@ page.addEventListener('pointerup', async (event) => {
         if (navigator.vibrate) {
             navigator.vibrate([2]);
         }
+        showLastGesture('click');
         handleInput({ name: 'click' });
         return;
     }
@@ -362,11 +521,13 @@ page.addEventListener('pointerup', async (event) => {
     debugG.clearRect(0, 0, debugCanvas.width, debugCanvas.height);
     debugG.drawImage(image, 0, 0, debugCanvas.width, debugCanvas.height);
 
-    if (record.checked) {
-        post('/record', {
-            gesture: roster[recordingGestureIndex].name,
-            image: imageUrl,
-        });
+    if (isRecording) {
+        const gesture = roster[recordingGestureIndex].name;
+
+        post('/record', { gesture, image: imageUrl });
+
+        recentSamples = [{ gesture, imageUrl }, ...recentSamples].slice(0, recentSampleLimit);
+        showRecentSamples();
 
         if (navigator.vibrate) {
             navigator.vibrate([2]);
@@ -417,15 +578,8 @@ page.addEventListener('pointerup', async (event) => {
 
     lastGestureIndex = result.index;
 
-    document.querySelector('.gesture-debug').innerText = JSON.stringify(
-        {
-            pointCount: points.length,
-            gesture: gesture.name,
-            result: result.value,
-        },
-        null,
-        4
-    );
+    showGestureDebug({ gesture: gesture.name, result: result.value });
+    showLastGesture(gesture.name);
 
     handleInput({ name: gesture.action });
 

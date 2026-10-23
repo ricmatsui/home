@@ -11,25 +11,86 @@
         <link rel='stylesheet' href="{{ url_for('static', filename='styles.css') }}">
     </head>
     <body>
-        <div style='position: absolute; top: 0; left: 20%; bottom: 0; border-left: 1px solid white'></div>
-        <div style='position: absolute; top: 0; left: 80%; bottom: 0; border-left: 1px solid white'></div>
-        <div style='position: absolute; left: 0; bottom: 0; right: 0; background: black; height: 5%; border-top: 1px solid white'></div>
-        <div style='position: absolute; top: 10; left: 10; right: 10'>
-            <button class='help-button'>Help</button>
-            <button class='delete-button'>Delete</button>
-            <label>
-                <input type='checkbox' class='record'> Record
-            </label>
-            <label>
-                <input type='checkbox' class='test'> Test
-            </label>
-            <pre class='model-status'></pre>
-            <pre class='record-instructions'></pre>
-            <pre class='gesture-debug'></pre>
+        <svg class='stroke-markers' width='0' height='0' aria-hidden='true'>
+            <defs>
+                <marker id='stroke-head-ink' viewBox='0 0 7 10' refX='1.5' refY='5' markerWidth='1.8' markerHeight='2.6' markerUnits='strokeWidth' orient='auto'>
+                    <path d='M0 0 L7 5 L0 10 Z' fill='#f2f4f8' stroke='#f2f4f8' stroke-width='1' stroke-linejoin='round' />
+                </marker>
+                <marker id='stroke-start-ink' viewBox='0 0 10 10' refX='5' refY='5' markerWidth='2' markerHeight='2' markerUnits='strokeWidth'>
+                    <circle cx='5' cy='5' r='5' fill='#f2f4f8' />
+                </marker>
+                <marker id='stroke-head-untrained' viewBox='0 0 7 10' refX='1.5' refY='5' markerWidth='1.8' markerHeight='2.6' markerUnits='strokeWidth' orient='auto'>
+                    <path d='M0 0 L7 5 L0 10 Z' fill='#fbbf24' stroke='#fbbf24' stroke-width='1' stroke-linejoin='round' />
+                </marker>
+                <marker id='stroke-start-untrained' viewBox='0 0 10 10' refX='5' refY='5' markerWidth='2' markerHeight='2' markerUnits='strokeWidth'>
+                    <circle cx='5' cy='5' r='5' fill='#fbbf24' />
+                </marker>
+            </defs>
+        </svg>
+
+        <div class='page'>
+            <div class='zone zone-left'><span>−</span></div>
+            <div class='zone zone-right'><span>+</span></div>
+            <canvas class='trail'></canvas>
+            <div class='last-gesture'></div>
         </div>
-        <div class='page' style='display: flex; align-items: center; justify-content: center'>
-            <canvas class='debug-canvas' style='border: 1px solid white' width='200' height='200'>
+
+        <div class='dead-zone'></div>
+
+        <div class='toolbars'>
+            <div class='toolbar'>
+                <button class='help-button' aria-pressed='false'>Help</button>
+                <button class='dev-button' aria-pressed='false'>Dev</button>
+                <button class='model-status' data-state='loading'>
+                    <span class='model-dot'></span><span class='model-state'>Loading</span>
+                </button>
+            </div>
+            <pre class='model-detail' hidden></pre>
+            <div class='toolbar dev-toolbar' hidden>
+                <button class='delete-button'>Delete</button>
+                <button class='record-button' aria-pressed='false'><span class='record-dot'></span>Record</button>
+                <button class='test-button' aria-pressed='false'>Test</button>
+            </div>
         </div>
+
+        <div class='record-prompt' hidden>
+            <span class='record-prompt-label'><span class='record-dot'></span>Now</span>
+            <span class='record-prompt-label'>Next</span>
+            <span class='record-prompt-gesture record-prompt-now'></span>
+            <span class='record-prompt-gesture record-prompt-next'></span>
+        </div>
+
+        <div class='bottom'>
+            <div class='dev-debug' hidden>
+                <canvas class='debug-canvas' width='200' height='200'></canvas>
+                <pre class='gesture-debug'></pre>
+            </div>
+            <div class='recent-samples' hidden></div>
+        </div>
+
+        <div class='help-sheet' hidden>
+            <div class='help-head'>
+                <h2>Help</h2>
+                <button class='help-close'>Close</button>
+            </div>
+            <div class='help-body'>
+                <h3>Touch areas</h3>
+                <div class='touch-areas'>
+                    <div class='touch-area touch-area-side'><b>−</b><span>Tap for<br>volume down</span></div>
+                    <div class='touch-area'>
+                        <svg viewBox='0 0 40 40'>
+                            <path d='M7 26 C12 8 18 8 20 20 S28 32 32 14' class='stroke' marker-start='url(#stroke-start-ink)' marker-end='url(#stroke-head-ink)' />
+                        </svg>
+                        <span>Draw a gesture<br>Tap to click</span>
+                    </div>
+                    <div class='touch-area touch-area-side'><b>+</b><span>Tap for<br>volume up</span></div>
+                </div>
+                <h3>Gestures</h3>
+                <div class='help-gestures'></div>
+                <p class='help-legend' hidden><span class='untrained'>Amber</span>: not in the deployed model yet</p>
+            </div>
+        </div>
+
         <script src='https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js'></script>
         <script type='module' src="{{ url_for('static', filename='app.js') }}"></script>
     </body>

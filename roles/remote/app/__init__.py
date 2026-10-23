@@ -108,10 +108,6 @@ def create_app(control=None, recordings=None, static=None):
     def favicon192():
         return flask.send_from_directory(static, 'favicon-192.png')
 
-    @app.route('/help.jpg')
-    def help_image():
-        return flask.send_from_directory(static, 'help.jpg')
-
     @app.route('/manifest.json')
     def manifest():
         return flask.send_from_directory(static, 'manifest.json')
