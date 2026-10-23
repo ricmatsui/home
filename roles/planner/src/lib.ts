@@ -91,11 +91,24 @@ function cloneAncestorChain(ancestors: TodoItem[], leafChildren: TodoItem[]): To
     return current;
 }
 
+function collectMoveTargetsFromItem(item: TodoItem, referenceDate: Date): string[] {
+    return item.children.flatMap(child => {
+        const action = parseAction(child.text, referenceDate);
+        return action ? [action.targetDate] : collectMoveTargetsFromItem(child, referenceDate);
+    });
+}
+
+export function collectMoveTargets(sections: Section[], referenceDate: Date): string[] {
+    const targetDates = sections.flatMap(section => section.items.flatMap(item => collectMoveTargetsFromItem(item, referenceDate)));
+    return [...new Set(targetDates)];
+}
+
 function extractActionsFromItem(
     item: TodoItem,
     ancestors: TodoItem[],
     sectionName: string,
     referenceDate: Date,
+    targetFileIdsByDate: Record<string, string>,
 ): Action[] {
     const path = [...ancestors, item];
     const actions: Action[] = [];
@@ -103,7 +116,7 @@ function extractActionsFromItem(
     const parsed = item.children.map(c => parseAction(c.text, referenceDate));
 
     item.children.forEach((child, i) => {
-        if (!parsed[i]) actions.push(...extractActionsFromItem(child, path, sectionName, referenceDate));
+        if (!parsed[i]) actions.push(...extractActionsFromItem(child, path, sectionName, referenceDate, targetFileIdsByDate));
     });
 
     if (!parsed.some(Boolean)) return actions;
@@ -115,7 +128,9 @@ function extractActionsFromItem(
         const action = parsed[i];
         if (!action) return;
         actions.push({ kind: 'addItem', targetDate: action.targetDate, sectionName, item: cloneAncestorChain(path, siblings) });
-        child.text = `${child.text} => ${action.targetDate}`;
+        const fileId = targetFileIdsByDate[action.targetDate];
+        if (!fileId) throw new Error(`No day page for move target ${action.targetDate}`);
+        child.text = `${child.text} => [${action.targetDate}](${fileId})`;
         child.status = 'completed';
     });
 
@@ -132,6 +147,7 @@ function earliestTargetDate(actions: Action[]): string {
 export function extractActions(
     sections: Section[],
     referenceDate: Date,
+    targetFileIdsByDate: Record<string, string>,
 ): { sections: Section[]; actions: Action[] } {
     const allActions: Action[] = [];
 
@@ -139,7 +155,7 @@ export function extractActions(
         const actionsByItem = new Map<TodoItem, Action[]>();
 
         for (const item of section.items) {
-            const itemActions = extractActionsFromItem(item, [], section.name, referenceDate);
+            const itemActions = extractActionsFromItem(item, [], section.name, referenceDate, targetFileIdsByDate);
             if (itemActions.length > 0) {
                 actionsByItem.set(item, itemActions);
                 allActions.push(...itemActions);

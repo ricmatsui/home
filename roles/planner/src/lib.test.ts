@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, extractActions, sortSectionItems, upsertSection, upsertTodayLink, upsertFrontmatterLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
+import { parseAction, collectMoveTargets, extractActions, sortSectionItems, upsertSection, upsertTodayLink, upsertFrontmatterLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
 import { Section, TodoItem } from './types.js';
 
 describe('parseAction', () => {
@@ -88,8 +88,54 @@ describe('parseAction', () => {
 
 });
 
+describe('collectMoveTargets', () => {
+    const ref = new Date(2026, 2, 30);
+
+    it('collects each target date once, from nested items, without reading top-level lines as moves', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [
+                { status: 'incomplete', text: '-> 06-01', children: [] },
+                {
+                    status: 'incomplete',
+                    text: 'Deploy service',
+                    children: [
+                        { status: 'incomplete', text: '-> 05-01', children: [] },
+                        {
+                            status: 'incomplete',
+                            text: 'Write notes',
+                            children: [{ status: 'incomplete', text: '-> 05-01', children: [] }],
+                        },
+                    ],
+                },
+            ],
+        }, {
+            name: 'Home',
+            items: [{
+                status: 'incomplete',
+                text: 'Fix gate',
+                children: [{ status: 'incomplete', text: '-> 07-01', children: [] }],
+            }],
+        }];
+
+        assert.deepEqual(collectMoveTargets(sections, ref), ['2026-05-01', '2026-07-01']);
+    });
+});
+
 describe('extractActions', () => {
     const ref = new Date(2026, 2, 30);
+    const targetFileIdsByDate = {
+        '2026-04-01': 'day-2026-04-01',
+        '2026-04-06': 'day-2026-04-06',
+        '2026-04-23': 'day-2026-04-23',
+        '2026-04-26': 'day-2026-04-26',
+        '2026-04-30': 'day-2026-04-30',
+        '2026-05-01': 'day-2026-05-01',
+        '2026-06-01': 'day-2026-06-01',
+        '2026-06-15': 'day-2026-06-15',
+        '2026-07-01': 'day-2026-07-01',
+        '2026-12-01': 'day-2026-12-01',
+    };
 
     it('extracts action from immediate child, marks parent and action completed', () => {
         const sections: Section[] = [{
@@ -105,7 +151,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -113,7 +159,7 @@ describe('extractActions', () => {
                     text: 'Deploy service',
                     children: [{
                         status: 'completed',
-                        text: '-> 05-01 => 2026-05-01',
+                        text: '-> 05-01 => [2026-05-01](day-2026-05-01)',
                         children: [],
                     }],
                 }],
@@ -160,7 +206,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -175,7 +221,7 @@ describe('extractActions', () => {
                                 text: 'C',
                                 children: [{
                                     status: 'completed',
-                                    text: '-> 06-15 => 2026-06-15',
+                                    text: '-> 06-15 => [2026-06-15](day-2026-06-15)',
                                     children: [],
                                 }],
                             },
@@ -223,7 +269,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -231,7 +277,7 @@ describe('extractActions', () => {
                     text: 'Item',
                     children: [{
                         status: 'completed',
-                        text: '-> 07-01 => 2026-07-01',
+                        text: '-> 07-01 => [2026-07-01](day-2026-07-01)',
                         children: [],
                     }],
                 }],
@@ -263,7 +309,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -296,7 +342,7 @@ describe('extractActions', () => {
 
         const ref = new Date(2026, 3, 22);
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -304,7 +350,7 @@ describe('extractActions', () => {
                     text: 'Review PR',
                     children: [{
                         status: 'completed',
-                        text: '-> next week => 2026-04-26',
+                        text: '-> next week => [2026-04-26](day-2026-04-26)',
                         children: [],
                     }],
                 }],
@@ -359,7 +405,7 @@ describe('extractActions', () => {
 
         const ref = new Date(2026, 3, 22); // April 22, 2026
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [
@@ -378,7 +424,7 @@ describe('extractActions', () => {
                         text: 'C - moved to thursday',
                         children: [{
                             status: 'completed',
-                            text: '-> thursday => 2026-04-23',
+                            text: '-> thursday => [2026-04-23](day-2026-04-23)',
                             children: [],
                         }],
                     },
@@ -387,7 +433,7 @@ describe('extractActions', () => {
                         text: 'A - moved to may',
                         children: [{
                             status: 'completed',
-                            text: '-> may => 2026-05-01',
+                            text: '-> may => [2026-05-01](day-2026-05-01)',
                             children: [],
                         }],
                     },
@@ -460,7 +506,7 @@ describe('extractActions', () => {
 
         const ref = new Date(2026, 2, 30); // March 30, 2026
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [
@@ -473,7 +519,7 @@ describe('extractActions', () => {
                                 text: 'Sub A',
                                 children: [{
                                     status: 'completed',
-                                    text: '-> december => 2026-12-01',
+                                    text: '-> december => [2026-12-01](day-2026-12-01)',
                                     children: [],
                                 }],
                             },
@@ -482,7 +528,7 @@ describe('extractActions', () => {
                                 text: 'Sub B',
                                 children: [{
                                     status: 'completed',
-                                    text: '-> april => 2026-04-01',
+                                    text: '-> april => [2026-04-01](day-2026-04-01)',
                                     children: [],
                                 }],
                             },
@@ -493,7 +539,7 @@ describe('extractActions', () => {
                         text: 'Late move',
                         children: [{
                             status: 'completed',
-                            text: '-> june => 2026-06-01',
+                            text: '-> june => [2026-06-01](day-2026-06-01)',
                             children: [],
                         }],
                     },
@@ -556,7 +602,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -564,7 +610,7 @@ describe('extractActions', () => {
                     text: 'Deploy service',
                     children: [{
                         status: 'completed',
-                        text: '-> 05-01 => 2026-05-01',
+                        text: '-> 05-01 => [2026-05-01](day-2026-05-01)',
                         children: [],
                     }],
                 }],
@@ -600,7 +646,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -609,7 +655,7 @@ describe('extractActions', () => {
                     children: [
                         { status: 'completed', text: 'Done item', children: [] },
                         { status: 'completed', text: 'In progress item', children: [] },
-                        { status: 'completed', text: '-> 1 month => 2026-04-30', children: [] },
+                        { status: 'completed', text: '-> 1 month => [2026-04-30](day-2026-04-30)', children: [] },
                     ],
                 }],
             }],
@@ -649,7 +695,7 @@ describe('extractActions', () => {
             }],
         }];
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -661,10 +707,10 @@ describe('extractActions', () => {
                             text: 'Not done item',
                             children: [
                                 { status: 'completed', text: 'Sub step done', children: [] },
-                                { status: 'completed', text: '-> 1 week => 2026-04-06', children: [] },
+                                { status: 'completed', text: '-> 1 week => [2026-04-06](day-2026-04-06)', children: [] },
                             ],
                         },
-                        { status: 'completed', text: '-> 1 month => 2026-04-30', children: [] },
+                        { status: 'completed', text: '-> 1 month => [2026-04-30](day-2026-04-30)', children: [] },
                     ],
                 }],
             }],
@@ -705,7 +751,7 @@ describe('extractActions', () => {
 
         const ref = new Date(2026, 3, 22);
 
-        assert.deepEqual(extractActions(sections, ref), {
+        assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
                 items: [{
@@ -720,6 +766,19 @@ describe('extractActions', () => {
             }],
             actions: [],
         });
+    });
+
+    it('fails rather than write a move without a page to link to', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [{
+                status: 'incomplete',
+                text: 'Deploy service',
+                children: [{ status: 'incomplete', text: '-> 08-01', children: [] }],
+            }],
+        }];
+
+        assert.throws(() => extractActions(sections, ref, targetFileIdsByDate), /No day page for move target 2026-08-01/);
     });
 });
 

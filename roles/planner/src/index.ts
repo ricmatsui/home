@@ -1,8 +1,9 @@
 import { DBOS, WorkflowQueue } from '@dbos-inc/dbos-sdk';
 import fs from 'fs';
+import path from 'path';
 import readline from 'readline';
 import { Section, Action } from './types.js';
-import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, extractActions, sortSectionItems, upsertSection, updateTodayLink, linkAdjacentDays } from './lib.js';
+import { unlockWikiIfPossible, formatDateStr, readTodoFile, findDayFilePath, createDayFile, parseDayFile, partitionSections, writeDayFile, markDayAsDone, commitWiki, pushWiki, collectMoveTargets, extractActions, sortSectionItems, upsertSection, updateTodayLink, linkAdjacentDays } from './lib.js';
 import { fetchDailyForecast, formatWeatherLine, formatWeatherUnavailable } from './weather.js';
 import * as donetick from './donetick.js';
 import { seedJournalSection } from './journal.js';
@@ -39,12 +40,25 @@ const wikiFunction = async (nextDate: Date) => {
         return { sections: foldLegacySections(parseDayFile(content)) };
     });
 
+    const { targetFileIdsByDate } = await DBOS.runStep(async () => {
+        const targetFileIdsByDate: Record<string, string> = {};
+        if (!sections) return { targetFileIdsByDate };
+
+        for (const targetDate of collectMoveTargets(sections, date)) {
+            const todoFile = await readTodoFile();
+            const targetPath = findDayFilePath(todoFile, targetDate) ?? await createDayFile(todoFile, targetDate);
+            targetFileIdsByDate[targetDate] = path.basename(targetPath, '.md');
+        }
+
+        return { targetFileIdsByDate };
+    });
+
     const { processedSections, actions } = await DBOS.runStep(async () => {
         if (!sections) {
             return { processedSections: null as Section[] | null, actions: [] as Action[] };
         }
 
-        const result = extractActions(sections, date);
+        const result = extractActions(sections, date, targetFileIdsByDate);
         return { processedSections: result.sections, actions: result.actions };
     });
 
@@ -229,10 +243,8 @@ const wikiFunction = async (nextDate: Date) => {
         await DBOS.runStep(async () => {
             const todoFile = await readTodoFile();
 
-            let targetPath = findDayFilePath(todoFile, action.targetDate);
-            if (!targetPath) {
-                targetPath = await createDayFile(todoFile, action.targetDate);
-            }
+            const targetPath = findDayFilePath(todoFile, action.targetDate);
+            if (!targetPath) throw new Error(`No day page for move target ${action.targetDate}`);
 
             const content = await fs.promises.readFile(targetPath, 'utf-8');
             const targetSections = parseDayFile(content);
