@@ -233,6 +233,9 @@
     - role: doorbell
       tags: doorbell
 
+    - role: urban_proxy
+      tags: urban_proxy
+
     - role: vpn_ui
       tags: vpn_ui
 

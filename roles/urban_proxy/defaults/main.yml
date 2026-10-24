@@ -1,0 +1,6 @@
+---
+
+urban_proxy_port: 8080
+urban_proxy_mqtt_url: mqtt://mosquitto:1883
+urban_proxy_datadog_metrics_host: deskpi
+urban_proxy_log_level: info

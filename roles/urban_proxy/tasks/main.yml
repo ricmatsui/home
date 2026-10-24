@@ -1,0 +1,76 @@
+---
+
+- name: set dns record
+  community.general.cloudflare_dns:
+    zone: "{{ config.cloudflare.zone }}"
+    record: "{{ config.urban_proxy.dns_name }}"
+    type: A
+    value: "{{ config.ingress.ip }}"
+    api_token: "{{ config.cloudflare.api_key }}"
+  delegate_to: localhost
+
+- name: build
+  community.docker.docker_image_build:
+    name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/urban-proxy"
+    tag: latest
+    path: "{{ role_path }}"
+    rebuild: always
+    platform:
+      - linux/amd64
+    outputs:
+      - type: image
+        push: true
+  delegate_to: localhost
+  register: build_result
+  tags: urban_proxy_stack
+
+- name: deploy stack
+  community.general.docker_stack:
+    name: urban-proxy
+    prune: yes
+    resolve_image: always
+    compose:
+      - version: '3.8'
+        services:
+          urban-proxy:
+            image: "{{ build_result.image.RepoDigests[0] }}"
+            networks:
+              - mosquitto_mosquitto
+              - traefik_traefik
+            environment:
+              PORT: "{{ urban_proxy_port }}"
+              MQTT_URL: "{{ urban_proxy_mqtt_url }}"
+              DATADOG_API_KEY: "{{ config.datadog.api_key }}"
+              DATADOG_METRICS_HOST: "{{ urban_proxy_datadog_metrics_host }}"
+              LOG_LEVEL: "{{ urban_proxy_log_level }}"
+            deploy:
+              mode: replicated
+              replicas: 1
+              labels:
+                - "home.scheduler.replicas=1"
+                - "home.scheduler.priority=40"
+                - "traefik.enable=true"
+                # Plain HTTP, because the device cannot speak TLS. This only wins
+                # over web's HTTPS redirect because traefik demotes that to priority 1.
+                - "traefik.http.routers.urban-proxy.rule=Host(`{{ config.urban_proxy.dns_name }}`)"
+                - "traefik.http.routers.urban-proxy.entrypoints=web"
+                - "traefik.http.services.urban-proxy.loadbalancer.server.port={{ urban_proxy_port }}"
+              placement:
+                constraints:
+                  - 'node.labels.home.instance_type == mbp'
+              resources:
+                limits:
+                  cpus: '0.25'
+                  memory: 100M
+              restart_policy:
+                delay: 1m
+              update_config:
+                order: stop-first
+        networks:
+          mosquitto_mosquitto:
+            external: true
+          traefik_traefik:
+            external: true
+  vars:
+    ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: urban_proxy_stack
