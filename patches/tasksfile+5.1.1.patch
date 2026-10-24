@@ -1,0 +1,16 @@
+diff --git a/node_modules/tasksfile/bin/task.js b/node_modules/tasksfile/bin/task.js
+index 7b351da..a3f497c 100755
+--- a/node_modules/tasksfile/bin/task.js
++++ b/node_modules/tasksfile/bin/task.js
+@@ -4,9 +4,10 @@ const path = require('path')
+ const packageJson = require(path.resolve('./package.json'))
+ 
+ const taskScript = packageJson.scripts.task
++const taskArgs = process.argv.slice(2).map((arg) => `'${arg.replace(/'/g, `'\\''`)}'`)
+ 
+ try {
+-  execSync(`${taskScript} ${process.argv.slice(2).join(' ')}`, {shell: true, stdio: 'inherit'})
++  execSync(`${taskScript} ${taskArgs.join(' ')}`, {shell: true, stdio: 'inherit'})
+ } catch (error) {
+   process.exit(1)
+ }

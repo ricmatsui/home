@@ -601,7 +601,7 @@ const handleInput = ({ name }) => {
     //  to: 'host',
     //},
 
-    if (name == 'netflix' || name == 'peacock' || name == 'appleTV') {
+    if (name == 'netflix' || name == 'peacock' || name == 'appleTV' || name == 'youtube') {
         let appId;
 
         switch (name) {
@@ -613,6 +613,9 @@ const handleInput = ({ name }) => {
                 break;
             case 'appleTV':
                 appId = '3201807016597';
+                break;
+            case 'youtube':
+                appId = '111299001912';
                 break;
         }
 

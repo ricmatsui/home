@@ -4,12 +4,14 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "task": "node ./tasksfile.js"
+    "task": "node ./tasksfile.js",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "tasksfile": "^5.1.1"
   },
   "devDependencies": {
-    "eslint": "^7.11.0"
+    "eslint": "^7.11.0",
+    "patch-package": "^8.0.1"
   }
 }

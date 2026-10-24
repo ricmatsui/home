@@ -19,5 +19,6 @@ def test_gestures_json_is_loadable_and_ordered():
         'v',
         '^',
         'at',
+        'y',
     ]
     assert all('action' in gesture for gesture in gestures)

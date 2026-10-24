@@ -7,6 +7,10 @@ const projectPath = (...paths) => {
 
 const sshEnv = { ...process.env, TERM: 'xterm' }
 
+const shellArgs = () => {
+    return rawArgs().map((arg) => `'${arg.replace(/'/g, `'\\''`)}'`).join(' ')
+}
+
 const publishDataset = () => {
     sh('scp -S /usr/bin/ssh pi:/mnt/gluster/remote/data/recordings.jsonl recordings.jsonl', {
         cwd: projectPath('model'),
@@ -14,7 +18,7 @@ const publishDataset = () => {
         env: sshEnv,
     });
 
-    sh(`poetry run python publish_dataset.py ${rawArgs().join(' ')}`, {
+    sh(`poetry run python publish_dataset.py ${shellArgs()}`, {
         cwd: projectPath('model'),
         nopipe: true,
     });
@@ -29,7 +33,7 @@ const train = () => {
 }
 
 const publishModel = () => {
-    sh(`poetry run python publish_model.py ${rawArgs().join(' ')}`, {
+    sh(`poetry run python publish_model.py ${shellArgs()}`, {
         cwd: projectPath('model'),
         nopipe: true,
     });

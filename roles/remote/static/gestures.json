@@ -9,5 +9,6 @@
   { "name": "p", "label": "Peacock", "action": "peacock", "stroke": "M9 7 V33 C10 22 16 7 24 7 C33 7 34 19 18 20", "allowSlanted": true },
   { "name": "v", "label": "Back", "action": "back", "stroke": "M8 8 L20 32 L30 12", "allowMirrorHorizontal": true, "allowSlanted": true },
   { "name": "^", "label": "Home", "action": "home", "stroke": "M8 32 L20 8 L30 28", "allowMirrorHorizontal": true, "allowSlanted": true },
-  { "name": "at", "label": "Apple TV", "action": "appleTV", "stroke": "M4 27 L11.1 13 L20 27 H23.9 V15.6 L18.3 13.4 H30", "allowSlanted": true }
+  { "name": "at", "label": "Apple TV", "action": "appleTV", "stroke": "M4 27 L11.1 13 L20 27 H23.9 V15.6 L18.3 13.4 H30", "allowSlanted": true },
+  { "name": "y", "label": "YouTube", "action": "youtube", "stroke": "M8 7 C10 17 14 21 18 21 C24 21 29 13 31 7 C29 20 28 31 25.4 34.7 C23 37.5 16 37 16.7 33.4 C18 27 30 20 36.9 14.6", "allowSlanted": true }
 ]
