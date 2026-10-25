@@ -40,12 +40,13 @@ class ChannelTimeout(Exception):
 
 
 class TvControl:
-    def __init__(self, ip, mac, client_name, token_store, lan):
+    def __init__(self, ip, mac, client_name, token_store, lan, status):
         self.ip = ip
         self.mac = mac
         self.client_name = client_name
         self.token_store = token_store
         self.lan = lan
+        self.status = status
         self.message_queue = None
 
         logger.debug(
@@ -118,6 +119,9 @@ class TvControl:
         gesture may start one.
         """
         while len(pending) == 0:
+            if self.token_store.read() is None:
+                self.status.set('unpaired')
+
             try:
                 pending.append(
                     await asyncio.wait_for(
@@ -125,9 +129,14 @@ class TvControl:
                     )
                 )
             except TimeoutError:
-                if self.token_store.read() is not None and await self._tv_is_on():
+                if self.token_store.read() is None:
+                    continue
+
+                if await self._tv_is_on():
                     logger.debug('tv on, preconnecting')
                     return
+
+                self.status.set('off')
 
     async def _open_channel(self, websocket, timeout):
         """Wait for the TV to admit us, and bank any token it hands over.
@@ -181,6 +190,10 @@ class TvControl:
 
             paired = self.token_store.read() is not None
 
+            # Retrying after a wake is still the wake as far as anyone
+            # watching is concerned, however many connects it takes.
+            self.status.set('waking' if last_attempt_failed else 'connecting')
+
             try:
                 async with websockets.connect(
                     self._url(),
@@ -207,6 +220,8 @@ class TvControl:
                             # triggered pairing still lands.
                             logger.debug('paired, reconnecting with keepalive')
                             continue
+
+                        self.status.set('connected')
 
                         while True:
                             while len(pending) > 0:
@@ -261,6 +276,7 @@ class TvControl:
                 self.token_store.clear()
                 pending.clear()
                 last_attempt_failed = False
+                self.status.set('unpaired')
             except Exception as error:
                 if isinstance(error, ChannelTimeout):
                     logger.debug('<- tv asleep: %s', error)
@@ -270,3 +286,9 @@ class TvControl:
                 if len(pending) > 0:
                     last_attempt_failed = True
                     self._wake()
+                    self.status.set('waking')
+                else:
+                    # A dropped channel or a failed preconnect says nothing
+                    # about whether the TV is off; the next presence check
+                    # does.
+                    self.status.set(None)

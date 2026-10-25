@@ -41,11 +41,11 @@
             <div class='toolbar'>
                 <button class='help-button' aria-pressed='false'>Help</button>
                 <button class='dev-button' aria-pressed='false'>Dev</button>
-                <button class='model-status' data-state='loading'>
-                    <span class='model-dot'></span><span class='model-state'>Loading</span>
+                <button class='status' data-dot='busy' aria-label='Loading'>
+                    <span class='status-dot'></span><span class='status-word' hidden></span>
                 </button>
             </div>
-            <pre class='model-detail' hidden></pre>
+            <pre class='status-detail' hidden></pre>
             <div class='toolbar dev-toolbar' hidden>
                 <button class='delete-button'>Delete</button>
                 <button class='record-button' aria-pressed='false'><span class='record-dot'></span>Record</button>

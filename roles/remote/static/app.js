@@ -16,9 +16,9 @@ const [roster, labels] = await Promise.all([
 ]);
 const actions = new Map(roster.map((gesture) => [gesture.name, gesture]));
 
-const modelStatus = document.querySelector('.model-status');
-const modelState = document.querySelector('.model-state');
-const modelDetail = document.querySelector('.model-detail');
+const statusButton = document.querySelector('.status');
+const statusWord = document.querySelector('.status-word');
+const statusDetail = document.querySelector('.status-detail');
 
 // A failed load or a lost WebGL context leaves no usable model, so the next
 // gesture starts over from a fresh backend instead of staying stuck.
@@ -34,17 +34,113 @@ const modelWaitMilliseconds = 2000;
 // up to this many predictions in all.
 const classifyAttempts = 3;
 
-const modelStateNames = { loading: 'Loading', ready: 'Ready', failed: 'Failed' };
+// How long a stream the server refused outright (Traefik's 502 mid-deploy)
+// waits before trying again; EventSource itself only retries dropped ones.
+const statusReopenMilliseconds = 10000;
 
-const showModelStatus = (state, detail = state) => {
-    modelStatus.dataset.state = state;
-    modelState.innerText = modelStateNames[state];
-    modelDetail.innerText = `model: ${detail}`;
+// How long a status has to hold before its word appears. A run of quick
+// changes, such as connecting then connected, only changes the dot.
+const statusWordDelayMilliseconds = 3000;
+
+let modelStatus = { state: 'loading', detail: 'loading' };
+
+// What the server last said about the TV. null is nothing known yet, from
+// the server or because this page has not heard from it; 'lost' is a stream
+// that failed, so whatever it said last is no longer trusted.
+let tvState = null;
+let statusEvents = null;
+
+let settlingWord;
+let statusWordTimer = null;
+
+// One dot for the TV and the model together, showing whichever matters most
+// to the next gesture: nothing works, not known yet, a prompt on the TV, a
+// delay, a wake. Off is the resting state, so it ranks just above ready.
+const combinedStatus = () => {
+    if (modelStatus.state === 'failed') return { dot: 'failed', word: 'Model failed' };
+    if (tvState === null) return { dot: 'busy', word: 'Loading' };
+    if (tvState === 'lost') return { dot: 'unknown', word: 'No status' };
+    if (tvState === 'unpaired') return { dot: 'attention', word: 'Unpaired' };
+    if (modelStatus.state === 'loading') return { dot: 'busy', word: 'Loading model' };
+    if (tvState === 'waking') return { dot: 'busy', word: 'Waking TV' };
+    if (tvState === 'connecting') return { dot: 'busy', word: 'Connecting' };
+    if (tvState === 'off') return { dot: 'off', word: 'TV off' };
+    return { dot: 'ready', word: null };
 };
 
-modelStatus.addEventListener('click', () => {
-    modelDetail.hidden = !modelDetail.hidden;
+const tvDetails = { null: 'loading', lost: 'lost contact with the server' };
+
+const showStatus = () => {
+    const { dot, word } = combinedStatus();
+    statusButton.dataset.dot = dot;
+    statusButton.setAttribute('aria-label', word ?? 'Ready');
+    statusDetail.innerText = `tv: ${tvDetails[tvState] ?? tvState}\n`
+        + `model: ${modelStatus.detail}`;
+
+    // A new detail under the same word is not a change of status.
+    if (word === settlingWord) {
+        return;
+    }
+
+    settlingWord = word;
+    clearTimeout(statusWordTimer);
+    statusWord.hidden = true;
+
+    if (word !== null) {
+        statusWordTimer = setTimeout(() => {
+            statusWord.innerText = word;
+            statusWord.hidden = false;
+        }, statusWordDelayMilliseconds);
+    }
+};
+
+const showModelStatus = (state, detail = state) => {
+    modelStatus = { state, detail };
+    showStatus();
+};
+
+statusButton.addEventListener('click', () => {
+    statusDetail.hidden = !statusDetail.hidden;
 });
+
+// Only a visible page holds a stream: a pocketed phone keeps no connection
+// open, and the server gets its thread back.
+const followStatus = () => {
+    if (document.visibilityState !== 'visible') {
+        statusEvents?.close();
+        statusEvents = null;
+        return;
+    }
+
+    if (statusEvents) {
+        return;
+    }
+
+    // Whatever was known before the page was hidden may have changed since.
+    tvState = null;
+    showStatus();
+
+    const events = new EventSource('/status');
+    statusEvents = events;
+
+    events.addEventListener('message', (event) => {
+        tvState = JSON.parse(event.data).state;
+        showStatus();
+    });
+
+    events.addEventListener('error', () => {
+        tvState = 'lost';
+        showStatus();
+
+        if (events.readyState === EventSource.CLOSED && statusEvents === events) {
+            statusEvents = null;
+            setTimeout(followStatus, statusReopenMilliseconds);
+        }
+    });
+};
+
+followStatus();
+document.addEventListener('visibilitychange', followStatus);
 
 const loadModel = async () => {
     showModelStatus('loading');

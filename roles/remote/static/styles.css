@@ -10,7 +10,8 @@
     --record-line: #ea580c;
     --delete: #fca5a5;
     --ready: #4ade80;
-    --loading: #fbbf24;
+    --busy: #fbbf24;
+    --off: #4b5263;
     --failed: #f87171;
     --untrained: #fbbf24;
     --mono: ui-monospace, Menlo, monospace;
@@ -173,7 +174,7 @@ button {
     color: var(--delete);
 }
 
-.toolbar .model-status {
+.toolbar .status {
     margin-left: auto;
     background: none;
     border: none;
@@ -182,23 +183,40 @@ button {
     color: var(--dim);
 }
 
-.model-dot {
+/* Shape, never motion, marks a state in progress: the page stays idle
+   however long the TV takes. */
+.status-dot {
     width: 8px;
     height: 8px;
+    flex-shrink: 0;
     border-radius: 50%;
-    background: var(--loading);
 }
 
-.model-status[data-state='ready'] .model-dot {
+.status[data-dot='ready'] .status-dot {
     background: var(--ready);
-    box-shadow: 0 0 8px var(--ready);
 }
 
-.model-status[data-state='failed'] .model-dot {
+.status[data-dot='busy'] .status-dot {
+    background: var(--busy);
+}
+
+.status[data-dot='attention'] .status-dot {
+    box-shadow: inset 0 0 0 1.5px var(--busy);
+}
+
+.status[data-dot='off'] .status-dot {
+    background: var(--off);
+}
+
+.status[data-dot='unknown'] .status-dot {
+    box-shadow: inset 0 0 0 1.5px var(--off);
+}
+
+.status[data-dot='failed'] .status-dot {
     background: var(--failed);
 }
 
-.model-detail {
+.status-detail {
     margin: 0;
     align-self: flex-end;
     max-width: 100%;

@@ -12,6 +12,7 @@ import app.control as control_module
 from app.control import ChannelTimeout, TvControl, Unauthorized
 from app.network import LanInterface
 from app.token_store import TokenStore
+from app.tv_status import TvStatus
 
 
 @pytest.fixture
@@ -19,13 +20,26 @@ def token_store(tmp_path):
     return TokenStore(tmp_path / 'token')
 
 
-def make_control(token_store, client_name='Remote'):
+class RecordingStatus(TvStatus):
+    def __init__(self):
+        super().__init__()
+        self.history = []
+
+    def set(self, state):
+        if not self.history or self.history[-1] != state:
+            self.history.append(state)
+
+        super().set(state)
+
+
+def make_control(token_store, client_name='Remote', status=None):
     return TvControl(
         ip='10.0.0.5',
         mac='aa:bb:cc:dd:ee:ff',
         client_name=client_name,
         token_store=token_store,
         lan=LanInterface(source_ip='10.0.0.2', broadcast_ip='10.0.0.255'),
+        status=status or TvStatus(),
     )
 
 
@@ -535,3 +549,108 @@ def test_tv_is_on_reads_the_power_state(token_store, monkeypatch, state, error, 
     power_state_response(monkeypatch, state=state, error=error)
 
     assert asyncio.run(make_control(token_store)._tv_is_on()) is expected
+
+
+def test_an_unpaired_remote_reports_unpaired_without_waiting(token_store, monkeypatch, wakes):
+    """No presence check runs unpaired, so there is nothing to wait for."""
+    status = RecordingStatus()
+
+    drive(
+        make_control(token_store, status=status),
+        monkeypatch,
+        lambda: status.history,
+        connect=lambda *a, **k: FakeConnect(FakeWebsocket([])),
+        gestures=(),
+    )
+
+    assert status.history == ['unpaired']
+
+
+def test_a_tv_in_standby_reports_off(token_store, monkeypatch, wakes):
+    token_store.write('12345678')
+    status = RecordingStatus()
+    control = make_control(token_store, status=status)
+    tv_power(monkeypatch, control, on=False)
+
+    drive(control, monkeypatch, lambda: status.history, gestures=())
+
+    assert status.history == ['off']
+
+
+def test_a_preconnected_channel_reports_connecting_then_connected(
+    token_store, monkeypatch, wakes
+):
+    token_store.write('12345678')
+    status = RecordingStatus()
+    control = make_control(token_store, status=status)
+    tv_power(monkeypatch, control, on=True)
+    connect, captured = counting_connect([FakeWebsocket([CONNECT])])
+
+    drive(
+        control,
+        monkeypatch,
+        lambda: 'connected' in status.history,
+        connect=connect,
+        gestures=(),
+    )
+
+    assert status.history == ['connecting', 'connected']
+
+
+def test_a_gesture_that_finds_the_tv_asleep_reports_waking_until_connected(
+    token_store, monkeypatch, wakes
+):
+    """The retries after a wake are still the wake, not fresh connects."""
+    token_store.write('12345678')
+    status = RecordingStatus()
+    awake = FakeWebsocket([CONNECT])
+    connect, captured = counting_connect(
+        [FakeWebsocket([TIMED_OUT]), FakeWebsocket([TIMED_OUT]), awake]
+    )
+
+    drive(
+        make_control(token_store, status=status),
+        monkeypatch,
+        lambda: awake.sent_something.is_set(),
+        connect=connect,
+    )
+
+    assert status.history == ['connecting', 'waking', 'connected']
+
+
+def test_a_refused_token_reports_unpaired(token_store, monkeypatch, wakes):
+    token_store.write('87654321')
+    status = RecordingStatus()
+
+    drive(
+        make_control(token_store, status=status),
+        monkeypatch,
+        lambda: token_store.read() is None and status.history[-1] == 'unpaired',
+        websocket=FakeWebsocket([UNAUTHORIZED]),
+    )
+
+    assert status.history == ['connecting', 'unpaired']
+
+
+def test_a_dropped_channel_reports_nothing_known_until_the_next_check(
+    token_store, monkeypatch, wakes
+):
+    """Keepalive noticing the TV leave says nothing about whether it is off;
+    the presence check says that."""
+    token_store.write('12345678')
+    status = RecordingStatus()
+    control = make_control(token_store, status=status)
+    tv_power(monkeypatch, control, on=True)
+    connect, captured = counting_connect(
+        [FakeWebsocket([CONNECT, ConnectionError('tv went away')])]
+    )
+
+    drive(
+        control,
+        monkeypatch,
+        lambda: len(status.history) >= 3,
+        connect=connect,
+        gestures=(),
+    )
+
+    assert status.history[:3] == ['connecting', 'connected', None]

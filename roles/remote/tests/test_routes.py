@@ -7,12 +7,14 @@ import pytest
 import app as app_module
 from app import create_app
 from app.recordings import Recordings
+from app.tv_status import TvStatus
 
 REVISION = '0123456789abcdef0123456789abcdef01234567'
 
 class FakeControl:
     def __init__(self):
         self.sent = []
+        self.status = TvStatus()
 
     def send(self, message):
         self.sent.append(message)
@@ -207,3 +209,53 @@ def test_create_app_pairs_through_a_token_file_not_the_environment(
     keywords = FakeTvControl.built.keywords
     assert keywords['token_store'].path == tmp_path / 'token'
     assert keywords['lan'].broadcast_ip == '10.0.0.255'
+
+
+def open_status_stream(client):
+    response = client.get('/status', buffered=False)
+    return response, iter(response.response)
+
+
+def test_the_status_stream_is_an_uncached_event_stream(client):
+    response, events = open_status_stream(client)
+
+    assert response.mimetype == 'text/event-stream'
+    assert response.cache_control.no_cache
+    response.close()
+
+
+def test_the_status_stream_opens_with_the_current_state(client, control):
+    control.status.set('off')
+
+    response, events = open_status_stream(client)
+
+    assert next(events) == b'data: {"state": "off"}\n\n'
+    response.close()
+
+
+def test_the_status_stream_opens_with_null_when_nothing_is_known(client):
+    response, events = open_status_stream(client)
+
+    assert next(events) == b'data: {"state": null}\n\n'
+    response.close()
+
+
+def test_the_status_stream_sends_each_change(client, control):
+    response, events = open_status_stream(client)
+    next(events)
+
+    control.status.set('connecting')
+
+    assert next(events) == b'data: {"state": "connecting"}\n\n'
+    response.close()
+
+
+def test_a_quiet_status_stream_sends_a_heartbeat(client, monkeypatch):
+    """A client that has gone away is only noticed on a write, and until
+    then it holds one of the server's threads."""
+    monkeypatch.setattr(app_module, 'STATUS_HEARTBEAT', 0)
+    response, events = open_status_stream(client)
+    next(events)
+
+    assert next(events) == b': heartbeat\n\n'
+    response.close()

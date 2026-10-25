@@ -9,8 +9,11 @@ from app.control import TvControl
 from app.network import local_addresses, select_lan_interface
 from app.recordings import Recordings
 from app.token_store import TokenStore
+from app.tv_status import TvStatus
 
 ROOT = Path(__file__).parent.parent
+
+STATUS_HEARTBEAT = 20
 
 
 def create_app(control=None, recordings=None, static=None):
@@ -37,6 +40,7 @@ def create_app(control=None, recordings=None, static=None):
             lan=select_lan_interface(
                 local_addresses(), os.environ['REMOTE_LAN_CIDR']
             ),
+            status=TvStatus(),
         )
         control.start()
 
@@ -62,6 +66,25 @@ def create_app(control=None, recordings=None, static=None):
         app.logger.debug('= control: %s', json.dumps(message))
         control.send(message)
         return flask.Response(status=204)
+
+    @app.route('/status')
+    def status():
+        def events():
+            version = None
+
+            while True:
+                change = control.status.wait(after=version, timeout=STATUS_HEARTBEAT)
+
+                if change is None:
+                    yield ': heartbeat\n\n'
+                    continue
+
+                version, state = change
+                yield f'data: {json.dumps({"state": state})}\n\n'
+
+        response = flask.Response(events(), mimetype='text/event-stream')
+        response.cache_control.no_cache = True
+        return response
 
     @app.route('/record', methods=['POST'])
     def post_record():

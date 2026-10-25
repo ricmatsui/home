@@ -26,5 +26,7 @@ USER 1000
 
 EXPOSE 5002
 
-CMD ["gunicorn", "--workers", "1", "--threads", "4", \
+# Increase threads for SSE, timeout quickly
+CMD ["gunicorn", "--workers", "1", "--threads", "32", \
+     "--graceful-timeout", "2", \
      "--bind", "0.0.0.0:5002", "app:create_app()"]
