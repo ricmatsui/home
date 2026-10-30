@@ -41,12 +41,18 @@
   ansible.builtin.copy:
     dest: "{{ item }}/override.conf"
     content: |
+      {% if docker_storage_external %}
+      [Unit]
+      RequiresMountsFor=/mnt/external/docker
+
+      {% endif %}
       [Service]
       Slice=docker.slice
   loop:
     - /etc/systemd/system/docker.service.d
     - /etc/systemd/system/containerd.service.d
   notify: docker_restart
+  tags: docker_services
 
 - name: install docker
   ansible.builtin.shell:

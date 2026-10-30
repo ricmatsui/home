@@ -19,9 +19,38 @@ if [[ "${1:-}" == "--dry-run" ]]; then
     DRY_RUN=true
 fi
 
+# A wedged mount parks anything touching it in uninterruptible sleep, where no
+# signal lands, so `timeout` sends its kill and then blocks reaping the child
+# forever. Run the command in the background and stop waiting instead; the
+# stranded process clears once the remount aborts the old connection. The unit
+# runs with KillMode=process so that leftover can't hold it in deactivating,
+# which would stop the timer from ever firing the run that recovers.
+bounded() {
+    local output pid elapsed=0
+    output=$(mktemp)
+    "$@" > "$output" 2>/dev/null &
+    pid=$!
+
+    while kill -0 "$pid" 2>/dev/null; do
+        if [[ "$elapsed" -ge "$PROBE_TIMEOUT" ]]; then
+            kill -9 "$pid" 2>/dev/null || true
+            rm -f "$output"
+            return 124
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    local status=0
+    wait "$pid" || status=$?
+    cat "$output"
+    rm -f "$output"
+    return "$status"
+}
+
 probe() {
     local output
-    output=$(timeout "$PROBE_TIMEOUT" ls "$MOUNT_POINT" 2>/dev/null) || return 1
+    output=$(bounded ls "$MOUNT_POINT") || return 1
     [[ -n "${output//[[:space:]]/}" ]] || return 1
 }
 
@@ -52,7 +81,7 @@ disconnected_bricks() {
     local private
     for private in "$MOUNT_POINT"/.meta/graphs/active/*-client-*/private; do
         [[ -e "$private" ]] || continue
-        if timeout "$PROBE_TIMEOUT" grep -qs '^connected = 0' "$private"; then
+        if bounded grep -qs '^connected = 0' "$private"; then
             basename "$(dirname "$private")"
         fi
     done

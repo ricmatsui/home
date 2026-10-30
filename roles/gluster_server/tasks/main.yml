@@ -19,9 +19,15 @@
   ansible.builtin.copy:
     dest: /etc/systemd/system/glusterd.service.d/override.conf
     content: |
+      {% if inventory_hostname in groups['gluster_brick_servers'] %}
+      [Unit]
+      RequiresMountsFor=/mnt/external/gluster
+
+      {% endif %}
       [Service]
       ExecStartPre=/bin/sleep 30
   notify: gluster_server_restart
+  tags: gluster_server_configure
 
 - name: install
   ansible.builtin.apt:

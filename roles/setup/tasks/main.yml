@@ -320,6 +320,31 @@
     - unattended-upgrades-shutdown
   tags: unattended_upgrades_log
 
+- name: create needrestart config directory
+  ansible.builtin.file:
+    path: /etc/needrestart/conf.d
+    state: directory
+  tags: needrestart
+
+- name: configure needrestart
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/50-report.conf
+    content: |
+      $nrconf{restart} = 'l';
+  tags: needrestart
+
+- name: install needrestart
+  ansible.builtin.apt:
+    name: needrestart
+  tags: needrestart
+
+- name: configure needrestart reboot hook
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99needrestart-reboot
+    content: |
+      DPkg::Post-Invoke {"/usr/sbin/needrestart -b 2>/dev/null | grep -E '^NEEDRESTART-(SVC: |KSTA: [23])' | sed 's/^NEEDRESTART-/needrestart-/; s/: /:/' | tee -a /var/run/reboot-required.pkgs | grep -q . && touch /var/run/reboot-required || true"; };
+  tags: needrestart
+
 - name: install docker sdk
   ansible.builtin.pip:
     name:

@@ -48,6 +48,7 @@
       [Service]
       Type=oneshot
       TimeoutStartSec=300
+      KillMode=process
       ExecStart=/opt/gluster-mount-recover.sh
   notify: gluster_mount_recover_reload
   tags: gluster_mount_recover
