@@ -256,6 +256,16 @@ test('a response cut short by eviction is worth retrying', () => {
     assert.equal(retryable(new TruncatedResponseError('modelUnloaded')), true);
 });
 
+test('a response that ran out of room is not retried, because temperature is zero', () => {
+    // A model caught in a reasoning loop repeats it verbatim on every attempt.
+    assert.equal(retryable(new TruncatedResponseError('maxPredictedTokensReached')), false);
+    assert.equal(retryable(new TruncatedResponseError('contextLengthReached')), false);
+});
+
+test('a response cut short by the token cap is rejected', () => {
+    assert.throws(() => assertComplete('maxPredictedTokensReached'), TruncatedResponseError);
+});
+
 test('an unparseable response is not retried, because temperature is zero', () => {
     // The same image and the same prompt produce the same text; a retry would
     // spend a model load to be told the same thing again.

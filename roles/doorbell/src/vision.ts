@@ -156,17 +156,19 @@ export function errorCode(error: unknown): string | undefined {
 /**
  * Whether another attempt could plausibly answer differently.
  *
- * The default is yes: an evicted model, a refused connection, a dropped socket and a
- * truncated answer are all the server having a bad moment, and the next attempt gets
- * a fresh handle. The exceptions are failures another attempt cannot change — a
- * deadline that has already been spent, a caller that has stopped caring, and a
- * response the model will produce again verbatim, since it runs at temperature 0.
+ * The default is yes: an evicted model, a refused connection and a dropped socket are
+ * all the server having a bad moment, and the next attempt gets a fresh handle. The
+ * exceptions are failures another attempt cannot change — a deadline that has already
+ * been spent, a caller that has stopped caring, and a response the model will produce
+ * again verbatim, since it runs at temperature 0. An answer that ran out of room is
+ * the last kind: it is a reasoning loop, and the next attempt walks the same loop.
  */
 export function retryable(error: unknown): boolean {
     return !(
         error instanceof UnparseableResponseError ||
         error instanceof InferenceTimeoutError ||
-        error instanceof InferenceAbortedError
+        error instanceof InferenceAbortedError ||
+        (error instanceof TruncatedResponseError && OUT_OF_ROOM_STOPS.has(error.stopReason))
     );
 }
 
@@ -233,6 +235,8 @@ export async function withRetries<T>(run: (attempt: number) => Promise<T>, optio
 
 /** The model ran out of things to say. Every other stop reason cut it off. */
 const CLEAN_STOPS = new Set(['eosFound', 'stopStringFound']);
+/** Stops where the model was still talking when it hit a limit. */
+const OUT_OF_ROOM_STOPS = new Set(['maxPredictedTokensReached', 'contextLengthReached']);
 
 export class TruncatedResponseError extends Error {
     constructor(readonly stopReason: string) {
@@ -367,6 +371,16 @@ const DEADLINE_MS = 600_000;
 const LOAD_DEADLINE_MS = 600_000;
 
 /**
+ * Caps the answer, thinking included. Measured on gemma-4-12b-qat over a third of the
+ * corpus: median 130 tokens, longest 305. A frame it cannot decide on sends it into a
+ * reasoning loop that runs until the 8192-token context is full — about eight minutes
+ * at the ~16 tokens/s it manages under load. At this cap the same loop costs about a
+ * minute, and a frame that is merely hard still has over three times the longest
+ * answer seen.
+ */
+const MAX_TOKENS = 1024;
+
+/**
  * Idle TTL on the JIT load, long enough that the model outlives the gaps between
  * doorbell events. It only governs *idle* unloading: it cannot stop the server
  * evicting the model to make room for a different one, which is what the retries and
@@ -452,7 +466,7 @@ export function createVisionClient(options: {
                     // for the rest nonReasoningContent is simply the whole response.
                     const result = await model.respond(
                         [{ role: 'user', content: prompt, images: [image] }],
-                        { temperature: 0, signal },
+                        { temperature: 0, maxTokens: MAX_TOKENS, signal },
                     );
 
                     // Before anything reads the text: a prediction the server
