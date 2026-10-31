@@ -41,13 +41,19 @@
   notify:
     - full_disk_encryption_update_initramfs
 
+- name: Remove other ip options in /boot/cmdline.txt
+  replace:
+    path: /boot/firmware/cmdline.txt
+    regexp: '\s*\bip=(?!:::::{{ full_disk_encryption_interface }}:dhcp(?:\s|$))\S*'
+    replace: ''
+
 - name: Configure options in /boot/cmdline.txt
   replace:
     path: /boot/firmware/cmdline.txt
     regexp: '^([\w](?!.*\b{{ item }}\b).*)$'
     replace: '\1 {{ item }}'
   loop:
-    - ip=:::::wlan0:dhcp
+    - ip=:::::{{ full_disk_encryption_interface }}:dhcp
     - root=/dev/mapper/root
 
 - name: configure wifi
@@ -55,6 +61,7 @@
     dest: /etc/initramfs-tools/wpa_supplicant.conf
     content: "{{ config.full_disk_encryption.wpa_supplicant_config }}"
     mode: u=rw,g=,o=
+  when: full_disk_encryption_wifi
   notify:
     - full_disk_encryption_update_initramfs
 
@@ -97,6 +104,7 @@
       manual_add_modules nhpoly1305
       manual_add_modules dm-crypt
 
+      {% if full_disk_encryption_wifi %}
       # Wi-Fi
       manual_add_modules brcmfmac
       manual_add_modules brcmfmac_wcc
@@ -113,8 +121,11 @@
 
       copy_file config /etc/initramfs-tools/wpa_supplicant.conf /etc/wpa_supplicant.conf
 
+      {% endif %}
       # Troubleshooting
+      {% if full_disk_encryption_wifi %}
       copy_exec /sbin/wpa_cli
+      {% endif %}
       copy_exec /usr/sbin/ip
       copy_exec /usr/bin/curl
     mode: u=rwx,g=rx,o=rx
@@ -142,8 +153,9 @@
       . /scripts/functions
 
       /usr/sbin/rfkill unblock all
-      /sbin/wpa_supplicant -i wlan0 -c /etc/wpa_supplicant.conf -P /run/initramfs-wpa_supplicant.pid -B -f /tmp/wpa_supplicant.log
+      /sbin/wpa_supplicant -i {{ full_disk_encryption_interface }} -c /etc/wpa_supplicant.conf -P /run/initramfs-wpa_supplicant.pid -B -f /tmp/wpa_supplicant.log
     mode: u=rwx,g=rx,o=rx
+  when: full_disk_encryption_wifi
   notify:
     - full_disk_encryption_update_initramfs
 
@@ -167,5 +179,18 @@
 
       kill $(cat /run/initramfs-wpa_supplicant.pid)
     mode: u=rwx,g=rx,o=rx
+  when: full_disk_encryption_wifi
+  notify:
+    - full_disk_encryption_update_initramfs
+
+- name: remove wifi
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/initramfs-tools/wpa_supplicant.conf
+    - /etc/initramfs-tools/scripts/init-premount/wifi
+    - /etc/initramfs-tools/scripts/local-bottom/reset-wifi
+  when: not full_disk_encryption_wifi
   notify:
     - full_disk_encryption_update_initramfs

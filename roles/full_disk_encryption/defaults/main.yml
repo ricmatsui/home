@@ -1,0 +1,4 @@
+---
+
+full_disk_encryption_interface: wlan0
+full_disk_encryption_wifi: "{{ full_disk_encryption_interface.startswith('wlan') }}"
