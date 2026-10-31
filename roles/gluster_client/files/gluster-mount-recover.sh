@@ -87,6 +87,24 @@ disconnected_bricks() {
     done
 }
 
+# A brick the client lost because its host is down (a reboot, a crashed brick
+# process) comes back on its own, and remounting against it only strands
+# containers. The wedge a remount fixes is a client that stays cut off from a
+# brick that is up. Servers can ask glusterd directly; clients without the CLI
+# fall back to whether glusterd on the brick's host answers at all.
+brick_online() {
+    local options="$MOUNT_POINT/.meta/graphs/active/$1/options"
+    local volume="${1%-client-*}" host subvolume
+    host=$(bounded cat "$options/remote-host") || return 1
+    subvolume=$(bounded cat "$options/remote-subvolume") || return 1
+
+    if command -v gluster >/dev/null; then
+        bounded gluster volume status "$volume" "$host:$subvolume" --xml | grep -q '<status>1</status>'
+    else
+        bounded bash -c 'exec 3<>"/dev/tcp/$0/24007"' "$host"
+    fi
+}
+
 all_bricks_connected() {
     local disconnected
     disconnected=$(disconnected_bricks) || return 1
@@ -113,10 +131,32 @@ record_failure() {
     recover
 }
 
+# Containers resolve bind mounts at creation, so they keep pointing at the dead
+# superblock across a remount and stay broken without ever crashing. Restarting
+# the daemon forces every container to re-resolve.
+restart_docker() {
+    if systemctl is-active --quiet docker; then
+        echo "Restarting docker so containers re-resolve their bind mounts"
+        systemctl restart docker
+        echo "Docker restarted"
+    else
+        echo "Docker not active, skipping restart"
+    fi
+}
+
 recover() {
     umount -f -l "$MOUNT_POINT" || echo "Unmount reported failure, continuing"
+
+    # The old superblock is detached now and every container still points at
+    # it, so however the remount goes, leave through the docker restart.
+    trap restart_docker EXIT
+
     sleep 2
-    systemctl restart "$MOUNT_UNIT"
+
+    # Anything touching the mount point after the detach triggers the automount,
+    # and a restart then fails trying to stop that mount half way up. Start
+    # joins it instead.
+    systemctl start "$MOUNT_UNIT" || echo "Starting $MOUNT_UNIT reported failure, continuing"
 
     if ! probe; then
         echo "Remount failed for $MOUNT_POINT" >&2
@@ -140,17 +180,6 @@ recover() {
 
     rm -f "$STATE_FILE"
     echo "Remount succeeded for $MOUNT_POINT"
-
-    # Containers resolve bind mounts at creation, so they keep pointing at the dead
-    # superblock across a remount and stay broken without ever crashing. Restarting
-    # the daemon forces every container to re-resolve.
-    if systemctl is-active --quiet docker; then
-        echo "Restarting docker so containers re-resolve their bind mounts"
-        systemctl restart docker
-        echo "Docker restarted"
-    else
-        echo "Docker not active, skipping restart"
-    fi
 }
 
 if ! probe; then
@@ -185,5 +214,19 @@ if [[ "$waiting" -lt "$WAITING_THRESHOLD" ]]; then
     exit 0
 fi
 
-echo "Wedged: bricks disconnected ($disconnected) with $waiting requests waiting on the FUSE queue"
+stranded=""
+for client in $disconnected; do
+    if brick_online "$client"; then
+        stranded+="$client "
+    fi
+done
+stranded="${stranded%% }"
+
+if [[ -z "$stranded" ]]; then
+    rm -f "$STATE_FILE"
+    echo "Bricks disconnected ($disconnected) are offline on their hosts, waiting for them to return"
+    exit 0
+fi
+
+echo "Wedged: bricks disconnected ($stranded) while online with $waiting requests waiting on the FUSE queue"
 record_failure
