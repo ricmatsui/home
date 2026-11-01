@@ -43,7 +43,9 @@ export interface RunFile {
     baseUrl: string;
     /** Frames in flight at once. Absent on runs written before it was settable. */
     concurrency?: number;
-    /** Factor frames were resampled by before sending. Absent on runs before it was settable, which all sent 2x. */
+    /** Width frames were resampled to before sending. Absent on runs from before it replaced `upscale`. */
+    inputWidth?: number;
+    /** Factor frames were resampled by, on runs from before `inputWidth`. Absent before that too, which all sent 2x. */
     upscale?: number;
     /** The --only patterns a subset run was narrowed by. Absent on full-corpus runs. */
     only?: string[];

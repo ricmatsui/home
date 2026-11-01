@@ -18,7 +18,7 @@ import {
     parseDetections,
     promptFor,
     scaleBox,
-    upscale,
+    resizeToWidth,
 } from './vision.js';
 
 test('scales a full-frame box', () => {
@@ -137,26 +137,42 @@ test('the prompt asks for the key and order gemma actually emits', () => {
     assert.match(PROMPT, /ymin, xmin, ymax, xmax/);
 });
 
-test('upscale multiplies both dimensions', async () => {
-    const source = await new Jimp({ width: 8, height: 6, color: 0xff0000ff }).getBuffer('image/jpeg');
-    const bigger = await Jimp.fromBuffer(await upscale(source, 2));
+test('resizeToWidth sends a stream grab at the width the eval measured', async () => {
+    const source = await new Jimp({ width: 512, height: 384, color: 0xff0000ff }).getBuffer('image/jpeg');
+    const resized = await Jimp.fromBuffer(await resizeToWidth(source, 912));
 
-    assert.equal(bigger.width, 16);
-    assert.equal(bigger.height, 12);
+    assert.equal(resized.width, 912);
+    assert.equal(resized.height, 684);
 });
 
-test('upscale rounds a fractional factor to whole pixels', async () => {
+test('resizeToWidth sends a smaller notification picture at the same size', async () => {
+    const source = await new Jimp({ width: 320, height: 240, color: 0xff0000ff }).getBuffer('image/jpeg');
+    const resized = await Jimp.fromBuffer(await resizeToWidth(source, 912));
+
+    assert.equal(resized.width, 912);
+    assert.equal(resized.height, 684);
+});
+
+test('resizeToWidth rounds the height to whole pixels', async () => {
     const source = await new Jimp({ width: 512, height: 387, color: 0xff0000ff }).getBuffer('image/jpeg');
-    const bigger = await Jimp.fromBuffer(await upscale(source, 1.78125));
+    const resized = await Jimp.fromBuffer(await resizeToWidth(source, 912));
 
-    assert.equal(bigger.width, 912);
-    assert.equal(bigger.height, 689);
+    assert.equal(resized.width, 912);
+    assert.equal(resized.height, 689);
 });
 
-test('upscale leaves the image readable', async () => {
+test('resizeToWidth scales a source wider than the target down', async () => {
+    const source = await new Jimp({ width: 1600, height: 1200, color: 0xff0000ff }).getBuffer('image/jpeg');
+    const resized = await Jimp.fromBuffer(await resizeToWidth(source, 912));
+
+    assert.equal(resized.width, 912);
+    assert.equal(resized.height, 684);
+});
+
+test('resizeToWidth leaves the image readable', async () => {
     const source = await new Jimp({ width: 8, height: 6, color: 0xff0000ff }).getBuffer('image/jpeg');
-    const bigger = await Jimp.fromBuffer(await upscale(source, 2));
-    const pixel = bigger.getPixelColor(8, 6);
+    const resized = await Jimp.fromBuffer(await resizeToWidth(source, 16));
+    const pixel = resized.getPixelColor(8, 6);
 
     // Still a red frame in the middle. Exact equality would be testing JPEG, which
     // comes back a point or two short of 0xff however little the resampling did.

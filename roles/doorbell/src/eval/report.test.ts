@@ -240,20 +240,33 @@ test('a run from before concurrency was settable says nothing about it', () => {
     assert.doesNotMatch(html, /at a time/);
 });
 
-test('the report and the compare header name the upscale a run sent at', () => {
+test('the report and the compare header name the width a run sent at', () => {
     const results = [result('a.jpg', false, false)];
-    const html = renderReport({ ...run(results), upscale: 1.78125 }, 'r');
+    const html = renderReport({ ...run(results), inputWidth: 912 }, 'r');
     const text = renderCompare({
-        a: { ...run(results), upscale: 2 },
-        b: { ...run(results), upscale: 1.78125 },
+        a: { ...run(results), inputWidth: 1024 },
+        b: { ...run(results), inputWidth: 912 },
         diff: diffRuns(results, results),
         beta: 0.5,
         p: 1,
     });
 
-    assert.match(html, /1\.78125× upscale/);
-    assert.match(text, /^A .*2× upscale$/m);
-    assert.match(text, /^B .*1\.78125× upscale$/m);
+    assert.match(html, /sent 912px wide/);
+    assert.match(text, /^A .*1024px wide$/m);
+    assert.match(text, /^B .*912px wide$/m);
+});
+
+test('a run that recorded an upscale factor reports the width it sent at', () => {
+    const results = [result('a.jpg', false, false)];
+    const text = renderCompare({
+        a: { ...run(results), upscale: 1.78125 },
+        b: { ...run(results), inputWidth: 912 },
+        diff: diffRuns(results, results),
+        beta: 0.5,
+        p: 1,
+    });
+
+    assert.match(text, /^A .*912px wide$/m);
 });
 
 const TRUTH = { xMin: 100, yMin: 100, xMax: 200, yMax: 200 };

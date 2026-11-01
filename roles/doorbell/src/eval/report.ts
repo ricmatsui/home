@@ -330,12 +330,13 @@ export function renderReport(run: RunFile, runDir: string): string {
     // Without it, a per-image ms is unreadable: frames in flight together each take
     // longer in wall clock than they would alone.
     const inFlight = run.concurrency ? ` (${run.concurrency} at a time)` : '';
-    const upscaled = run.upscale ? ` · ${run.upscale}× upscale` : '';
+    const width = inputWidthOf(run);
+    const sent = width ? ` · sent ${width}px wide` : '';
     const subset = run.only ? ` · only ${run.only.map((pattern) => `<code>${escapeHtml(pattern)}</code>`).join(', ')}` : '';
 
     const body = `<h1>${escapeHtml(run.model)}</h1>
 <p>${escapeHtml(run.startedAt)} · ${run.corpus.images} images, ${run.corpus.positives} cat${subset} ·
-${(run.summary.totalMs / 1000).toFixed(1)}s${inFlight}${upscaled}<br>
+${(run.summary.totalMs / 1000).toFixed(1)}s${inFlight}${sent}<br>
 prompt <code>${escapeHtml(run.promptSha.slice(0, 12))}</code> ·
 labels <code>${escapeHtml(run.labelsSha.slice(0, 12))}</code></p>
 <pre>${escapeHtml(run.prompt)}</pre>
@@ -356,8 +357,17 @@ ${section('Errors', of('error'), runDir)}`;
     return page(`${run.model} — doorbell eval`, body);
 }
 
-function upscaleNote(run: RunFile): string {
-    return run.upscale ? `  ${run.upscale}× upscale` : '';
+/**
+ * Runs from before `inputWidth` recorded a factor instead. Every corpus frame then
+ * was 512 wide, so the factor converts exactly and old and new runs still compare.
+ */
+function inputWidthOf(run: RunFile): number | undefined {
+    return run.inputWidth ?? (run.upscale ? Math.round(run.upscale * 512) : undefined);
+}
+
+function inputWidthNote(run: RunFile): string {
+    const width = inputWidthOf(run);
+    return width ? `  ${width}px wide` : '';
 }
 
 function summaryLine(name: string, run: RunFile): string {
@@ -404,8 +414,8 @@ export function renderCompare(options: {
           `${fixed} fixed / ${broke} broke, McNemar p=${p.toFixed(4)} (n too small to call)`;
 
     return [
-        `A  ${a.model}  ${a.startedAt}${upscaleNote(a)}`,
-        `B  ${b.model}  ${b.startedAt}${upscaleNote(b)}`,
+        `A  ${a.model}  ${a.startedAt}${inputWidthNote(a)}`,
+        `B  ${b.model}  ${b.startedAt}${inputWidthNote(b)}`,
         '',
         summaryLine('A', a),
         summaryLine('B', b),

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { annotate } from '../annotate.js';
-import { DEFAULT_UPSCALE, createVisionClient, promptFor } from '../vision.js';
+import { DEFAULT_INPUT_WIDTH, createVisionClient, promptFor } from '../vision.js';
 import { createAnnotatorServer } from './annotator.js';
 import {
     hasCat,
@@ -86,7 +86,7 @@ const USAGE = `usage:
   yarn eval bootstrap [--dir <corpus>]
   yarn eval annotate  [--dir <corpus>] [--only <path|glob>]... [--pending] [--port <n>]
   yarn eval run       [--dir <corpus>] [--model <name>] [--url <ws://…>] [--prompt-file <f>]
-                      [--only <path|glob>]... [--limit <n>] [--concurrency <n>] [--upscale <factor>]
+                      [--only <path|glob>]... [--limit <n>] [--concurrency <n>] [--width <px>]
   yarn eval compare   <runA.json> <runB.json> [--beta <n>]
 
 --url defaults to LM_STUDIO_URL, which may be set in the environment or in a .env
@@ -99,8 +99,9 @@ writes only the frames you brought up, so the rest keep whatever they had.
 --only narrows a run (or an annotate session) to the images matching a path or glob relative to images/,
 e.g. --only '2026-09-25/*' --only night/porch-ir-03.jpg. Repeatable.
 
---upscale resamples each frame by <factor> before sending (default ${DEFAULT_UPSCALE}, what the
-service deploys). Box placement varies with it: 1.78125 sends a 512x384 frame as 912x684.
+--width resamples each frame to <px> wide before sending, keeping its aspect ratio (default
+${DEFAULT_INPUT_WIDTH}, what the service deploys). Box placement varies with it: 912 sends a
+512x384 frame as 912x684.
 
 --model defaults the same way from LM_STUDIO_MODEL, falling back to the model the
 service is deployed with (${DEFAULT_MODEL}).
@@ -170,7 +171,7 @@ async function run(options: {
     model: string;
     baseUrl: string;
     concurrency: number;
-    upscale: number;
+    inputWidth: number;
     promptFile?: string;
     only: string[];
     limit?: number;
@@ -206,7 +207,7 @@ async function run(options: {
         baseUrl: options.baseUrl,
         model: options.model,
         prompt,
-        upscale: options.upscale,
+        inputWidth: options.inputWidth,
         attempts: EVAL_ATTEMPTS,
         deadlineMs: EVAL_DEADLINE_MS,
         loadDeadlineMs: EVAL_LOAD_DEADLINE_MS,
@@ -282,7 +283,7 @@ async function run(options: {
         model: options.model,
         baseUrl: options.baseUrl,
         concurrency: options.concurrency,
-        upscale: options.upscale,
+        inputWidth: options.inputWidth,
         ...(options.only.length > 0 && { only: options.only }),
         prompt,
         promptSha: sha(prompt),
@@ -371,7 +372,7 @@ const { values, positionals } = parseArgs({
         only: { type: 'string', multiple: true },
         limit: { type: 'string' },
         concurrency: { type: 'string' },
-        upscale: { type: 'string' },
+        width: { type: 'string' },
         beta: { type: 'string' },
         port: { type: 'string' },
         pending: { type: 'boolean' },
@@ -399,7 +400,7 @@ if (command === 'bootstrap') {
         only: values.only ?? [],
         limit: values.limit ? Number(values.limit) : undefined,
         concurrency: values.concurrency ? Number(values.concurrency) : DEFAULT_CONCURRENCY,
-        upscale: values.upscale ? Number(values.upscale) : DEFAULT_UPSCALE,
+        inputWidth: values.width ? Number(values.width) : DEFAULT_INPUT_WIDTH,
     });
 } else if (command === 'compare') {
     const [, fileA, fileB] = positionals;
