@@ -1,5 +1,6 @@
 import mqtt, { MqttClient } from 'mqtt';
 import { createLogger, elapsedMs } from './log.js';
+import { CAMERA_NOTIFICATION_TOPIC } from './notifications.js';
 
 const log = createLogger('mqtt');
 
@@ -112,6 +113,7 @@ export interface DoorbellMqtt {
     setWindowOpen(open: boolean): void;
     setCatPresent(present: boolean): void;
     publishDetection(image: Buffer, at: Date): void;
+    subscribeToCameraNotifications(onNotification: (data: string) => Promise<void>): Promise<void>;
     end(): Promise<void>;
 }
 
@@ -214,6 +216,21 @@ export async function connectMqtt(options: {
         publishDetection(image: Buffer, at: Date): void {
             publish(topic.image, image);
             publish(topic.lastDetection, at.toISOString());
+        },
+
+        async subscribeToCameraNotifications(onNotification: (data: string) => Promise<void>): Promise<void> {
+            client.on('message', async (target, payload) => {
+                if (target !== CAMERA_NOTIFICATION_TOPIC) return;
+                log.debug('message', { topic: target, bytes: payload.length });
+                try {
+                    await onNotification(payload.toString());
+                } catch (error) {
+                    log.error('failed to handle message', { topic: target, error });
+                }
+            });
+            // mqtt.js renews the subscription itself on every reconnect.
+            await client.subscribeAsync(CAMERA_NOTIFICATION_TOPIC, { qos: 1 });
+            log.debug('subscribed', { topic: CAMERA_NOTIFICATION_TOPIC });
         },
 
         async end(): Promise<void> {

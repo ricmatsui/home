@@ -4,10 +4,11 @@ import { ActivityWindow } from './window.js';
 import { CatPresence } from './presence.js';
 import { SerialQueue } from './queue.js';
 import { createVisionClient, errorCode } from './vision.js';
-import { Frame, grabFrame } from './frames.js';
+import { Frame, grabFrame, saveFrame } from './frames.js';
 import { annotate, writeResult } from './annotate.js';
 import { connectMqtt } from './mqtt.js';
 import { createFrigateEvents } from './frigate.js';
+import { CAMERA_NOTIFICATION_TOPIC, parseCameraNotification } from './notifications.js';
 import { createLogger, elapsedMs } from './log.js';
 import { metrics } from './metrics.js';
 
@@ -47,6 +48,8 @@ log.info('starting', {
  */
 const abandon = new AbortController();
 
+let shuttingDown = false;
+
 const broker = await connectMqtt({
     url: config.mqttUrl,
     camera: config.frigateCamera,
@@ -79,7 +82,11 @@ const queue = new SerialQueue<Frame>({
     },
     worker: async (frame) => {
         const started = performance.now();
-        log.debug('processing frame', { path: frame.rawPath, age_ms: Date.now() - frame.at.getTime() });
+        log.debug('processing frame', {
+            path: frame.rawPath,
+            source: frame.source,
+            age_ms: Date.now() - frame.at.getTime(),
+        });
 
         let detections;
         try {
@@ -90,6 +97,7 @@ const queue = new SerialQueue<Frame>({
             await writeResult({
                 framesPath: config.framesPath,
                 at: frame.at,
+                source: frame.source,
                 verdict: 'nocat',
                 annotated: null,
                 body: { error: String(error) },
@@ -103,6 +111,7 @@ const queue = new SerialQueue<Frame>({
         await writeResult({
             framesPath: config.framesPath,
             at: frame.at,
+            source: frame.source,
             verdict: cat ? 'cat' : 'nocat',
             annotated: buffer,
             body: { detections, boxes },
@@ -110,10 +119,11 @@ const queue = new SerialQueue<Frame>({
 
         broker.publishDetection(buffer, frame.at);
         presence.recordDetection(cat);
-        metrics.increment('frame.processed', { verdict: cat ? 'cat' : 'nocat' });
+        metrics.increment('frame.processed', { verdict: cat ? 'cat' : 'nocat', source: frame.source });
 
         log.info('frame processed', {
             path: frame.rawPath,
+            source: frame.source,
             verdict: cat ? 'cat' : 'nocat',
             detections: detections.length,
             ms: elapsedMs(started),
@@ -176,7 +186,42 @@ const subscription = subscribeToDoorbellEvents({
 
 log.info('subscribed', { subscription: config.pubsubSubscription });
 
-let shuttingDown = false;
+await broker.subscribeToCameraNotifications(async (data) => {
+    const notification = parseCameraNotification(data);
+
+    if (!notification) {
+        log.debug('notification ignored, no picture');
+        return;
+    }
+
+    if (shuttingDown) {
+        log.debug('notification ignored, shutting down');
+        return;
+    }
+
+    log.info('notification', {
+        title: notification.title,
+        text: notification.text,
+        at: notification.at,
+        bytes: notification.picture.length,
+    });
+    activityWindow.onEvent();
+
+    try {
+        queue.push(await saveFrame({
+            framesPath: config.framesPath,
+            at: notification.at,
+            source: 'notification',
+            raw: notification.picture,
+        }));
+        metrics.increment('notification', { result: 'ok' });
+    } catch (error) {
+        log.error('failed to save notification frame', { error });
+        metrics.increment('notification', { result: 'error' });
+    }
+});
+
+log.info('subscribed', { topic: CAMERA_NOTIFICATION_TOPIC });
 
 async function shutdown(code: number): Promise<void> {
     if (shuttingDown) return;

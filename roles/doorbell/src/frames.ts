@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { rawFramePath } from './annotate.js';
+import { FrameSource, rawFramePath } from './annotate.js';
 import { createLogger, elapsedMs } from './log.js';
 
 const log = createLogger('frames');
@@ -10,8 +10,22 @@ const RETRY_DELAY_MS = 3_000;
 
 export interface Frame {
     at: Date;
+    source: FrameSource;
     raw: Buffer;
     rawPath: string;
+}
+
+/** Persists the raw image before inference, which reads it back from disk. */
+export async function saveFrame(options: {
+    framesPath: string;
+    at: Date;
+    source: FrameSource;
+    raw: Buffer;
+}): Promise<Frame> {
+    const rawPath = rawFramePath(options.framesPath, options.at, options.source);
+    await fs.promises.mkdir(path.dirname(rawPath), { recursive: true });
+    await fs.promises.writeFile(rawPath, options.raw);
+    return { at: options.at, source: options.source, raw: options.raw, rawPath };
 }
 
 export function frameUrl(go2rtcUrl: string, stream: string): string {
@@ -80,11 +94,9 @@ export async function grabFrame(options: {
         raw = await grab(url, signal);
     }
 
-    const rawPath = rawFramePath(options.framesPath, at);
-    await fs.promises.mkdir(path.dirname(rawPath), { recursive: true });
-    await fs.promises.writeFile(rawPath, raw);
+    const frame = await saveFrame({ framesPath: options.framesPath, at, source: 'stream', raw });
 
-    log.debug('grabbed', { path: rawPath, bytes: raw.length, attempts, ms: elapsedMs(started) });
+    log.debug('grabbed', { path: frame.rawPath, bytes: raw.length, attempts, ms: elapsedMs(started) });
 
-    return { at, raw, rawPath };
+    return frame;
 }

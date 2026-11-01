@@ -12,6 +12,13 @@ const BOX_THICKNESS = 2;
 
 export type Verdict = 'cat' | 'nocat';
 
+/**
+ * Where a frame came from. A notification picture can land in the same second as
+ * a stream grab, so it carries its source in the file name rather than overwrite
+ * one mid-inference; stream frames keep the bare name they have always had.
+ */
+export type FrameSource = 'stream' | 'notification';
+
 /** Minimal surface of a Jimp image, so drawing can be tested without decoding one. */
 export interface DrawableImage {
     width: number;
@@ -27,19 +34,26 @@ function frameDay(at: Date): string {
     return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }
 
-function frameTime(at: Date): string {
-    return `${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
+function frameStem(at: Date, source: FrameSource): string {
+    const time = `${pad(at.getHours())}${pad(at.getMinutes())}${pad(at.getSeconds())}`;
+    return source === 'stream' ? time : `${time}-${source}`;
 }
 
-export function rawFramePath(framesPath: string, at: Date): string {
-    return path.join(framesPath, frameDay(at), `${frameTime(at)}.raw.jpg`);
+export function rawFramePath(framesPath: string, at: Date, source: FrameSource = 'stream'): string {
+    return path.join(framesPath, frameDay(at), `${frameStem(at, source)}.raw.jpg`);
 }
 
-export function resultPaths(framesPath: string, at: Date, verdict: Verdict): { annotated: string; json: string } {
+export function resultPaths(
+    framesPath: string,
+    at: Date,
+    verdict: Verdict,
+    source: FrameSource = 'stream',
+): { annotated: string; json: string } {
     const dir = path.join(framesPath, frameDay(at));
+    const stem = frameStem(at, source);
     return {
-        annotated: path.join(dir, `${frameTime(at)}-${verdict}.jpg`),
-        json: path.join(dir, `${frameTime(at)}.json`),
+        annotated: path.join(dir, `${stem}-${verdict}.jpg`),
+        json: path.join(dir, `${stem}.json`),
     };
 }
 
@@ -103,11 +117,12 @@ export async function annotate(
 export async function writeResult(options: {
     framesPath: string;
     at: Date;
+    source: FrameSource;
     verdict: Verdict;
     annotated: Buffer | null;
     body: unknown;
 }): Promise<void> {
-    const paths = resultPaths(options.framesPath, options.at, options.verdict);
+    const paths = resultPaths(options.framesPath, options.at, options.verdict, options.source);
 
     await fs.promises.mkdir(path.dirname(paths.json), { recursive: true });
     if (options.annotated) await fs.promises.writeFile(paths.annotated, options.annotated);

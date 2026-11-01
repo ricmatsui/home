@@ -21,6 +21,14 @@ test('result paths carry the verdict on the annotated image only', () => {
     assert.equal(resultPaths('/frames', AT, 'nocat').annotated, '/frames/2026-09-11/140509-nocat.jpg');
 });
 
+test('a notification frame carries its source so it cannot collide with a stream grab', () => {
+    assert.equal(rawFramePath('/frames', AT, 'notification'), '/frames/2026-09-11/140509-notification.raw.jpg');
+    assert.deepEqual(resultPaths('/frames', AT, 'cat', 'notification'), {
+        annotated: '/frames/2026-09-11/140509-notification-cat.jpg',
+        json: '/frames/2026-09-11/140509-notification.json',
+    });
+});
+
 test('drawBoxes paints the four edges and nothing inside', () => {
     const painted = new Set<string>();
     const image = {
@@ -104,6 +112,7 @@ test('writeResult creates the day directory and both files', async () => {
     await writeResult({
         framesPath,
         at: AT,
+        source: 'stream',
         verdict: 'cat',
         annotated: Buffer.from([0xff, 0xd8]),
         body: { detections: [] },
@@ -120,6 +129,7 @@ test('writeResult with no annotated image still writes the json', async () => {
     await writeResult({
         framesPath,
         at: AT,
+        source: 'stream',
         verdict: 'nocat',
         annotated: null,
         body: { error: 'lm studio unreachable' },
