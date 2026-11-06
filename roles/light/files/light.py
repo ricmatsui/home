@@ -127,7 +127,7 @@ async def toggle_light():
 
     context = {
         'child_ids': [
-            os.environ['LIGHT_CHILD_ID'] + '00',
+            os.environ['LIGHT_DEVICE_ID'] + os.environ['LIGHT_SOCKET'],
         ]
     }
 
@@ -153,7 +153,7 @@ async def toggle_light():
         logger.info('Toggle start')
         info = await blast_command(info_command, 10)
         statsd.increment('lightpuck.toggle_info')
-        light = next(light for light in info['system']['get_sysinfo']['children'] if light['id'] == '00')
+        light = next(light for light in info['system']['get_sysinfo']['children'] if light['id'] == os.environ['LIGHT_SOCKET'])
         logger.debug('Light status: %s', json.dumps(light))
 
         light_on = light['state'] == 1
