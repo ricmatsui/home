@@ -35,6 +35,24 @@ export interface DailyForecast {
     sunset: string[];
 }
 
+export interface HourlyForecast {
+    time: string[];
+    weather_code: number[];
+    temperature_2m: number[];
+    precipitation_probability: number[];
+    wind_speed_10m: number[];
+    wind_direction_10m: number[];
+    wind_gusts_10m: number[];
+    uv_index: number[];
+    precipitation: number[];
+}
+
+export interface SunTimes {
+    time: string[];
+    sunrise: string[];
+    sunset: string[];
+}
+
 export interface Chore {
     id: number;
     isActive: boolean;

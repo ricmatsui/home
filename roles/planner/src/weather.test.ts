@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatWeatherLine, formatWeatherUnavailable, fetchDailyForecast } from './weather.js';
-import { DailyForecast } from './types.js';
+import { formatWeatherLine, formatWeatherUnavailable, fetchDailyForecast, summarizeDaytime } from './weather.js';
+import { DailyForecast, HourlyForecast, SunTimes } from './types.js';
 
 const daily: DailyForecast = {
     time: ['2026-09-04'],
@@ -17,6 +17,100 @@ const daily: DailyForecast = {
     sunrise: ['2026-09-04T06:46'],
     sunset: ['2026-09-04T19:38'],
 };
+
+const sunTimes: SunTimes = {
+    time: ['2026-09-04'],
+    sunrise: ['2026-09-04T06:46'],
+    sunset: ['2026-09-04T19:38'],
+};
+
+// Every hour is calm and dry except where a test overrides it
+function hourlyWith(overrides: Partial<Record<keyof Omit<HourlyForecast, 'time'>, Record<number, number>>> = {}): HourlyForecast {
+    const base = {
+        weather_code: 1,
+        temperature_2m: 65,
+        precipitation_probability: 0,
+        wind_speed_10m: 5,
+        wind_direction_10m: 180,
+        wind_gusts_10m: 8,
+        uv_index: 0,
+        precipitation: 0,
+    };
+    const hours = Array.from({ length: 24 }, (_, h) => h);
+    const series = Object.fromEntries(Object.entries(base).map(([field, value]) => [
+        field,
+        hours.map(h => overrides[field as keyof typeof base]?.[h] ?? value),
+    ]));
+
+    return { time: hours.map(h => `2026-09-04T${String(h).padStart(2, '0')}:00`), ...series } as HourlyForecast;
+}
+
+describe('summarizeDaytime', () => {
+    it('ignores the hours before 6am', () => {
+        const summary = summarizeDaytime(hourlyWith({
+            weather_code: { 2: 95 },
+            temperature_2m: { 4: 40, 5: 90 },
+            precipitation_probability: { 3: 80 },
+            wind_speed_10m: { 1: 30 },
+            wind_gusts_10m: { 1: 45 },
+            precipitation: { 3: 0.5 },
+        }), sunTimes);
+
+        assert.equal(summary.weather_code[0], 1);
+        assert.equal(summary.temperature_2m_max[0], 65);
+        assert.equal(summary.temperature_2m_min[0], 65);
+        assert.equal(summary.precipitation_probability_max[0], 0);
+        assert.equal(summary.wind_speed_10m_max[0], 5);
+        assert.equal(summary.wind_gusts_10m_max[0], 8);
+        assert.equal(summary.precipitation_sum[0], 0);
+    });
+
+    it('summarizes the hours from 6am through 11pm', () => {
+        const summary = summarizeDaytime(hourlyWith({
+            weather_code: { 6: 3, 15: 63 },
+            temperature_2m: { 6: 52, 23: 80 },
+            precipitation_probability: { 15: 70 },
+            wind_speed_10m: { 12: 14 },
+            wind_gusts_10m: { 12: 22 },
+            uv_index: { 13: 7.2 },
+            precipitation: { 15: 0.25, 16: 0.5 },
+        }), sunTimes);
+
+        assert.equal(summary.weather_code[0], 63);
+        assert.equal(summary.temperature_2m_max[0], 80);
+        assert.equal(summary.temperature_2m_min[0], 52);
+        assert.equal(summary.precipitation_probability_max[0], 70);
+        assert.equal(summary.wind_speed_10m_max[0], 14);
+        assert.equal(summary.wind_gusts_10m_max[0], 22);
+        assert.equal(summary.uv_index_max[0], 7.2);
+        assert.equal(summary.precipitation_sum[0], 0.75);
+    });
+
+    it('keeps the sun times as reported', () => {
+        const summary = summarizeDaytime(hourlyWith(), sunTimes);
+
+        assert.deepEqual(
+            { time: summary.time, sunrise: summary.sunrise, sunset: summary.sunset },
+            sunTimes,
+        );
+    });
+
+    it('takes the dominant wind direction across north without averaging to south', () => {
+        const direction = { ...Object.fromEntries(Array.from({ length: 18 }, (_, i) => [i + 6, i % 2 === 0 ? 350 : 10])) };
+        const summary = summarizeDaytime(hourlyWith({ wind_direction_10m: direction }), sunTimes);
+
+        assert.ok(Math.min(summary.wind_direction_10m_dominant[0], 360 - summary.wind_direction_10m_dominant[0]) < 1);
+    });
+
+    it('weights the dominant wind direction by speed', () => {
+        const summary = summarizeDaytime(hourlyWith({
+            wind_direction_10m: { 10: 270 },
+            wind_speed_10m: { 10: 200 },
+        }), sunTimes);
+
+        assert.ok(summary.wind_direction_10m_dominant[0] > 225 && summary.wind_direction_10m_dominant[0] < 270);
+    });
+});
 
 describe('formatWeatherLine', () => {
     it('renders a forecast as a single line', () => {
@@ -113,7 +207,8 @@ describe('formatWeatherLine wind', () => {
 });
 
 describe('fetchDailyForecast', () => {
-    const payload = { daily };
+    const hourly = hourlyWith({ temperature_2m: { 3: 40 } });
+    const payload = { hourly, daily: sunTimes };
 
     beforeEach(() => {
         process.env.WEATHER_LATITUDE = '40.7128';
@@ -159,14 +254,15 @@ describe('fetchDailyForecast', () => {
         assert.equal(url.searchParams.get('temperature_unit'), 'fahrenheit');
         assert.equal(url.searchParams.get('wind_speed_unit'), 'mph');
         assert.equal(url.searchParams.get('precipitation_unit'), 'inch');
-        assert.deepEqual(url.searchParams.get('daily')?.split(','), Object.keys(daily).filter(k => k !== 'time'));
+        assert.deepEqual(url.searchParams.get('hourly')?.split(','), Object.keys(hourly).filter(k => k !== 'time'));
+        assert.deepEqual(url.searchParams.get('daily')?.split(','), ['sunrise', 'sunset']);
     });
 
-    it('returns the daily forecast', async () => {
+    it('returns the forecast summarized over the daytime hours', async () => {
         const stub = stubFetch(() => jsonResponse(payload));
 
         try {
-            assert.deepEqual(await fetchDailyForecast('2026-09-04'), daily);
+            assert.deepEqual(await fetchDailyForecast('2026-09-04'), summarizeDaytime(hourly, sunTimes));
         } finally {
             stub.restore();
         }
@@ -189,7 +285,17 @@ describe('fetchDailyForecast', () => {
     });
 
     it('throws when the response has no row for the requested date', async () => {
-        const stub = stubFetch(() => jsonResponse({ daily: { ...daily, time: [] } }));
+        const stub = stubFetch(() => jsonResponse({ ...payload, daily: { ...sunTimes, time: [] } }));
+
+        try {
+            await assert.rejects(fetchDailyForecast('2026-09-04'), /2026-09-04/);
+        } finally {
+            stub.restore();
+        }
+    });
+
+    it('throws when the response has no hours for the requested date', async () => {
+        const stub = stubFetch(() => jsonResponse({ ...payload, hourly: { ...hourly, time: [] } }));
 
         try {
             await assert.rejects(fetchDailyForecast('2026-09-04'), /2026-09-04/);

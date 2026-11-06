@@ -1,4 +1,4 @@
-import { DailyForecast } from './types.js';
+import { DailyForecast, HourlyForecast, SunTimes } from './types.js';
 import { requireEnv } from './env.js';
 import { describeError } from './errors.js';
 
@@ -10,19 +10,22 @@ const LOCATION = {
     get longitude() { return requireEnv('WEATHER_LONGITUDE'); },
 };
 
-const DAILY_FIELDS = [
+// Open-Meteo's daily aggregates span midnight to midnight, so the day is
+// summarized from hourly values instead, leaving the overnight hours out
+const DAYTIME_START_HOUR = 6;
+
+const HOURLY_FIELDS = [
     'weather_code',
-    'temperature_2m_max',
-    'temperature_2m_min',
-    'precipitation_probability_max',
-    'wind_speed_10m_max',
-    'wind_direction_10m_dominant',
-    'wind_gusts_10m_max',
-    'uv_index_max',
-    'precipitation_sum',
-    'sunrise',
-    'sunset',
+    'temperature_2m',
+    'precipitation_probability',
+    'wind_speed_10m',
+    'wind_direction_10m',
+    'wind_gusts_10m',
+    'uv_index',
+    'precipitation',
 ];
+
+const DAILY_FIELDS = ['sunrise', 'sunset'];
 
 const COMPASS = [
     'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
@@ -76,6 +79,36 @@ function compassPoint(degrees: number): string {
     return COMPASS[Math.round(degrees / 22.5) % 16];
 }
 
+// Speed-weighted vector mean, so a day swinging between 350° and 10° reads as
+// north rather than averaging out to south
+function dominantDirection(degrees: number[], speeds: number[]): number {
+    const radians = degrees.map(d => d * Math.PI / 180);
+    const east = radians.reduce((sum, r, i) => sum + speeds[i] * Math.sin(r), 0);
+    const north = radians.reduce((sum, r, i) => sum + speeds[i] * Math.cos(r), 0);
+    return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+}
+
+export function summarizeDaytime(hourly: HourlyForecast, daily: SunTimes): DailyForecast {
+    const daytime = hourly.time.flatMap((t, i) => Number(t.slice(11, 13)) >= DAYTIME_START_HOUR ? [i] : []);
+    const pick = (values: number[]) => daytime.map(i => values[i]);
+
+    return {
+        time: daily.time,
+        // WMO codes rise with severity, matching how Open-Meteo picks the daily code
+        weather_code: [Math.max(...pick(hourly.weather_code))],
+        temperature_2m_max: [Math.max(...pick(hourly.temperature_2m))],
+        temperature_2m_min: [Math.min(...pick(hourly.temperature_2m))],
+        precipitation_probability_max: [Math.max(...pick(hourly.precipitation_probability))],
+        wind_speed_10m_max: [Math.max(...pick(hourly.wind_speed_10m))],
+        wind_direction_10m_dominant: [dominantDirection(pick(hourly.wind_direction_10m), pick(hourly.wind_speed_10m))],
+        wind_gusts_10m_max: [Math.max(...pick(hourly.wind_gusts_10m))],
+        uv_index_max: [Math.max(...pick(hourly.uv_index))],
+        precipitation_sum: [pick(hourly.precipitation).reduce((sum, p) => sum + p, 0)],
+        sunrise: daily.sunrise,
+        sunset: daily.sunset,
+    };
+}
+
 export function formatWeatherLine(daily: DailyForecast): string {
     const parts = [
         `${describeCode(daily.weather_code[0])} ${Math.round(daily.temperature_2m_max[0])}°/${Math.round(daily.temperature_2m_min[0])}°F`,
@@ -103,6 +136,7 @@ export async function fetchDailyForecast(dateStr: string): Promise<DailyForecast
     url.search = new URLSearchParams({
         latitude: LOCATION.latitude,
         longitude: LOCATION.longitude,
+        hourly: HOURLY_FIELDS.join(','),
         daily: DAILY_FIELDS.join(','),
         // Day boundaries follow the coordinates, so they cannot drift from the location
         timezone: 'auto',
@@ -118,10 +152,10 @@ export async function fetchDailyForecast(dateStr: string): Promise<DailyForecast
         throw new Error(`Forecast request failed (${response.status})`);
     }
 
-    const body = await response.json() as { daily?: DailyForecast };
-    if (body.daily?.time[0] !== dateStr) {
+    const body = await response.json() as { hourly?: HourlyForecast; daily?: SunTimes };
+    if (body.daily?.time[0] !== dateStr || !body.hourly?.time.some(t => t.startsWith(dateStr))) {
         throw new Error(`Forecast has no row for ${dateStr}`);
     }
 
-    return body.daily;
+    return summarizeDaytime(body.hourly, body.daily);
 }
