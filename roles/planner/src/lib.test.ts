@@ -1,6 +1,9 @@
-import { describe, it } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAction, collectMoveTargets, extractActions, sortSectionItems, upsertSection, upsertTodayLink, upsertFrontmatterLink, partitionSections, extendDailyList, formatDateStr } from './lib.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { parseAction, collectMoveTargets, extractActions, sortSectionItems, upsertSection, upsertTodayLink, upsertFrontmatterLink, partitionSections, extendDailyList, formatDateStr, createDayFile, readTodoFile } from './lib.js';
 import { Section, TodoItem } from './types.js';
 
 describe('parseAction', () => {
@@ -1361,5 +1364,73 @@ describe('upsertFrontmatterLink', () => {
             }),
             /Frontmatter not found/,
         );
+    });
+});
+
+describe('createDayFile', () => {
+    let wiki: string;
+
+    const dayPage = (dateStr: string) => [
+        '---',
+        `title: ${dateStr}`,
+        'parent: [TODO](220306-0621)',
+        '---',
+        '',
+        '',
+    ].join('\n');
+
+    const write = (fileId: string, content: string) =>
+        fs.writeFileSync(path.join(wiki, `${fileId}.md`), content);
+    const read = (filePath: string) => fs.readFileSync(filePath, 'utf-8');
+    const links = (content: string) => content.split('\n').filter(line => /^(previous|next):/.test(line));
+
+    beforeEach(() => {
+        wiki = fs.mkdtempSync(path.join(os.tmpdir(), 'planner-wiki-'));
+        process.env.WIKI_PATH = wiki;
+        write('index', '- [TODO](220306-0621)\n');
+    });
+
+    afterEach(() => {
+        fs.rmSync(wiki, { recursive: true, force: true });
+        delete process.env.WIKI_PATH;
+    });
+
+    function writeTodo(...dates: string[]) {
+        write('220306-0621', ['---', 'title: TODO', '---', '', '# Daily', '', ...dates, ''].join('\n'));
+    }
+
+    it('links the new page to the existing days on either side', async () => {
+        writeTodo('- [ ] [2026-11-06](261102-0001)', '- [ ] 2026-11-05', '- [.] [2026-11-04](261103-0000)');
+        write('261102-0001', dayPage('2026-11-06'));
+        write('261103-0000', dayPage('2026-11-04'));
+
+        const created = await createDayFile(await readTodoFile(), '2026-11-05');
+        const fileId = path.basename(created, '.md');
+
+        assert.deepEqual(links(read(created)), [
+            'previous: [2026-11-04](261103-0000)',
+            'next: [2026-11-06](261102-0001)',
+        ]);
+        assert.deepEqual(links(read(path.join(wiki, '261103-0000.md'))), [`next: [2026-11-05](${fileId})`]);
+        assert.deepEqual(links(read(path.join(wiki, '261102-0001.md'))), [`previous: [2026-11-05](${fileId})`]);
+    });
+
+    it('leaves a side unlinked when that day has no page', async () => {
+        writeTodo('- [ ] 2026-11-07', '- [ ] 2026-11-06', '- [ ] 2026-11-05', '- [.] [2026-11-04](261103-0000)');
+        write('261103-0000', dayPage('2026-11-04'));
+
+        const created = await createDayFile(await readTodoFile(), '2026-11-06');
+
+        assert.deepEqual(links(read(created)), []);
+        assert.deepEqual(links(read(path.join(wiki, '261103-0000.md'))), []);
+    });
+
+    it('links across a month boundary', async () => {
+        writeTodo('- [ ] 2026-12-01', '- [ ] [2026-11-30](261120-0000)');
+        write('261120-0000', dayPage('2026-11-30'));
+
+        const created = await createDayFile(await readTodoFile(), '2026-12-01');
+
+        assert.deepEqual(links(read(created)), ['previous: [2026-11-30](261120-0000)']);
     });
 });

@@ -568,7 +568,29 @@ export async function createDayFile(todoFile: TodoFileInfo, dateStr: string): Pr
     );
     await fs.promises.writeFile(todoFile.todoPath, updatedTodo, 'utf-8');
 
+    await linkExistingNeighbours({ ...todoFile, todoContent: updatedTodo }, dateStr, filePath);
+
     return filePath;
+}
+
+// A day can be created after the days around it, as a move target or a day
+// the planner skipped, so it joins whichever calendar neighbours already exist
+async function linkExistingNeighbours(todoFile: TodoFileInfo, dateStr: string, filePath: string): Promise<void> {
+    const previousDate = parseDateStr(dateStr);
+    previousDate.setDate(previousDate.getDate() - 1);
+    const previousDateStr = formatDateStr(previousDate);
+    const previousPath = findDayFilePath(todoFile, previousDateStr);
+    if (previousPath) {
+        await linkAdjacentDays({ previousPath, previousDateStr, nextPath: filePath, nextDateStr: dateStr });
+    }
+
+    const nextDate = parseDateStr(dateStr);
+    nextDate.setDate(nextDate.getDate() + 1);
+    const nextDateStr = formatDateStr(nextDate);
+    const nextPath = findDayFilePath(todoFile, nextDateStr);
+    if (nextPath) {
+        await linkAdjacentDays({ previousPath: filePath, previousDateStr: dateStr, nextPath, nextDateStr });
+    }
 }
 
 export async function markDayAsDone(todoFile: TodoFileInfo, dateStr: string): Promise<void> {
