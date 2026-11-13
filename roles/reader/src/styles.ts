@@ -288,14 +288,15 @@ ul > li:not(.cb-item) { color: var(--fg); font-weight: 400; }
     background: currentColor;
 }
 
-/* In progress keeps a mark so it stays distinguishable from an open item;
-   only its colour is plain, per the layout decision. */
+/* In progress is the [.] it is written as: a dot in an otherwise open box,
+   in the plain text colour. Painted as a gradient rather than a small
+   rounded box, whose edge snaps to whole pixels and renders lumpy; the
+   gradient's edge always anti-aliases. */
 .cb-mark-progress::after {
     content: "";
     position: absolute;
-    inset: 0.16em;
-    border-radius: 1px;
-    background: currentColor;
+    inset: 0;
+    background: radial-gradient(circle, currentColor 0 0.14em, transparent 0.17em);
 }
 
 /* Colour and weight are set on the item itself, not on a child <p>: the
