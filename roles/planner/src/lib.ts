@@ -103,41 +103,69 @@ export function collectMoveTargets(sections: Section[], referenceDate: Date): st
     return [...new Set(targetDates)];
 }
 
+// A branch whose every line moved out is left with nothing for either day
+function isEmptiedByMove(item: TodoItem, moved: TodoItem | null): boolean {
+    return moved !== null && item.children.length === 0;
+}
+
+/*
+ * Takes the move lines out of the item, so what was done stays where it was,
+ * and returns them in a closed copy of the path down to them
+ */
 function extractActionsFromItem(
     item: TodoItem,
     ancestors: TodoItem[],
     sectionName: string,
     referenceDate: Date,
     targetFileIdsByDate: Record<string, string>,
-): Action[] {
+): { actions: Action[]; moved: TodoItem | null } {
     const path = [...ancestors, item];
     const actions: Action[] = [];
 
     const parsed = item.children.map(c => parseAction(c.text, referenceDate));
 
-    item.children.forEach((child, i) => {
-        if (!parsed[i]) actions.push(...extractActionsFromItem(child, path, sectionName, referenceDate, targetFileIdsByDate));
+    const nestedMoved = item.children.map((child, i) => {
+        if (parsed[i]) return null;
+        const nested = extractActionsFromItem(child, path, sectionName, referenceDate, targetFileIdsByDate);
+        actions.push(...nested.actions);
+        return nested.moved;
     });
 
-    if (!parsed.some(Boolean)) return actions;
+    const movedChildren: TodoItem[] = [];
 
-    const partitions = item.children.map((c, i) => parsed[i] ? null : partitionItem(c, item));
-    const siblings = partitions.flatMap(p => p?.next ? [p.next] : []);
+    if (parsed.some(Boolean)) {
+        const partitions = item.children.map((c, i) => parsed[i] ? null : partitionItem(c, item));
+        const siblings = partitions.flatMap(p => p?.next ? [p.next] : []);
 
-    item.children.forEach((child, i) => {
-        const action = parsed[i];
-        if (!action) return;
-        actions.push({ kind: 'addItem', targetDate: action.targetDate, sectionName, item: cloneAncestorChain(path, siblings) });
-        const fileId = targetFileIdsByDate[action.targetDate];
-        if (!fileId) throw new Error(`No day page for move target ${action.targetDate}`);
-        child.text = `${child.text} => [${action.targetDate}](${fileId})`;
-        child.status = 'completed';
-    });
+        item.children.forEach((child, i) => {
+            const action = parsed[i];
+            if (!action) return;
+            actions.push({ kind: 'addItem', targetDate: action.targetDate, sectionName, item: cloneAncestorChain(path, siblings) });
+            const fileId = targetFileIdsByDate[action.targetDate];
+            if (!fileId) throw new Error(`No day page for move target ${action.targetDate}`);
+            child.text = `${child.text} => [${action.targetDate}](${fileId})`;
+            child.status = 'completed';
+        });
 
-    item.status = 'completed';
-    item.children = item.children.flatMap((c, i) => parsed[i] ? [c] : partitions[i]!.last ? [partitions[i]!.last] : []);
+        item.status = 'completed';
+        item.children.forEach((child, i) => {
+            const moved = parsed[i] ? child : nestedMoved[i];
+            if (moved) movedChildren.push(moved);
+        });
+        item.children = item.children.flatMap((_, i) => {
+            const last = partitions[i]?.last;
+            return last && !isEmptiedByMove(last, nestedMoved[i]) ? [last] : [];
+        });
+    } else {
+        nestedMoved.forEach(moved => { if (moved) movedChildren.push(moved); });
+        item.children = item.children.filter((c, i) => !isEmptiedByMove(c, nestedMoved[i]));
+    }
 
-    return actions;
+    const moved: TodoItem | null = movedChildren.length > 0
+        ? { status: 'completed', text: item.text, children: movedChildren }
+        : null;
+
+    return { actions, moved };
 }
 
 function earliestTargetDate(actions: Action[]): string {
@@ -152,22 +180,21 @@ export function extractActions(
     const allActions: Action[] = [];
 
     for (const section of sections) {
-        const actionsByItem = new Map<TodoItem, Action[]>();
+        const movedItems: { item: TodoItem; earliest: string }[] = [];
 
-        for (const item of section.items) {
-            const itemActions = extractActionsFromItem(item, [], section.name, referenceDate, targetFileIdsByDate);
-            if (itemActions.length > 0) {
-                actionsByItem.set(item, itemActions);
-                allActions.push(...itemActions);
-            }
-        }
+        // The items keep their place, so what carries over to the next day
+        // does too. Only the moved copies, closed and so left with the day,
+        // gather at the end.
+        section.items = section.items.filter(item => {
+            const { actions, moved } = extractActionsFromItem(item, [], section.name, referenceDate, targetFileIdsByDate);
+            if (!moved) return true;
+            allActions.push(...actions);
+            movedItems.push({ item: moved, earliest: earliestTargetDate(actions) });
+            return !isEmptiedByMove(item, moved);
+        });
 
-        if (actionsByItem.size > 0) {
-            const unmoved = section.items.filter(i => !actionsByItem.has(i));
-            const moved = section.items.filter(i => actionsByItem.has(i));
-            moved.sort((a, b) => earliestTargetDate(actionsByItem.get(a)!).localeCompare(earliestTargetDate(actionsByItem.get(b)!)));
-            section.items = [...unmoved, ...moved];
-        }
+        movedItems.sort((a, b) => a.earliest.localeCompare(b.earliest));
+        section.items.push(...movedItems.map(m => m.item));
     }
 
     return { sections, actions: allActions };

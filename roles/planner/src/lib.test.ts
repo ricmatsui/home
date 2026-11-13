@@ -212,14 +212,27 @@ describe('extractActions', () => {
         assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
-                items: [{
-                    status: 'incomplete',
-                    text: 'A',
-                    children: [{
+                items: [
+                    {
                         status: 'incomplete',
-                        text: 'B',
-                        children: [
-                            {
+                        text: 'A',
+                        children: [{
+                            status: 'incomplete',
+                            text: 'B',
+                            children: [{
+                                status: 'incomplete',
+                                text: 'D',
+                                children: [],
+                            }],
+                        }],
+                    },
+                    {
+                        status: 'completed',
+                        text: 'A',
+                        children: [{
+                            status: 'completed',
+                            text: 'B',
+                            children: [{
                                 status: 'completed',
                                 text: 'C',
                                 children: [{
@@ -227,15 +240,10 @@ describe('extractActions', () => {
                                     text: '-> 06-15 => [2026-06-15](day-2026-06-15)',
                                     children: [],
                                 }],
-                            },
-                            {
-                                status: 'incomplete',
-                                text: 'D',
-                                children: [],
-                            },
-                        ],
-                    }],
-                }],
+                            }],
+                        }],
+                    },
+                ],
             }],
             actions: [{
                 kind: 'addItem',
@@ -514,7 +522,7 @@ describe('extractActions', () => {
                 name: 'Work',
                 items: [
                     {
-                        status: 'incomplete',
+                        status: 'completed',
                         text: 'Multi move',
                         children: [
                             {
@@ -652,15 +660,23 @@ describe('extractActions', () => {
         assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
-                items: [{
-                    status: 'completed',
-                    text: 'Test',
-                    children: [
-                        { status: 'completed', text: 'Done item', children: [] },
-                        { status: 'completed', text: 'In progress item', children: [] },
-                        { status: 'completed', text: '-> 1 month => [2026-04-30](day-2026-04-30)', children: [] },
-                    ],
-                }],
+                items: [
+                    {
+                        status: 'completed',
+                        text: 'Test',
+                        children: [
+                            { status: 'completed', text: 'Done item', children: [] },
+                            { status: 'completed', text: 'In progress item', children: [] },
+                        ],
+                    },
+                    {
+                        status: 'completed',
+                        text: 'Test',
+                        children: [
+                            { status: 'completed', text: '-> 1 month => [2026-04-30](day-2026-04-30)', children: [] },
+                        ],
+                    },
+                ],
             }],
             actions: [{
                 kind: 'addItem',
@@ -701,21 +717,29 @@ describe('extractActions', () => {
         assert.deepEqual(extractActions(sections, ref, targetFileIdsByDate), {
             sections: [{
                 name: 'Work',
-                items: [{
-                    status: 'completed',
-                    text: 'Test',
-                    children: [
-                        {
+                items: [
+                    {
+                        status: 'completed',
+                        text: 'Test',
+                        children: [{
                             status: 'completed',
                             text: 'Not done item',
-                            children: [
-                                { status: 'completed', text: 'Sub step done', children: [] },
-                                { status: 'completed', text: '-> 1 week => [2026-04-06](day-2026-04-06)', children: [] },
-                            ],
-                        },
-                        { status: 'completed', text: '-> 1 month => [2026-04-30](day-2026-04-30)', children: [] },
-                    ],
-                }],
+                            children: [{ status: 'completed', text: 'Sub step done', children: [] }],
+                        }],
+                    },
+                    {
+                        status: 'completed',
+                        text: 'Test',
+                        children: [
+                            {
+                                status: 'completed',
+                                text: 'Not done item',
+                                children: [{ status: 'completed', text: '-> 1 week => [2026-04-06](day-2026-04-06)', children: [] }],
+                            },
+                            { status: 'completed', text: '-> 1 month => [2026-04-30](day-2026-04-30)', children: [] },
+                        ],
+                    },
+                ],
             }],
             actions: [
                 {
@@ -736,6 +760,90 @@ describe('extractActions', () => {
                 },
             ],
         });
+    });
+
+    it('leaves an item with a nested move in place for both days, gathering only the moved branch at the end', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [
+                { status: 'incomplete', text: 'Alpha', children: [] },
+                {
+                    status: 'incomplete',
+                    text: 'Project',
+                    children: [
+                        { status: 'completed', text: 'Step done', children: [] },
+                        { status: 'incomplete', text: 'Step left', children: [] },
+                        {
+                            status: 'incomplete',
+                            text: 'Phase',
+                            children: [
+                                { status: 'completed', text: 'Phase done', children: [] },
+                                { status: 'incomplete', text: 'Phase left', children: [] },
+                                { status: 'incomplete', text: '-> 05-01', children: [] },
+                            ],
+                        },
+                    ],
+                },
+                { status: 'incomplete', text: 'Beta', children: [] },
+                {
+                    status: 'incomplete',
+                    text: 'Errand',
+                    children: [
+                        { status: 'incomplete', text: 'Buy thing', children: [] },
+                        { status: 'incomplete', text: '-> 04-01', children: [] },
+                    ],
+                },
+                { status: 'completed', text: 'Gamma', children: [] },
+            ],
+        }];
+
+        const { lastData, nextData } = partitionSections(extractActions(sections, ref, targetFileIdsByDate).sections);
+
+        assert.deepEqual(sortSectionItems(lastData), [{
+            name: 'Work',
+            items: [
+                {
+                    status: 'completed',
+                    text: 'Project',
+                    children: [
+                        { status: 'completed', text: 'Step done', children: [] },
+                        {
+                            status: 'completed',
+                            text: 'Phase',
+                            children: [{ status: 'completed', text: 'Phase done', children: [] }],
+                        },
+                    ],
+                },
+                { status: 'completed', text: 'Gamma', children: [] },
+                {
+                    status: 'completed',
+                    text: 'Errand',
+                    children: [{ status: 'completed', text: '-> 04-01 => [2026-04-01](day-2026-04-01)', children: [] }],
+                },
+                {
+                    status: 'completed',
+                    text: 'Project',
+                    children: [{
+                        status: 'completed',
+                        text: 'Phase',
+                        children: [{ status: 'completed', text: '-> 05-01 => [2026-05-01](day-2026-05-01)', children: [] }],
+                    }],
+                },
+            ],
+        }]);
+
+        assert.deepEqual(sortSectionItems(nextData), [{
+            name: 'Work',
+            items: [
+                { status: 'incomplete', text: 'Alpha', children: [] },
+                {
+                    status: 'incomplete',
+                    text: 'Project',
+                    children: [{ status: 'incomplete', text: 'Step left', children: [] }],
+                },
+                { status: 'incomplete', text: 'Beta', children: [] },
+            ],
+        }]);
     });
 
     it('leaves -> with unparseable text untouched', () => {
