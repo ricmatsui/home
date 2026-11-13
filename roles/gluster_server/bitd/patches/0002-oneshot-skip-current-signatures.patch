@@ -1,0 +1,29 @@
+Description: Skip objects with a current signature in the oneshot crawl
+ Reverts upstream commit 9849715d74677766cab0eba9d5a5677e5f1d1c25. Re-signing
+ every object on each bitd start bumps every object's version, making every
+ signature stale until it is re-signed, so signatures never survive a stop
+ and start. Restores the old bug: never disable then re-enable bitrot on a
+ volume holding data.
+Origin: upstream, commit 9849715d74677766cab0eba9d5a5677e5f1d1c25 (reverted)
+
+--- a/xlators/features/bit-rot/src/bitd/bit-rot.c
++++ b/xlators/features/bit-rot/src/bitd/bit-rot.c
+@@ -1028,18 +1028,6 @@
+                     uuid_utoa(linked_inode->gfid), NULL);
+     } else {
+         need_signing = br_check_object_need_sign(this, xattr, child);
+-
+-        /*
+-         * If we are here means, bitrot daemon has started. Is it just
+-         * a simple restart of the daemon or is it started because the
+-         * feature is enabled is something hard to determine. Hence,
+-         * if need_signing is false (because bit-rot version and signature
+-         * are present), then still go ahead and sign it.
+-         */
+-        if (!need_signing) {
+-            need_signing = _gf_true;
+-            need_reopen = _gf_true;
+-        }
+     }
+ 
+     if (!need_signing)

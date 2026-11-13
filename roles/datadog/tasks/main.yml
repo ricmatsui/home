@@ -53,7 +53,7 @@
       - systemd-journal
   notify: datadog_restart
 
-- name: allow datadog to run gstatus
+- name: allow datadog to run gluster commands
   ansible.builtin.copy:
     dest: /etc/sudoers.d/datadog
     owner: root
@@ -61,7 +61,14 @@
     mode: u=r,g=r,o=
     content: |
       dd-agent ALL=(ALL) NOPASSWD: /usr/bin/gstatus
+      {% if datadog_glusterfs_check_enabled %}
+      {% for volume in datadog_gluster_scrub_volumes %}
+      dd-agent ALL=(ALL) NOPASSWD: /usr/sbin/gluster volume bitrot {{ volume }} scrub status
+      {% endfor %}
+      {% endif %}
+    validate: visudo -cf %s
   notify: datadog_restart
+  tags: datadog_sudoers
 
 - name: configure
   ansible.builtin.blockinfile:
@@ -95,6 +102,26 @@
     owner: root
     group: root
   when: inventory_hostname in groups.get('gluster_client', [])
+  notify: datadog_restart
+  tags: datadog_checks
+
+- name: install gluster scrub check
+  ansible.builtin.template:
+    src: custom_gluster_scrub.py
+    dest: /etc/datadog-agent/checks.d/custom_gluster_scrub.py
+    owner: root
+    group: root
+  when: datadog_glusterfs_check_enabled
+  notify: datadog_restart
+  tags: datadog_checks
+
+- name: configure gluster scrub check
+  ansible.builtin.template:
+    src: custom_gluster_scrub.yaml
+    dest: /etc/datadog-agent/conf.d/custom_gluster_scrub.yaml
+    owner: root
+    group: root
+  when: datadog_glusterfs_check_enabled
   notify: datadog_restart
   tags: datadog_checks
 

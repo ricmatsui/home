@@ -19,9 +19,21 @@
     state: restarted
   listen: gluster_server_restart
 
+- name: restart bitrot daemons
+  ansible.builtin.command:
+    cmd: gluster volume start gv0 force
+  listen: gluster_server_bitd_restart
+
 - name: reload gluster recover timer
   ansible.builtin.systemd:
     name: gluster-recover.timer
     daemon_reload: true
     state: restarted
   listen: gluster_recover_reload
+
+- name: reload gluster scrub timer
+  ansible.builtin.systemd:
+    name: gluster-scrub.timer
+    daemon_reload: true
+    state: restarted
+  listen: gluster_scrub_reload

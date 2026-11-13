@@ -27,3 +27,19 @@
     src: /opt/backup-unmount.sh
     dest: /usr/local/bin/backup-unmount.sh
     state: link
+
+- name: create backup scrub script
+  ansible.builtin.template:
+      dest: /opt/backup-scrub.sh
+      src: backup-scrub.sh
+      owner: root
+      group: root
+      mode: u=rwx,g=r,o=r
+  tags: backup_scrub
+
+- name: install backup scrub script
+  ansible.builtin.file:
+    src: /opt/backup-scrub.sh
+    dest: /usr/local/bin/backup-scrub.sh
+    state: link
+  tags: backup_scrub

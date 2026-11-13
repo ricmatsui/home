@@ -1,0 +1,13 @@
+init_config:
+  nodes:
+    localhost: {{ inventory_hostname }}
+{% for host in groups['gluster_brick_servers'] %}
+    {{ hostvars[host]['overlay_ip'] }}: {{ host }}
+{% endfor %}
+
+instances:
+{% for volume in datadog_gluster_scrub_volumes %}
+  - volume: {{ volume }}
+    timeout: 30
+    min_collection_interval: 300
+{% endfor %}

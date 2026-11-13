@@ -86,6 +86,88 @@
     inventory_hostname in groups['gluster_management_server']
     and gluster_volume_config.stdout is not search('features\.bitrot\s+on')
 
+- name: get glusterfs version and architecture for patched bitd
+  ansible.builtin.command:
+    cmd: dpkg-query -W -f=${Version}\ ${Architecture} glusterfs-common
+  register: gluster_bitd_glusterfs_package
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['gluster_brick_servers']
+  tags: gluster_server_bitd
+
+- name: get stock bitd path
+  ansible.builtin.command:
+    cmd: dpkg -L glusterfs-common
+  register: gluster_bitd_glusterfs_files
+  changed_when: false
+  check_mode: false
+  when: inventory_hostname in groups['gluster_brick_servers']
+  tags: gluster_server_bitd
+
+- name: set patched bitd facts
+  ansible.builtin.set_fact:
+    gluster_bitd_glusterfs_version: "{{ gluster_bitd_glusterfs_package.stdout.split(' ')[0] }}"
+    gluster_bitd_architecture: "{{ gluster_bitd_glusterfs_package.stdout.split(' ')[1] }}"
+    gluster_bitd_path: "{{ gluster_bitd_glusterfs_files.stdout_lines | select('search', '/xlator/features/bit-rot\\.so$') | list }}"
+  when: inventory_hostname in groups['gluster_brick_servers']
+  tags: gluster_server_bitd
+
+- name: require the glusterfs version and architecture the patched bitd is built for
+  ansible.builtin.assert:
+    that:
+      - gluster_bitd_glusterfs_version == '10.3-5'
+      - gluster_bitd_architecture in ['amd64', 'arm64']
+      - gluster_bitd_path | length == 1
+    fail_msg: "patched bit-rot.so is built from glusterfs 10.3-5 for amd64 and arm64, found {{ gluster_bitd_glusterfs_package.stdout }} with {{ gluster_bitd_path }}"
+  when: inventory_hostname in groups['gluster_brick_servers']
+  tags: gluster_server_bitd
+
+- name: hold glusterfs packages for patched bitd
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - glusterfs-cli
+    - glusterfs-client
+    - glusterfs-common
+    - glusterfs-server
+    - libgfapi0
+    - libgfchangelog0
+    - libgfrpc0
+    - libgfxdr0
+    - libglusterd0
+    - libglusterfs0
+  when: inventory_hostname in groups['gluster_brick_servers']
+  tags: gluster_server_bitd
+
+- name: build patched bitd
+  ansible.builtin.command:
+    cmd: docker build --platform linux/amd64,linux/arm64 --output type=local,dest={{ role_path }}/dist {{ role_path }}/bitd
+  changed_when: false
+  check_mode: false
+  delegate_to: localhost
+  run_once: true
+  tags: gluster_server_bitd
+
+- name: divert stock bitd
+  community.general.dpkg_divert:
+    path: "{{ gluster_bitd_path | first }}"
+    divert: "{{ gluster_bitd_path | first }}.distrib"
+    rename: true
+  when: inventory_hostname in groups['gluster_brick_servers']
+  tags: gluster_server_bitd
+
+- name: install patched bitd
+  ansible.builtin.copy:
+    dest: "{{ gluster_bitd_path | first }}"
+    src: "{{ role_path }}/dist/linux_{{ gluster_bitd_architecture }}/bit-rot.so"
+    owner: root
+    group: root
+    mode: u=rw,g=r,o=r
+  when: inventory_hostname in groups['gluster_brick_servers']
+  notify: gluster_server_bitd_restart
+  tags: gluster_server_bitd
+
 - name: enable logging
   ansible.builtin.systemd:
     name: gluster-log@{{ item }}
@@ -148,3 +230,45 @@
     enabled: true
     state: started
   tags: gluster_recover
+
+- name: configure gluster scrub service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-scrub.service
+    content: |
+      [Unit]
+      Description=Gluster Volume Scrub
+      After=glusterd.service
+      Requires=glusterd.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/sbin/gluster volume bitrot gv0 scrub ondemand
+  when: inventory_hostname in groups['gluster_management_server']
+  notify: gluster_scrub_reload
+  tags: gluster_scrub
+
+- name: configure gluster scrub timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluster-scrub.timer
+    content: |
+      [Unit]
+      Description=Gluster Volume Scrub
+
+      [Timer]
+      OnCalendar=Sun *-*-01..07 10:00:00
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+  when: inventory_hostname in groups['gluster_management_server']
+  notify: gluster_scrub_reload
+  tags: gluster_scrub
+
+- name: enable gluster scrub timer
+  ansible.builtin.systemd:
+    name: gluster-scrub.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  when: inventory_hostname in groups['gluster_management_server']
+  tags: gluster_scrub

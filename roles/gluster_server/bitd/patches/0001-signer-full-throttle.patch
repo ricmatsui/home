@@ -1,0 +1,40 @@
+Description: Sign at full throttle
+ The signer's token bucket allows 128 KiB of hashing per 600 ms, scaled down
+ by the share of bricks on this node, and the hash loop charges each block
+ twice. That signs ~36 KiB/s, which never catches up on a multi-terabyte
+ volume that is only started for backups.
+Origin: upstream, commit d19126132eb4d669f01f61082c3f1acdd0874808 (added the limit)
+
+--- a/xlators/features/bit-rot/src/bitd/bit-rot.c
++++ b/xlators/features/bit-rot/src/bitd/bit-rot.c
+@@ -1787,9 +1787,9 @@
+ }
+ 
+ /**
+- * For signer, only rate limit CPU usage (during hash calculation) when
+- * compiled with -DBR_RATE_LIMIT_SIGNER cflags, else let it run full
+- * throttle.
++ * For signer, always run full throttle: the -DBR_RATE_LIMIT_SIGNER rate
++ * (128 KiB per 600 ms, scaled down per local brick) is far too slow to
++ * sign terabytes on a volume that is only started for backups.
+  */
+ static int32_t
+ br_rate_limit_signer(xlator_t *this, int child_count, int numbricks)
+@@ -1822,17 +1822,6 @@
+      **/
+     spec.token_gen_interval = 600000; /* In usec */
+ 
+-#ifdef BR_RATE_LIMIT_SIGNER
+-
+-    double contribution = 0;
+-    contribution = ((double)1 - ((double)child_count / (double)numbricks));
+-    if (contribution == 0)
+-        contribution = 1;
+-    spec.rate = BR_HASH_CALC_READ_SIZE * contribution;
+-    spec.maxlimit = priv->signer_th_count * BR_HASH_CALC_READ_SIZE;
+-
+-#endif
+-
+     if (!spec.rate)
+         gf_smsg(this->name, GF_LOG_INFO, 0, BRB_MSG_RATE_LIMIT_INFO,
+                 "FULL THROTTLE", NULL);

@@ -1,0 +1,5 @@
+---
+
+datadog_gluster_scrub_volumes:
+  - gv0
+  - backup
