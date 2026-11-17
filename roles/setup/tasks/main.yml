@@ -86,6 +86,7 @@
       OnCalendar={{ apt_download_time }}
       RandomizedDelaySec=10m
   notify: setup_apt_download_restart
+  tags: apt_timers
 
 - name: configure apt upgrade timer
   ansible.builtin.copy:
@@ -96,6 +97,7 @@
       OnCalendar={{ apt_upgrade_time }}
       RandomizedDelaySec=10m
   notify: setup_apt_upgrade_restart
+  tags: apt_timers
 
 - name: configure timesyncd
   ansible.builtin.copy:
