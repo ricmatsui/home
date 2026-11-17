@@ -20,12 +20,16 @@
     - /mnt/gluster/actual/backups
 
 - name: mirror image
-  include_tasks: tasks/docker_mirror_image.yml
+  include_tasks:
+    file: tasks/docker_mirror_image.yml
+    apply:
+      tags: actual_stack
+  tags: actual_stack
   vars:
     fact: actual_image
     name: actual
-    source: actualbudget/actual-server:26.7.0
-    image_id: sha256:b3490972fefd224b6a6c405771f469c2039240a135b6cddba17c9455a3ee5361
+    source: actualbudget/actual-server:26.11.0
+    image_id: sha256:06cf186569cf58d93e12659ff1a517b65b5b0ebee7050a3991d4bd8a1d398da6
 
 - name: deploy stack
   community.general.docker_stack:
@@ -48,7 +52,7 @@
             volumes:
               - /mnt/gluster/actual/data:/data
             healthcheck:
-              test: ['CMD-SHELL', 'node src/scripts/health-check.js']
+              test: ['CMD-SHELL', 'node scripts/health-check.js']
               interval: 60s
               timeout: 10s
               retries: 3
@@ -82,6 +86,7 @@
             external: true
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: actual_stack
 
 - name: configure backup
   ansible.builtin.copy:
