@@ -159,6 +159,11 @@ function extractActionsFromItem(
     } else {
         nestedMoved.forEach(moved => { if (moved) movedChildren.push(moved); });
         item.children = item.children.filter((c, i) => !isEmptiedByMove(c, nestedMoved[i]));
+        // A move that took the last open work from under the item closes it,
+        // as it does the item the move sits under
+        if (movedChildren.length > 0 && (item.status === 'incomplete' || item.status === 'started') && partitionItem(item).next?.children.length === 0) {
+            item.status = 'completed';
+        }
     }
 
     const moved: TodoItem | null = movedChildren.length > 0

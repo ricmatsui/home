@@ -846,6 +846,83 @@ describe('extractActions', () => {
         }]);
     });
 
+    it('closes the ancestors of a nested move once nothing open is left under them', () => {
+        const sections: Section[] = [{
+            name: 'Work',
+            items: [
+                { status: 'incomplete', text: 'Alpha', children: [] },
+                {
+                    status: 'started',
+                    text: 'Area',
+                    children: [
+                        { status: 'completed', text: 'Area done', children: [] },
+                        {
+                            status: 'started',
+                            text: 'Project',
+                            children: [
+                                { status: 'completed', text: 'Step done', children: [] },
+                                {
+                                    status: 'started',
+                                    text: 'Phase',
+                                    children: [
+                                        { status: 'completed', text: 'Phase done', children: [] },
+                                        { status: 'incomplete', text: 'Phase left', children: [] },
+                                        { status: 'incomplete', text: '-> 05-01', children: [] },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }];
+
+        const { lastData, nextData } = partitionSections(extractActions(sections, ref, targetFileIdsByDate).sections);
+
+        assert.deepEqual(sortSectionItems(lastData), [{
+            name: 'Work',
+            items: [
+                {
+                    status: 'completed',
+                    text: 'Area',
+                    children: [
+                        { status: 'completed', text: 'Area done', children: [] },
+                        {
+                            status: 'completed',
+                            text: 'Project',
+                            children: [
+                                { status: 'completed', text: 'Step done', children: [] },
+                                {
+                                    status: 'completed',
+                                    text: 'Phase',
+                                    children: [{ status: 'completed', text: 'Phase done', children: [] }],
+                                },
+                            ],
+                        },
+                    ],
+                },
+                {
+                    status: 'completed',
+                    text: 'Area',
+                    children: [{
+                        status: 'completed',
+                        text: 'Project',
+                        children: [{
+                            status: 'completed',
+                            text: 'Phase',
+                            children: [{ status: 'completed', text: '-> 05-01 => [2026-05-01](day-2026-05-01)', children: [] }],
+                        }],
+                    }],
+                },
+            ],
+        }]);
+
+        assert.deepEqual(sortSectionItems(nextData), [{
+            name: 'Work',
+            items: [{ status: 'incomplete', text: 'Alpha', children: [] }],
+        }]);
+    });
+
     it('leaves -> with unparseable text untouched', () => {
         const sections: Section[] = [{
             name: 'Work',
