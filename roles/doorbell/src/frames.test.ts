@@ -35,28 +35,80 @@ test('writes the raw frame to a dated path', async () => {
     assert.deepEqual(await fs.promises.readFile(frame.rawPath), Buffer.from([0xff, 0xd8, 0x01]));
 });
 
-test('hands the window signal to every attempt', async () => {
+/** A go2rtc that accepted the request and will never answer it. */
+function stuck(_url: string, signal: AbortSignal): Promise<Buffer> {
+    return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    });
+}
+
+test('aborts an in-flight attempt when the window closes', async () => {
     const framesPath = await framesDir();
     const controller = new AbortController();
-    const signals: AbortSignal[] = [];
     let attempts = 0;
 
-    await grabFrame({
+    await assert.rejects(
+        grabFrame({
+            go2rtcUrl: 'http://go2rtc:1984',
+            stream: 'example_camera',
+            framesPath,
+            signal: controller.signal,
+            at: AT,
+            delay: async () => {},
+            fetchImpl: (url, signal) => {
+                attempts += 1;
+                setImmediate(() => controller.abort());
+                return stuck(url, signal);
+            },
+        }),
+        { name: 'AbortError' },
+    );
+
+    assert.equal(attempts, 1);
+});
+
+test('retries an attempt that go2rtc never answers', async () => {
+    const framesPath = await framesDir();
+    let attempts = 0;
+
+    const frame = await grabFrame({
         go2rtcUrl: 'http://go2rtc:1984',
         stream: 'example_camera',
         framesPath,
-        signal: controller.signal,
+        signal: new AbortController().signal,
         at: AT,
+        attemptTimeoutMs: 10,
         delay: async () => {},
-        fetchImpl: async (_url, signal) => {
-            signals.push(signal);
+        fetchImpl: async (url, signal) => {
             attempts += 1;
-            if (attempts === 1) throw new Error('connection refused');
+            if (attempts === 1) return stuck(url, signal);
             return Buffer.from([0xff, 0xd8]);
         },
     });
 
-    assert.deepEqual(signals, [controller.signal, controller.signal]);
+    assert.equal(attempts, 2);
+    assert.equal(frame.raw.length, 2);
+});
+
+test('gives up when the retry is never answered either', async () => {
+    const framesPath = await framesDir();
+    let attempts = 0;
+
+    await assert.rejects(
+        grabFrame({
+            go2rtcUrl: 'http://go2rtc:1984',
+            stream: 'example_camera',
+            framesPath,
+            signal: new AbortController().signal,
+            at: AT,
+            attemptTimeoutMs: 10,
+            delay: async () => {},
+            fetchImpl: (url, signal) => { attempts += 1; return stuck(url, signal); },
+        }),
+        { name: 'TimeoutError' },
+    );
+
+    assert.equal(attempts, 2);
 });
 
 test('retries once after a failure', async () => {

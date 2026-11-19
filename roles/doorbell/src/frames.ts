@@ -8,6 +8,15 @@ const log = createLogger('frames');
 
 const RETRY_DELAY_MS = 3_000;
 
+/**
+ * Per attempt. A healthy grab, Nest dial included, lands in a few seconds; one
+ * still waiting at this point is stuck on a stream that connected but stopped
+ * sending, which go2rtc answers only once Nest drops it, often long after the
+ * window has closed. Under go2rtc's own 30s keyframe limit, so giving up here is
+ * what releases its side.
+ */
+const ATTEMPT_TIMEOUT_MS = 20_000;
+
 export interface Frame {
     at: Date;
     source: FrameSource;
@@ -49,11 +58,11 @@ async function fetchFrame(url: string, signal: AbortSignal): Promise<Buffer> {
  * Grab one frame and persist it. The first grab after a window opens can fail
  * while go2rtc is still dialling Nest, so one retry is worth it.
  *
- * The activity window is the only deadline. `signal` aborts when it expires, so a
- * grab that go2rtc takes a minute to answer is waited out instead of being cut
- * off, and an event arriving mid-grab extends it for free. Nothing here is
- * budgeted against the poll interval: the caller awaits each grab before pacing
- * the next, so a slow one delays its successor rather than overlapping it.
+ * Each attempt is bounded by `ATTEMPT_TIMEOUT_MS` as well as by the activity
+ * window, whose `signal` aborts when it expires. A timed-out attempt is a failure
+ * and gets the retry; one the window closed under is not, and does not. Nothing
+ * here is budgeted against the poll interval: the caller awaits each grab before
+ * pacing the next, so a slow one delays its successor rather than overlapping it.
  */
 export async function grabFrame(options: {
     go2rtcUrl: string;
@@ -61,14 +70,18 @@ export async function grabFrame(options: {
     framesPath: string;
     signal: AbortSignal;
     at?: Date;
+    attemptTimeoutMs?: number;
     fetchImpl?: (url: string, signal: AbortSignal) => Promise<Buffer>;
     delay?: (ms: number, signal: AbortSignal) => Promise<void>;
 }): Promise<Frame> {
     const at = options.at ?? new Date();
-    const grab = options.fetchImpl ?? fetchFrame;
+    const fetchImpl = options.fetchImpl ?? fetchFrame;
     const delay = options.delay ?? ((ms: number, signal: AbortSignal) => sleep(ms, undefined, { signal }));
     const signal = options.signal;
     const url = frameUrl(options.go2rtcUrl, options.stream);
+    const attemptTimeoutMs = options.attemptTimeoutMs ?? ATTEMPT_TIMEOUT_MS;
+    const grab = (): Promise<Buffer> =>
+        fetchImpl(url, AbortSignal.any([signal, AbortSignal.timeout(attemptTimeoutMs)]));
 
     signal.throwIfAborted();
 
@@ -78,7 +91,7 @@ export async function grabFrame(options: {
     let raw: Buffer;
     let attempts = 1;
     try {
-        raw = await grab(url, signal);
+        raw = await grab();
     } catch (error) {
         // A grab the window closed under is not a grab that failed, and there is
         // nothing left to retry into either way.
@@ -91,7 +104,7 @@ export async function grabFrame(options: {
         await delay(RETRY_DELAY_MS, signal);
         signal.throwIfAborted();
         attempts = 2;
-        raw = await grab(url, signal);
+        raw = await grab();
     }
 
     const frame = await saveFrame({ framesPath: options.framesPath, at, source: 'stream', raw });
