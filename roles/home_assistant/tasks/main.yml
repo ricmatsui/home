@@ -19,13 +19,17 @@
     - /mnt/gluster/home-assistant/config
 
 - name: mirror image
-  include_tasks: tasks/docker_mirror_image.yml
+  include_tasks:
+    file: tasks/docker_mirror_image.yml
+    apply:
+      tags: home_assistant_stack
+  tags: home_assistant_stack
   vars:
     fact: home_assistant_image
     name: home-assistant
-    # https://github.com/home-assistant/core/pkgs/container/home-assistant/1300800009?tag=2026.9.4
-    source: ghcr.io/home-assistant/home-assistant:2026.9.4
-    image_id: sha256:3e6710a7ab2a61311d9d899b719f6c3657791c63e8f4942cec4ebc42401d6b76
+    # https://github.com/home-assistant/core/pkgs/container/home-assistant/1576405394?tag=2026.11.2
+    source: ghcr.io/home-assistant/home-assistant:2026.11.2
+    image_id: sha256:493a07e8f6530fc640223f4a0a5248f20a61ca2f718bb1d31efbf08a2c5ea28f
 
 - name: deploy stack
   community.general.docker_stack:
@@ -87,6 +91,7 @@
             external: true
   vars:
     ansible_python_interpreter: /opt/docker_venv/bin/python
+  tags: home_assistant_stack
 
 - name: configure backup
   ansible.builtin.copy:
