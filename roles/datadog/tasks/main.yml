@@ -53,7 +53,7 @@
       - systemd-journal
   notify: datadog_restart
 
-- name: allow datadog to run gluster commands
+- name: allow datadog to run check commands
   ansible.builtin.copy:
     dest: /etc/sudoers.d/datadog
     owner: root
@@ -65,6 +65,10 @@
       {% for volume in datadog_gluster_scrub_volumes %}
       dd-agent ALL=(ALL) NOPASSWD: /usr/sbin/gluster volume bitrot {{ volume }} scrub status
       {% endfor %}
+      {% endif %}
+      {% if ingress_host_candidate | default(false) %}
+      dd-agent ALL=(ALL) NOPASSWD: /usr/bin/wg show vpn-host latest-handshakes
+      dd-agent ALL=(ALL) NOPASSWD: /usr/bin/cat /etc/wireguard/vpn-host.conf
       {% endif %}
     validate: visudo -cf %s
   notify: datadog_restart
@@ -122,6 +126,26 @@
     owner: root
     group: root
   when: datadog_glusterfs_check_enabled
+  notify: datadog_restart
+  tags: datadog_checks
+
+- name: install wireguard handshake check
+  ansible.builtin.template:
+    src: custom_wireguard_handshake.py
+    dest: /etc/datadog-agent/checks.d/custom_wireguard_handshake.py
+    owner: root
+    group: root
+  when: ingress_host_candidate | default(false)
+  notify: datadog_restart
+  tags: datadog_checks
+
+- name: configure wireguard handshake check
+  ansible.builtin.template:
+    src: custom_wireguard_handshake.yaml
+    dest: /etc/datadog-agent/conf.d/custom_wireguard_handshake.yaml
+    owner: root
+    group: root
+  when: ingress_host_candidate | default(false)
   notify: datadog_restart
   tags: datadog_checks
 

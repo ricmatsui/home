@@ -1,0 +1,6 @@
+init_config:
+
+instances:
+  - interface: vpn-host
+    config_path: /etc/wireguard/vpn-host.conf
+    min_collection_interval: 60
