@@ -16,6 +16,15 @@
     group: pi
     state: directory
 
+- name: configure snapmaker u1 source
+  ansible.builtin.copy:
+    dest: /mnt/gluster/go2rtc/config/snapmaker-u1.sh
+    src: snapmaker-u1.sh
+    owner: pi
+    group: pi
+    mode: u=rwx,g=rx,o=rx
+  tags: go2rtc_config
+
 - name: build
   community.docker.docker_image_build:
     name: "gitea.{{ config.domain }}/{{ config.gitea.username }}/go2rtc"

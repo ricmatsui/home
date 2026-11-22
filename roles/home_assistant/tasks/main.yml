@@ -75,7 +75,7 @@
               resources:
                 limits:
                   cpus: '1.00'
-                  memory: 800M
+                  memory: 1500M
               restart_policy:
                 delay: 10m
               update_config:
