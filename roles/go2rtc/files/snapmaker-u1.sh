@@ -4,9 +4,21 @@ url="http://$host/server/files/camera/monitor.jpg"
 frame=$(mktemp)
 req_id=0
 last_wake=0
-seen=$(curl -sS -I -m 5 -o /dev/null -w '%header{last-modified}' "$url")
+seen=
 
 trap 'kill "$WS_PID" 2>/dev/null; rm -f "$frame"; exit' TERM INT
+
+if result=$(curl -sS -m 5 -o "$frame" -w '%{http_code} %header{last-modified}' "$url" 2>&1); then
+  read -r code modified <<<"$result"
+  if [[ $code == 200 ]]; then
+    seen=$modified
+    if (( $(date +%s) - $(date -u -D '%a, %d %b %Y %H:%M:%S GMT' -d "$modified" +%s) <= 10 )); then
+      cat "$frame"
+    fi
+  fi
+else
+  echo "$result" >&2
+fi
 
 wake() {
   if ! kill -0 "$WS_PID" 2>/dev/null; then
