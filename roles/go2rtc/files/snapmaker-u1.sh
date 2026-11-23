@@ -1,8 +1,10 @@
 #!/bin/bash
 host=$1
+url="http://$host/server/files/camera/monitor.jpg"
 frame=$(mktemp)
 req_id=0
 last_wake=0
+seen=$(curl -sS -I -m 5 -o /dev/null -w '%header{last-modified}' "$url")
 
 trap 'kill "$WS_PID" 2>/dev/null; rm -f "$frame"; exit' TERM INT
 
@@ -19,13 +21,22 @@ while :; do
   now=$(date +%s)
   if (( now - last_wake >= 10 )); then
     wake
-    (( last_wake == 0 )) && sleep 3
     last_wake=$now
   fi
-  if err=$(curl -fsS -m 5 -o "$frame" "http://$host/server/files/camera/monitor.jpg" 2>&1); then
-    cat "$frame"
+  if result=$(curl -sS -m 5 -o "$frame" ${seen:+-z "$seen"} -w '%{http_code} %header{last-modified}' "$url" 2>&1); then
+    read -r code modified <<<"$result"
+    case $code in
+      200)
+        if [[ $modified != "$seen" ]]; then
+          cat "$frame"
+          seen=$modified
+        fi
+        ;;
+      304 | 404) ;;
+      *) echo "$result" >&2 ;;
+    esac
   else
-    echo "$err" >&2
+    echo "$result" >&2
   fi
   sleep 1
 done
